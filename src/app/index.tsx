@@ -7,7 +7,7 @@ export default function Index() {
   const [clicks, setClicks] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(
-    supabase ? null : "Add your Supabase URL and key to .env.local"
+    supabase ? null : "Add your Supabase URL and key to .env"
   );
 
   useEffect(() => {

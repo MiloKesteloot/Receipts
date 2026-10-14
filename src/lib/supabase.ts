@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-// Null until the values in .env.local are filled in, so the app can show a
+// Null until the values in .env are filled in, so the app can show a
 // message instead of crashing on startup.
 export const supabase =
   supabaseUrl && supabasePublishableKey
