@@ -1,9 +1,11 @@
+import { useTheme } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "@/lib/supabase";
 
 export default function Index() {
+  const { colors } = useTheme();
   const [clicks, setClicks] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(
@@ -36,8 +38,8 @@ export default function Index() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text>Receipts</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={{ color: colors.text }}>Receipts</Text>
       <Pressable
         onPress={handlePress}
         disabled={clicks === null || saving}
