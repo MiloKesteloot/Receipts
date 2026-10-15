@@ -1,10 +1,14 @@
 import { useTheme } from "expo-router";
-import { useEffect, useState } from "react";
+import { JSX, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "@/lib/supabase";
 
-export default function Index() {
+/**
+ * TODO Write description
+ * @returns JSX element
+ */
+export default function Index(): JSX.Element {
   const { colors } = useTheme();
   const [clicks, setClicks] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -25,6 +29,9 @@ export default function Index() {
       });
   }, []);
 
+  /**
+   * TODO Write description
+   */
   async function handlePress() {
     if (!supabase) return;
     setSaving(true);
@@ -55,6 +62,9 @@ export default function Index() {
   );
 }
 
+/**
+ * TODO Write description
+ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,

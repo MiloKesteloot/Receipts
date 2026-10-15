@@ -21,6 +21,7 @@ export default defineConfig([
       "jsdoc/require-jsdoc": [
         "error",
         {
+          contexts: ["Program > VariableDeclaration"],
           require: {
             FunctionDeclaration: true,
             MethodDefinition: true,
