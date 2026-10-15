@@ -3,7 +3,7 @@
 **Feature Branch**: `feature/us-1.4-join-group`  
 **Created**: 2026-10-14  
 **Status**: Draft  
-**Input**: User description: "As a user, I want to type in my roommate's invite code, so that I can join their group. Done when: a correct code adds me and opens the group, a wrong code shows an error, and joining twice just opens the group. App: Join window on the Groups page with a code input and error messages. Server: POST /groups/join with any letter case accepted. Test: Correct code, wrong code, joining twice. Toast popups for all 3 scenarios: error message, 'you are already in this group', or 'joined {group name} successfully'."
+**Input**: User description: "As a user, I want to type in my roommate's invite code, so that I can join their group. Done when: a correct code adds me and opens the group, a wrong code shows an error, and joining twice just opens the group. App: Join window on the Groups page with a code input and error messages. Server: POST /groups/join with any letter case accepted. Test: Correct code, wrong code, joining twice. Toast popups for all 3 scenarios: error message, 'You are already in this group', or 'Joined {group name} successfully'."
 
 ---
 
