@@ -2,7 +2,7 @@ import { useTheme } from "expo-router";
 import { JSX, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { supabase } from "@/lib/supabase";
+import { SUPABASE } from "@/lib/supabase";
 
 /**
  * TODO Write description
@@ -13,12 +13,12 @@ export default function Index(): JSX.Element {
   const [clicks, setClicks] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(
-    supabase ? null : "Add your Supabase URL and key to .env"
+    SUPABASE ? null : "Add your Supabase URL and key to .env"
   );
 
   useEffect(() => {
-    if (!supabase) return;
-    supabase
+    if (!SUPABASE) return;
+    SUPABASE
       .from("counter")
       .select("clicks")
       .eq("id", 1)
@@ -33,9 +33,9 @@ export default function Index(): JSX.Element {
    * TODO Write description
    */
   async function handlePress() {
-    if (!supabase) return;
+    if (!SUPABASE) return;
     setSaving(true);
-    const { data, error } = await supabase.rpc("increment_clicks");
+    const { data, error } = await SUPABASE.rpc("increment_clicks");
     setSaving(false);
     if (error) setError(error.message);
     else {
