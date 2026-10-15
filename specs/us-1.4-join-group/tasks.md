@@ -16,8 +16,8 @@
 
 **Purpose**: Project initialization, types, and directories layout
 
-- [ ] T001 Create project directories `src/components/`, `src/lib/`, `tests/unit/`, and `supabase/migrations/` per implementation plan
-- [ ] T002 [P] Initialize TypeScript interfaces for `Group`, `GroupMembership`, and `JoinGroupResult` in `src/lib/groups.types.ts`
+- [X] T001 Create project directories `src/components/`, `src/lib/`, `tests/unit/`, and `supabase/migrations/` per implementation plan
+- [X] T002 [P] Initialize TypeScript interfaces for `Group`, `GroupMembership`, and `JoinGroupResult` in `src/lib/groups.types.ts`
 
 ---
 
@@ -27,9 +27,9 @@
 
 **⚠️ CRITICAL**: Foundational components required by all 3 user stories (toast system, mock service seam, and database schema)
 
-- [ ] T003 [P] Implement lightweight cross-platform animated `Toast` component and provider in `src/components/toast.tsx`
-- [ ] T004 [P] Define database schema (`groups`, `group_members`) and `join_group` stored procedure in `supabase/migrations/20261014_groups_schema.sql`
-- [ ] T005 Implement `GroupService` interface and in-memory mock service with seed data in `src/lib/groups.ts`
+- [X] T003 [P] Implement lightweight cross-platform animated `Toast` component and provider in `src/components/toast.tsx`
+- [X] T004 [P] Define database schema (`groups`, `group_members`) and `join_group` stored procedure in `supabase/migrations/20261014_groups_schema.sql`
+- [X] T005 Implement `GroupService` interface and in-memory mock service with seed data in `src/lib/groups.ts`
 
 **Checkpoint**: Foundational contracts and mock seam ready — user story implementation can now begin
 
@@ -43,13 +43,13 @@
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] Unit test for successful join with valid code and case-insensitivity (`"APT402"`, `"apt402"`) in `tests/unit/groups.test.ts`
+- [X] T006 [P] [US1] Unit test for successful join with valid code and case-insensitivity (`"APT402"`, `"apt402"`) in `tests/unit/groups.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Implement case-insensitive lookup (`trim().toLowerCase()`) and member insertion in `src/lib/groups.ts`
-- [ ] T008 [US1] Build `JoinGroupModal` with invite code input, submit button, loading spinner, and success toast trigger in `src/components/join-group-modal.tsx`
-- [ ] T009 [US1] Mount temporary "Join Group" trigger button on `src/app/index.tsx` for interactive on-device verification
+- [X] T007 [US1] Implement case-insensitive lookup (`trim().toLowerCase()`) and member insertion in `src/lib/groups.ts`
+- [X] T008 [US1] Build `JoinGroupModal` with invite code input, submit button, loading spinner, and success toast trigger in `src/components/join-group-modal.tsx`
+- [X] T009 [US1] Mount temporary "Join Group" trigger button on `src/app/index.tsx` for interactive on-device verification
 
 **Checkpoint**: User Story 1 is fully functional and testable independently (MVP ready!)
 
@@ -63,12 +63,12 @@
 
 ### Tests for User Story 2
 
-- [ ] T010 [P] [US2] Unit test for invalid invite code returning `NOT_FOUND` error and empty code validation in `tests/unit/groups.test.ts`
+- [X] T010 [P] [US2] Unit test for invalid invite code returning `NOT_FOUND` error and empty code validation in `tests/unit/groups.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Implement invalid code error handling, empty string validation, and user-friendly error messages in `src/lib/groups.ts`
-- [ ] T012 [US2] Update `JoinGroupModal` in `src/components/join-group-modal.tsx` to render inline error banner and trigger error toast while preserving user input
+- [X] T011 [US2] Implement invalid code error handling, empty string validation, and user-friendly error messages in `src/lib/groups.ts`
+- [X] T012 [US2] Update `JoinGroupModal` in `src/components/join-group-modal.tsx` to render inline error banner and trigger error toast while preserving user input
 
 **Checkpoint**: User Stories 1 and 2 both work and handle valid/invalid flows independently
 
@@ -82,12 +82,12 @@
 
 ### Tests for User Story 3
 
-- [ ] T013 [P] [US3] Unit test verifying repeat join returns `ALREADY_MEMBER` status without duplicate entries in `tests/unit/groups.test.ts`
+- [X] T013 [P] [US3] Unit test verifying repeat join returns `ALREADY_MEMBER` status without duplicate entries in `tests/unit/groups.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Implement idempotency check (`ALREADY_MEMBER`) in `src/lib/groups.ts`
-- [ ] T015 [US3] Update `JoinGroupModal` in `src/components/join-group-modal.tsx` to display `"You are already in this group"` toast and navigate to group view
+- [X] T014 [US3] Implement idempotency check (`ALREADY_MEMBER`) in `src/lib/groups.ts`
+- [X] T015 [US3] Update `JoinGroupModal` in `src/components/join-group-modal.tsx` to display `"You are already in this group"` toast and navigate to group view
 
 **Checkpoint**: All 3 user stories are complete, idempotent, and independently verified
 
@@ -97,9 +97,9 @@
 
 **Purpose**: Supabase production wiring, linting, typechecking, and final verification
 
-- [ ] T016 [P] Add Supabase RPC client integration in `src/lib/groups.ts` with transparent fallback to mock service when `.env` is unconfigured
-- [ ] T017 Run complete automated test suite verifying all 3 acceptance criteria in `tests/unit/groups.test.ts`
-- [ ] T018 Run `npx expo lint` and `npx tsc --noEmit` to verify type safety and adherence to repository code standards
+- [X] T016 [P] Add Supabase RPC client integration in `src/lib/groups.ts` with transparent fallback to mock service when `.env` is unconfigured
+- [X] T017 Run complete automated test suite verifying all 3 acceptance criteria in `tests/unit/groups.test.ts`
+- [X] T018 Run `npx expo lint` and `npx tsc --noEmit` to verify type safety and adherence to repository code standards
 
 ---
 
