@@ -6,61 +6,100 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  { 
-    files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
-    plugins: { js, jsdoc }, 
-    extends: ["js/recommended"], 
-    languageOptions: {
-      globals: globals.browser
-    }, 
-    rules: {
-      "no-unused-vars": "warn",      // Warns about declared but unused variables
-      "eqeqeq": "warn",             // Forces usage of === and !== instead of == and !=
-      "semi": ["error", "always"],   // Throws an error if semicolons are missing
-      "prefer-const": ["error", { "ignoreReadBeforeAssign": false }], // Enforces const, with extra parameters
-      "jsdoc/require-jsdoc": [
-        "error",
-        {
-          contexts: ["Program > VariableDeclaration"],
-          require: {
-            FunctionDeclaration: true,
-            MethodDefinition: true,
-            ClassDeclaration: true,
-            ArrowFunctionExpression: false,
-            FunctionExpression: false,
-          }
+    {
+        files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+        plugins: { js, jsdoc },
+        extends: ["js/recommended"],
+        languageOptions: {
+            parserOptions: {
+                projectService: true
+            },
+            globals: globals.browser
+        },
+        rules: {
+            "no-unused-vars": "warn",      // Warns about declared but unused variables
+            "eqeqeq": "warn",             // Forces usage of === and !== instead of == and !=
+            "semi": ["error", "always"],   // Throws an error if semicolons are missing
+            "prefer-const": ["error", { "ignoreReadBeforeAssign": false }], // Enforces const, with extra parameters
+            "jsdoc/require-jsdoc": [
+                "error",
+                {
+                    contexts: ["Program > VariableDeclaration"],
+                    require: {
+                        FunctionDeclaration: true,
+                        MethodDefinition: true,
+                        ClassDeclaration: true,
+                        ArrowFunctionExpression: false,
+                        FunctionExpression: false,
+                    }
+                }
+            ],
+            "jsdoc/require-description": [
+                "error",
+                {
+                    contexts: ["any"]
+                }
+            ],
+            "jsdoc/no-blank-blocks": "error",
+            "jsdoc/require-param": "error",
+            "jsdoc/require-param-description": "error",
+            "jsdoc/check-param-names": "error",
+            "jsdoc/require-returns": [
+                "error",
+                {
+                    "checkConstructors": false
+                }
+            ],
+            "jsdoc/require-returns-description": "error",
+            "jsdoc/require-returns-check": "error",
+            "@typescript-eslint/naming-convention": [
+                "error",
+                { selector: "default", format: ["camelCase"], leadingUnderscore: "allow" },
+                { selector: "variable", format: ["camelCase"] },
+                { selector: "parameter", format: ["camelCase"], leadingUnderscore: "allow" },
+                {
+                    selector: "variable",
+                    modifiers: ["const", "global"],
+                    format: ["UPPER_CASE"],
+                },
+                {
+                    selector: "variable",
+                    modifiers: ["const", "global"],
+                    types: ["function"],
+                    format: ["camelCase", "PascalCase"],
+                },
+                {
+                    selector: "classProperty",
+                    modifiers: ["static", "readonly"],
+                    format: ["UPPER_CASE"],
+                },
+                { selector: "function", format: ["camelCase", "PascalCase"] },
+                { selector: "typeLike", format: ["PascalCase"] },
+                {
+                    selector: ["objectLiteralProperty", "typeProperty"],
+                    modifiers: ["requiresQuotes"],
+                    format: null,
+                },
+            ]
         }
-      ],
-      "jsdoc/require-description": [
-        "error",
-        {
-          contexts: ["any"] 
+    },
+
+    ...tseslint.configs.recommended,
+
+    {
+        files: ["**/*.{ts,mts,cts,tsx}"],
+        rules: {
+            "@typescript-eslint/explicit-module-boundary-types": "error",
         }
-      ],
-      "jsdoc/no-blank-blocks": "error",
-      "jsdoc/require-param": "error",
-      "jsdoc/require-param-description": "error",
-      "jsdoc/check-param-names": "error",
-      "jsdoc/require-returns": [
-        "error",
-        {
-          "checkConstructors": false
-        }
-      ],
-      "jsdoc/require-returns-description": "error",
-      "jsdoc/require-returns-check": "error"
-    }
-  },
+    },
 
-  ...tseslint.configs.recommended,
+    {
+        files: ["*.config.{js,cjs,mjs,ts}", "eslint.config.js"],
+        rules: {
+            "@typescript-eslint/naming-convention": "off",
+        },
+    },
 
-  {
-    files: ["**/*.{ts,mts,cts,tsx}"],
-    rules: {
-      "@typescript-eslint/explicit-module-boundary-types": "error",
-    }
-  },
-
-  react.configs.flat.recommended,
-  react.configs.flat['jsx-runtime']
+    react.configs.flat.recommended,
+    react.configs.flat['jsx-runtime']
 ]);

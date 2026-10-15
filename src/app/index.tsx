@@ -45,19 +45,19 @@ export default function Index(): JSX.Element {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[STYLES.container, { backgroundColor: colors.background }]}>
       <Text style={{ color: colors.text }}>Receipts</Text>
       <Pressable
         onPress={handlePress}
         disabled={clicks === null || saving}
         style={({ pressed }) => [
-          styles.button,
-          (pressed || saving) && styles.buttonPressed,
+          STYLES.button,
+          (pressed || saving) && STYLES.buttonPressed,
         ]}
       >
-        <Text style={styles.buttonText}>Clicks: {clicks ?? "…"}</Text>
+        <Text style={STYLES.buttonText}>Clicks: {clicks ?? "…"}</Text>
       </Pressable>
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <Text style={STYLES.error}>{error}</Text>}
     </View>
   );
 }
@@ -65,7 +65,7 @@ export default function Index(): JSX.Element {
 /**
  * TODO Write description
  */
-const styles = StyleSheet.create({
+const STYLES = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
