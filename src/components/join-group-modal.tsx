@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -70,7 +71,6 @@ export function JoinGroupModal({
           triggerToast(result.message, "info");
         }
 
-        // Reset input and close modal after brief delay or immediately
         setCode("");
         onClose();
         if (onSuccess) {
@@ -142,7 +142,9 @@ export function JoinGroupModal({
             </View>
 
             {inlineError && (
-              <Text style={styles.errorText}>{inlineError}</Text>
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{inlineError}</Text>
+              </View>
             )}
 
             <View style={styles.buttonRow}>
@@ -157,17 +159,24 @@ export function JoinGroupModal({
               <Pressable
                 style={[
                   styles.button,
-                  styles.submitButton,
+                  styles.submitWrapper,
                   loading && styles.buttonDisabled,
                 ]}
                 onPress={handleJoin}
                 disabled={loading}
               >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Join</Text>
-                )}
+                <LinearGradient
+                  colors={["#BAC8E8", "#98B687"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.gradientButton}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.submitButtonText}>Join</Text>
+                  )}
+                </LinearGradient>
               </Pressable>
             </View>
           </View>
@@ -217,7 +226,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F9FAFB",
     borderWidth: 1.5,
     borderColor: "#E5E7EB",
     borderRadius: 12,
@@ -229,15 +238,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   inputError: {
-    borderColor: "#EF4444",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#EACECE",
+    backgroundColor: "#FFF8F8",
+  },
+  errorBox: {
+    backgroundColor: "#EACECD",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
   },
   errorText: {
-    color: "#DC2626",
+    color: "#5C1D24",
     fontSize: 13,
-    fontWeight: "500",
-    marginBottom: 12,
-    marginLeft: 2,
+    fontWeight: "600",
   },
   buttonRow: {
     flexDirection: "row",
@@ -246,26 +260,40 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    paddingVertical: 14,
     borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
   },
   cancelButton: {
     backgroundColor: "#F3F4F6",
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   cancelButtonText: {
     color: "#4B5563",
     fontSize: 15,
     fontWeight: "600",
   },
-  submitButton: {
-    backgroundColor: "#2563EB",
+  submitWrapper: {
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  gradientButton: {
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   submitButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
+    textShadowColor: "rgba(0, 0, 0, 0.15)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   buttonDisabled: {
     opacity: 0.6,

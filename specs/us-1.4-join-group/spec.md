@@ -85,11 +85,13 @@ When an existing member enters an invite code for a group they have already join
 - **FR-007**: When the invite code is valid and the user is already a member, the server MUST return the group details without creating duplicate memberships or reporting an error.
 - **FR-008**: When the invite code does not match any existing group, the server MUST return an invalid code error response.
 - **FR-009**: The system MUST provide feedback via toast notifications across all three outcome scenarios:
-  - Failure/Error: Error toast displaying the failure reason + inline error message.
-  - Existing Member: Informational toast stating `"You are already in this group"`.
-  - New Member: Success toast stating `"Joined {group name} successfully"`.
+  - Failure/Error: Error toast displaying the failure reason + inline error message, styled in soft pastel blush red (`#eacecd`) with dark high-contrast text.
+  - Existing Member: Informational toast stating `"You are already in this group"`, styled in soft pastel periwinkle blue (`#dce5f5`) with dark high-contrast text.
+  - New Member: Success toast stating `"Joined {group name} successfully"`, styled in soft pastel sage green (`#ddeae0`) with dark high-contrast text.
 - **FR-010**: Upon successful join or repeat join, the system MUST close the join window and open the group view.
 - **FR-011**: While user authentication is pending in the application, the system MUST support an isolated user identity context so that group membership operations can be fully validated independently.
+- **FR-012**: Toast notifications MUST be anchored at the bottom of the device screen, respecting device safe area margins above navigation bars.
+- **FR-013**: The primary join action button MUST incorporate the project design palette, utilizing a vertical gradient transitioning from soft periwinkle blue (`#B4C5E7`) at the top to soft sage green (`#97B685`) at the bottom.
 
 ### Key Entities
 

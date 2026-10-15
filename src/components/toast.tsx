@@ -25,13 +25,14 @@ export function Toast({
   onDismiss,
 }: ToastProps) {
   const insets = useSafeAreaInsets();
-  const [translateY] = useState(() => new Animated.Value(-100));
+  // Animate from 80 (below bottom) to 0 (resting position)
+  const [translateY] = useState(() => new Animated.Value(80));
   const [opacity] = useState(() => new Animated.Value(0));
 
   const handleDismiss = useCallback(() => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: -100,
+        toValue: 80,
         duration: 200,
         useNativeDriver: true,
       }),
@@ -49,7 +50,7 @@ export function Toast({
     if (visible) {
       Animated.parallel([
         Animated.timing(translateY, {
-          toValue: insets.top + 12,
+          toValue: 0,
           duration: 250,
           useNativeDriver: true,
         }),
@@ -66,27 +67,44 @@ export function Toast({
 
       return () => clearTimeout(timer);
     }
-  }, [visible, message, duration, insets.top, handleDismiss, opacity, translateY]);
+  }, [visible, message, duration, insets.bottom, handleDismiss, opacity, translateY]);
 
   if (!visible) {
     return null;
   }
 
-  const backgroundColor =
+  // Design palette colors requested: #ddeae0 for green, #eacecd for red, #dce5f5 for info
+  const theme =
     type === "success"
-      ? "#10B981" // Emerald green
+      ? {
+          backgroundColor: "#ddeae0",
+          textColor: "#1B4332",
+          borderColor: "#B8D3BE",
+        }
       : type === "error"
-      ? "#EF4444" // Crimson red
-      : "#3B82F6"; // Cobalt blue (info)
+      ? {
+          backgroundColor: "#eacecd",
+          textColor: "#5C1D24",
+          borderColor: "#D8AEAD",
+        }
+      : {
+          backgroundColor: "#dce5f5",
+          textColor: "#1E3A8A",
+          borderColor: "#B8CBE8",
+        };
+
+  const bottomOffset = Math.max(insets.bottom, 16) + 12;
 
   return (
     <Animated.View
       style={[
         styles.container,
         {
+          bottom: bottomOffset,
           transform: [{ translateY }],
           opacity,
-          backgroundColor,
+          backgroundColor: theme.backgroundColor,
+          borderColor: theme.borderColor,
         },
       ]}
       accessibilityLiveRegion="polite"
@@ -97,7 +115,7 @@ export function Toast({
         onPress={handleDismiss}
         style={styles.inner}
       >
-        <Text style={styles.text}>{message}</Text>
+        <Text style={[styles.text, { color: theme.textColor }]}>{message}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -109,21 +127,21 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     zIndex: 9999,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 10,
     elevation: 8,
   },
   inner: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   text: {
-    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "600",
     textAlign: "center",

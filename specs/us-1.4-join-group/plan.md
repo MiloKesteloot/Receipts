@@ -127,12 +127,17 @@ export type JoinGroupResult =
 
 * **`Toast` (`src/components/toast.tsx`)**:
   - Props: `visible: boolean`, `message: string`, `type: 'success' | 'info' | 'error'`, `onDismiss: () => void`.
-  - Self-dismisses after 3 seconds; slides down from top / floats above modals.
+  - Self-dismisses after 3 seconds; slides up from the **bottom** of the screen (`insets.bottom + 16`).
+  - Palette tokens:
+    - Success: Background `#ddeae0` with dark forest green text (`#1B4332`) and border `#B7D2BD`.
+    - Error: Background `#eacecd` with dark burgundy text (`#5C1D24`) and border `#D8ACAB`.
+    - Info: Background `#dce5f5` with dark blue text (`#1E3A8A`) and border `#BAC8E8`.
 * **`JoinGroupModal` (`src/components/join-group-modal.tsx`)**:
   - Props: `visible: boolean`, `onClose: () => void`, `onSuccess: (group: Group) => void`, `userId?: string`.
   - Input field with automatic trimming and uppercase auto-capitalization helper.
+  - Primary button styled with `expo-linear-gradient` using the project design gradient (`['#B4C5E7', '#97B685']`).
   - Disables submit button while submission is in-flight (`loading` spinner).
-  - Triggers corresponding Toast on error, already in group, or joined successfully.
+  - Triggers corresponding bottom Toast on error, already in group, or joined successfully.
 
 ---
 

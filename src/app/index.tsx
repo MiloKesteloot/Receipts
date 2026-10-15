@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { JoinGroupModal } from "@/components/join-group-modal";
 import { Group } from "@/lib/groups.types";
+import { LinearGradient } from "expo-linear-gradient";
 
 export default function Index() {
   const { colors } = useTheme();
@@ -58,7 +59,7 @@ export default function Index() {
 
       {currentGroup && (
         <View style={styles.groupCard}>
-          <Text style={styles.groupCardLabel}>Current Active Group:</Text>
+          <Text style={styles.groupCardLabel}>Current Active Group</Text>
           <Text style={styles.groupCardName}>{currentGroup.name}</Text>
           <Text style={styles.groupCardCode}>Invite Code: {currentGroup.invite_code}</Text>
         </View>
@@ -67,11 +68,18 @@ export default function Index() {
       <Pressable
         onPress={() => setJoinModalVisible(true)}
         style={({ pressed }) => [
-          styles.joinButton,
+          styles.joinButtonWrapper,
           pressed && styles.buttonPressed,
         ]}
       >
-        <Text style={styles.joinButtonText}>Join a Group</Text>
+        <LinearGradient
+          colors={["#BAC8E8", "#98B687"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.joinButton}
+        >
+          <Text style={styles.joinButtonText}>Join a Group</Text>
+        </LinearGradient>
       </Pressable>
 
       <JoinGroupModal
@@ -108,52 +116,66 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   error: {
-    color: "#D93025",
+    color: "#5C1D24",
+    backgroundColor: "#EACECD",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
     textAlign: "center",
+    overflow: "hidden",
   },
-  joinButton: {
-    backgroundColor: "#10B981",
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 10,
+  joinButtonWrapper: {
+    borderRadius: 12,
+    overflow: "hidden",
     marginTop: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  joinButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   joinButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
+    textShadowColor: "rgba(0, 0, 0, 0.15)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   groupCard: {
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    backgroundColor: "#DDEAE0",
     borderWidth: 1,
-    borderColor: "#10B981",
+    borderColor: "#B8D3BE",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
     width: "100%",
-    maxWidth: 300,
+    maxWidth: 320,
   },
   groupCardLabel: {
-    fontSize: 12,
-    color: "#059669",
-    fontWeight: "600",
+    fontSize: 11,
+    color: "#1B4332",
+    fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   groupCardName: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
-    marginTop: 2,
+    color: "#1B4332",
+    marginTop: 3,
   },
   groupCardCode: {
     fontSize: 13,
-    color: "#4B5563",
+    color: "#2D5A3D",
     marginTop: 2,
+    fontWeight: "500",
   },
 });
