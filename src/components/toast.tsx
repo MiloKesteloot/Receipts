@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Animated,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -21,24 +22,23 @@ export function Toast({
   visible,
   message,
   type = "info",
-  duration = 3000,
+  duration = 3500,
   onDismiss,
 }: ToastProps) {
   const insets = useSafeAreaInsets();
-  // Animate from 80 (below bottom) to 0 (resting position)
-  const [translateY] = useState(() => new Animated.Value(80));
+  const [translateY] = useState(() => new Animated.Value(-70));
   const [opacity] = useState(() => new Animated.Value(0));
 
   const handleDismiss = useCallback(() => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: 80,
-        duration: 200,
+        toValue: -70,
+        duration: 180,
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 200,
+        duration: 180,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -51,12 +51,12 @@ export function Toast({
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: 0,
-          duration: 250,
+          duration: 220,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: 1,
-          duration: 250,
+          duration: 220,
           useNativeDriver: true,
         }),
       ]).start();
@@ -66,57 +66,57 @@ export function Toast({
       }, duration);
 
       return () => clearTimeout(timer);
+    } else {
+      translateY.setValue(-70);
+      opacity.setValue(0);
     }
-  }, [visible, message, duration, insets.bottom, handleDismiss, opacity, translateY]);
+  }, [visible, message, duration, handleDismiss, opacity, translateY]);
 
   if (!visible) {
     return null;
   }
 
-  // Design palette colors requested: #ddeae0 for green, #eacecd for red, #dce5f5 for info
-  const theme =
+  const accentColor =
     type === "success"
-      ? {
-          backgroundColor: "#ddeae0",
-          textColor: "#1B4332",
-          borderColor: "#B8D3BE",
-        }
+      ? "#81C784"
       : type === "error"
-      ? {
-          backgroundColor: "#eacecd",
-          textColor: "#5C1D24",
-          borderColor: "#D8AEAD",
-        }
-      : {
-          backgroundColor: "#dce5f5",
-          textColor: "#1E3A8A",
-          borderColor: "#B8CBE8",
-        };
+        ? "#F28B82"
+        : "#8AB4F8";
 
-  const bottomOffset = Math.max(insets.bottom, 16) + 12;
+  const topOffset = Math.max(insets.top, 14) + 8;
 
   return (
     <Animated.View
       style={[
         styles.container,
         {
-          bottom: bottomOffset,
+          top: topOffset,
           transform: [{ translateY }],
           opacity,
-          backgroundColor: theme.backgroundColor,
-          borderColor: theme.borderColor,
         },
       ]}
       accessibilityLiveRegion="polite"
       accessibilityRole="alert"
     >
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={handleDismiss}
-        style={styles.inner}
-      >
-        <Text style={[styles.text, { color: theme.textColor }]}>{message}</Text>
-      </TouchableOpacity>
+      <View style={[styles.indicatorBar, { backgroundColor: accentColor }]} />
+      <View style={styles.contentRow}>
+        <View style={styles.textContainer}>
+          <Text style={styles.messageText} numberOfLines={2}>
+            {message}
+          </Text>
+        </View>
+
+        <Pressable
+          hitSlop={8}
+          onPress={handleDismiss}
+          style={({ pressed }) => [
+            styles.dismissButton,
+            pressed && styles.dismissPressed,
+          ]}
+        >
+          <Text style={[styles.dismissText, { color: accentColor }]}>Dismiss</Text>
+        </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -124,26 +124,53 @@ export function Toast({
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 20,
-    right: 20,
-    zIndex: 9999,
-    borderRadius: 14,
-    borderWidth: 1,
+    left: 16,
+    right: 16,
+    zIndex: 99999,
+    backgroundColor: "#313033",
+    borderRadius: 12,
+    flexDirection: "row",
+    overflow: "hidden",
+    alignItems: "stretch",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     elevation: 8,
   },
-  inner: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
+  indicatorBar: {
+    width: 5,
   },
-  text: {
-    fontSize: 15,
+  contentRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  textContainer: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  messageText: {
+    color: "#F4EFF4",
+    fontSize: 14,
+    fontWeight: "400",
+    letterSpacing: 0.2,
+    lineHeight: 20,
+  },
+  dismissButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  dismissPressed: {
+    opacity: 0.6,
+  },
+  dismissText: {
+    fontSize: 13,
     fontWeight: "600",
-    textAlign: "center",
+    letterSpacing: 0.4,
   },
 });

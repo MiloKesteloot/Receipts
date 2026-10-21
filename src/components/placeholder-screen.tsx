@@ -6,8 +6,6 @@ type Props = {
   description: string;
 };
 
-// Stand-in for tabs that don't have real content yet. It scrolls so the
-// tab bar's minimize-on-scroll and glass effects have something to show.
 export function PlaceholderScreen({ title, description }: Props) {
   const { colors } = useTheme();
 

@@ -6,13 +6,16 @@ export interface Group {
   id: string;
   name: string;
   invite_code: string;
+  created_by?: string;
   created_at?: string;
+  role?: "owner" | "member";
 }
 
 export interface GroupMembership {
   id: string;
   group_id: string;
   user_id: string;
+  role?: "owner" | "member";
   joined_at?: string;
 }
 
@@ -33,10 +36,11 @@ export type JoinGroupResult =
     }
   | {
       success: false;
-      error: "INVALID_CODE" | "EMPTY_CODE" | "NETWORK_ERROR";
+      error: "INVALID_CODE" | "EMPTY_CODE" | "NOT_SIGNED_IN" | "NETWORK_ERROR";
       message: string;
     };
 
 export interface GroupService {
-  joinGroupByCode(inviteCode: string, userId: string): Promise<JoinGroupResult>;
+  joinGroupByCode(inviteCode: string, userId?: string): Promise<JoinGroupResult>;
 }
+

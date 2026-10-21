@@ -1,5 +1,4 @@
-import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,27 +14,38 @@ import { joinGroup } from "../lib/groups";
 import { Group } from "../lib/groups.types";
 import { Toast, ToastType } from "./toast";
 
-export interface JoinGroupModalProps {
+export interface AddGroupModalProps {
   visible: boolean;
   userId?: string;
   onClose: () => void;
-  onSuccess?: (group: Group) => void;
+  onSuccess?: (group: Group, status: "JOINED" | "ALREADY_MEMBER", message: string) => void;
+  // [TEAMMATE EDIT AREA]: Optional custom renderer for US 1.2 group creation. Can be removed once implemented.
+  renderCreateSection?: () => React.ReactNode;
 }
 
-export function JoinGroupModal({
+export function AddGroupModal({
   visible,
   userId = "current-user",
   onClose,
   onSuccess,
-}: JoinGroupModalProps) {
+  renderCreateSection,
+}: AddGroupModalProps) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
 
-  // Toast state
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<ToastType>("info");
+
+  useEffect(() => {
+    if (!visible) {
+      setCode("");
+      setHasError(false);
+      setToastVisible(false);
+      setToastMessage("");
+    }
+  }, [visible]);
 
   function triggerToast(message: string, type: ToastType) {
     setToastMessage(message);
@@ -43,46 +53,42 @@ export function JoinGroupModal({
     setToastVisible(true);
   }
 
-  function handleTextChange(text: string) {
-    setCode(text);
-    if (inlineError) {
-      setInlineError(null);
+  function handleCodeChange(text: string) {
+    setCode(text.toUpperCase());
+    if (hasError) {
+      setHasError(false);
     }
   }
 
   async function handleJoin() {
-    const trimmed = code.trim();
+    const trimmed = code.trim().toUpperCase();
     if (!trimmed) {
-      setInlineError("Please enter an invite code");
+      setHasError(true);
       triggerToast("Please enter an invite code", "error");
       return;
     }
 
     setLoading(true);
-    setInlineError(null);
 
     try {
       const result = await joinGroup(trimmed, userId);
 
       if (result.success) {
-        if (result.status === "JOINED") {
-          triggerToast(result.message, "success");
-        } else if (result.status === "ALREADY_MEMBER") {
-          triggerToast(result.message, "info");
-        }
-
+        setHasError(false);
         setCode("");
+        setToastVisible(false);
+        setToastMessage("");
         onClose();
         if (onSuccess) {
-          onSuccess(result.group);
+          onSuccess(result.group, result.status, result.message);
         }
       } else {
-        setInlineError(result.message);
+        setHasError(true);
         triggerToast(result.message, "error");
       }
     } catch (err: any) {
+      setHasError(true);
       const msg = err?.message || "Failed to join group. Please try again.";
-      setInlineError(msg);
       triggerToast(msg, "error");
     } finally {
       setLoading(false);
@@ -91,12 +97,19 @@ export function JoinGroupModal({
 
   function handleClose() {
     setCode("");
-    setInlineError(null);
+    setHasError(false);
+    setToastVisible(false);
+    setToastMessage("");
     onClose();
   }
 
   return (
-    <>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleClose}
+    >
       <Toast
         visible={toastVisible}
         message={toastMessage}
@@ -104,87 +117,97 @@ export function JoinGroupModal({
         onDismiss={() => setToastVisible(false)}
       />
 
-      <Modal
-        visible={visible}
-        transparent
-        animationType="fade"
-        onRequestClose={handleClose}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.backdrop}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.backdrop}
-        >
-          <Pressable style={styles.backdropTouch} onPress={handleClose} />
+        <Pressable style={styles.backdropTouch} onPress={handleClose} />
 
-          <View style={styles.modalCard}>
-            <Text style={styles.title}>Join a Group</Text>
-            <Text style={styles.subtitle}>
-              {"Enter your roommate's invite code to join their group."}
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={[
-                  styles.input,
-                  inlineError ? styles.inputError : undefined,
-                ]}
-                placeholder="e.g. APT402"
-                placeholderTextColor="#9CA3AF"
-                value={code}
-                onChangeText={handleTextChange}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={handleJoin}
-                editable={!loading}
-                autoFocus
-              />
+        <View style={styles.card}>
+          <View style={styles.header}>
+            <View style={styles.headerTextGroup}>
+              <Text style={styles.title}>Add a group</Text>
             </View>
-
-            {inlineError && (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{inlineError}</Text>
-              </View>
-            )}
-
-            <View style={styles.buttonRow}>
-              <Pressable
-                style={[styles.button, styles.cancelButton]}
-                onPress={handleClose}
-                disabled={loading}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.button,
-                  styles.submitWrapper,
-                  loading && styles.buttonDisabled,
-                ]}
-                onPress={handleJoin}
-                disabled={loading}
-              >
-                <LinearGradient
-                  colors={["#BAC8E8", "#98B687"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.gradientButton}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <Text style={styles.submitButtonText}>Join</Text>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={handleClose}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.closeButton,
+                pressed && styles.closeButtonPressed,
+              ]}
+            >
+              <Text style={styles.closeIcon}>✕</Text>
+            </Pressable>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </>
+
+          {/* [TEAMMATE EDIT AREA]: Group creation (US 1.2) - replace or wire up createGroup logic here. This comment can be removed once implemented. */}
+          {renderCreateSection ? (
+            renderCreateSection()
+          ) : (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionLabel}>Create a new group</Text>
+              <TextInput
+                style={[styles.input, styles.disabledInput]}
+                placeholder="Group name"
+                placeholderTextColor="#9CA3AF"
+                editable={false}
+              />
+              <View style={styles.placeholderCreateButton}>
+                <Text style={styles.placeholderCreateButtonText}>
+                  Create group
+                </Text>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionLabel}>Join an existing group</Text>
+            <TextInput
+              style={[
+                styles.input,
+                hasError && styles.inputError,
+              ]}
+              placeholder="Enter 8-character invite code"
+              placeholderTextColor="#9CA3AF"
+              value={code}
+              onChangeText={handleCodeChange}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={8}
+              returnKeyType="done"
+              onSubmitEditing={handleJoin}
+              editable={!loading}
+            />
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.joinButton,
+                pressed && styles.joinButtonPressed,
+                loading && styles.buttonDisabled,
+              ]}
+              onPress={handleJoin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.joinButtonText}>Join group</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
+
+export const JoinGroupModal = AddGroupModal;
 
 const styles = StyleSheet.create({
   backdrop: {
@@ -197,103 +220,134 @@ const styles = StyleSheet.create({
   backdropTouch: {
     ...StyleSheet.absoluteFill,
   },
-  modalCard: {
+  card: {
     width: "100%",
-    maxWidth: 380,
+    maxWidth: 400,
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 10,
     zIndex: 1,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  headerTextGroup: {
+    flex: 1,
   },
   title: {
     fontSize: 22,
     fontWeight: "700",
     color: "#111827",
-    marginBottom: 6,
+    letterSpacing: -0.3,
   },
-  subtitle: {
+  closeButton: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+    marginLeft: 8,
+  },
+  closeButtonPressed: {
+    opacity: 0.7,
+  },
+  closeIcon: {
     fontSize: 14,
-    color: "#4B5563",
-    lineHeight: 20,
-    marginBottom: 20,
+    color: "#6B7280",
+    fontWeight: "700",
+    textAlign: "center",
+    width: 16,
+    height: 16,
+    lineHeight: 16,
   },
-  inputContainer: {
+  sectionContainer: {
+    width: "100%",
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: "#E5E7EB",
+    borderColor: "#D1D5DB",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 18,
-    fontWeight: "600",
+    paddingVertical: 13,
+    fontSize: 15,
     color: "#111827",
-    letterSpacing: 1.5,
-  },
-  inputError: {
-    borderColor: "#EACECE",
-    backgroundColor: "#FFF8F8",
-  },
-  errorBox: {
-    backgroundColor: "#EACECD",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     marginBottom: 12,
   },
-  errorText: {
-    color: "#5C1D24",
-    fontSize: 13,
-    fontWeight: "600",
+  inputError: {
+    borderColor: "#EF4444",
+    backgroundColor: "#FEF2F2",
   },
-  buttonRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 12,
+  disabledInput: {
+    backgroundColor: "#F9FAFB",
+    borderColor: "#E5E7EB",
+    color: "#9CA3AF",
   },
-  button: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  cancelButton: {
+  placeholderCreateButton: {
     backgroundColor: "#F3F4F6",
-    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  cancelButtonText: {
-    color: "#4B5563",
-    fontSize: 15,
-    fontWeight: "600",
+  placeholderCreateButtonText: {
+    color: "#9CA3AF",
+    fontSize: 14,
+    fontWeight: "500",
   },
-  submitWrapper: {
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 18,
   },
-  gradientButton: {
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E5E7EB",
+  },
+  dividerText: {
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: "#9CA3AF",
+    fontWeight: "500",
+  },
+  joinButton: {
+    backgroundColor: "#4F8A5B",
+    borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    width: "100%",
+    shadowColor: "#4F8A5B",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
   },
-  submitButtonText: {
+  joinButtonPressed: {
+    backgroundColor: "#42774C",
+  },
+  joinButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "700",
-    textShadowColor: "rgba(0, 0, 0, 0.15)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    letterSpacing: 0.2,
   },
   buttonDisabled: {
     opacity: 0.6,

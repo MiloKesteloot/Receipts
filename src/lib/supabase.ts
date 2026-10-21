@@ -16,3 +16,5 @@ export const supabase =
         },
       })
     : null;
+
+export const SUPABASE = supabase;

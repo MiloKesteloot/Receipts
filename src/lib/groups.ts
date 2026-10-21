@@ -1,19 +1,16 @@
-import { supabase } from "./supabase";
 import {
   Group,
   GroupMembership,
   GroupService,
   JoinGroupResult,
 } from "./groups.types";
+import { supabase } from "./supabase";
 
-/**
- * Initial seed groups for development and testing.
- */
 export const SEED_GROUPS: Group[] = [
   {
     id: "group-apt402",
     name: "Apartment 402",
-    invite_code: "APT402",
+    invite_code: "tsAPT402",
     created_at: new Date().toISOString(),
   },
   {
@@ -24,10 +21,6 @@ export const SEED_GROUPS: Group[] = [
   },
 ];
 
-/**
- * Mock Group Service: In-memory implementation of GroupService.
- * Allows full UI and acceptance criteria testing without network/Supabase dependencies.
- */
 export class MockGroupService implements GroupService {
   private groups: Group[];
   private members: GroupMembership[];
@@ -52,9 +45,8 @@ export class MockGroupService implements GroupService {
     inviteCode: string,
     userId: string = "current-user"
   ): Promise<JoinGroupResult> {
-    const trimmed = (inviteCode || "").trim();
+    const trimmed = (inviteCode || "").trim().toUpperCase();
 
-    // 1. Validation: empty code
     if (!trimmed) {
       return {
         success: false,
@@ -63,9 +55,8 @@ export class MockGroupService implements GroupService {
       };
     }
 
-    // 2. Case-insensitive group lookup
     const group = this.groups.find(
-      (g) => g.invite_code.toLowerCase() === trimmed.toLowerCase()
+      (g) => g.invite_code.toUpperCase() === trimmed
     );
 
     if (!group) {
@@ -76,7 +67,6 @@ export class MockGroupService implements GroupService {
       };
     }
 
-    // 3. Check for existing membership (idempotency check)
     const isMember = this.members.some(
       (m) => m.group_id === group.id && m.user_id === userId
     );
@@ -90,7 +80,6 @@ export class MockGroupService implements GroupService {
       };
     }
 
-    // 4. Add member
     const newMembership: GroupMembership = {
       id: `member-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       group_id: group.id,
@@ -107,7 +96,6 @@ export class MockGroupService implements GroupService {
     };
   }
 
-  // Helper inspect methods for tests
   getMembers(): GroupMembership[] {
     return [...this.members];
   }
@@ -117,13 +105,10 @@ export class MockGroupService implements GroupService {
   }
 }
 
-/**
- * Supabase-backed Group Service using RPC: POST /groups/join
- */
 export class SupabaseGroupService implements GroupService {
   async joinGroupByCode(
     inviteCode: string,
-    userId: string = "current-user"
+    _userId?: string
   ): Promise<JoinGroupResult> {
     if (!supabase) {
       return {
@@ -133,7 +118,7 @@ export class SupabaseGroupService implements GroupService {
       };
     }
 
-    const trimmed = (inviteCode || "").trim();
+    const trimmed = (inviteCode || "").trim().toUpperCase();
     if (!trimmed) {
       return {
         success: false,
@@ -145,10 +130,16 @@ export class SupabaseGroupService implements GroupService {
     try {
       const { data, error } = await supabase.rpc("join_group", {
         p_invite_code: trimmed,
-        p_user_id: userId,
       });
 
       if (error) {
+        if (error.code === "42501") {
+          return {
+            success: false,
+            error: "NOT_SIGNED_IN",
+            message: "Please sign in to join a group",
+          };
+        }
         return {
           success: false,
           error: "NETWORK_ERROR",
@@ -167,22 +158,22 @@ export class SupabaseGroupService implements GroupService {
   }
 }
 
-// Default shared instance for the application
 export const mockGroupService = new MockGroupService();
 export const supabaseGroupService = new SupabaseGroupService();
 
-/**
- * Primary joinGroup export: Uses Supabase when configured, otherwise falls back to MockGroupService
- */
+// [TEAMMATE EDIT AREA]: Group creation (US 1.2) - wire up createGroup or register newly created groups with mock service here. Can be removed once implemented.
+export function registerMockGroup(group: Group) {
+  mockGroupService.getGroups().push(group);
+}
+
 export async function joinGroup(
   inviteCode: string,
   userId: string = "current-user"
 ): Promise<JoinGroupResult> {
-  // If Supabase is available in .env, attempt network call; otherwise use reliable in-memory mock
   if (supabase) {
     const result = await supabaseGroupService.joinGroupByCode(inviteCode, userId);
-    // If the remote function isn't yet migrated into Supabase database, fall back gracefully to mock
-    if (!result.success && result.error === "NETWORK_ERROR") {
+    // Fall back to mock service if sign-in is not yet present or network is unavailable
+    if (!result.success && (result.error === "NETWORK_ERROR" || result.error === "NOT_SIGNED_IN")) {
       return mockGroupService.joinGroupByCode(inviteCode, userId);
     }
     return result;
