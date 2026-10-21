@@ -1,56 +1,57 @@
-# Welcome to your Expo app 👋
+# Receipts
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Run the app
 
-## Get started
+### 1. Install the tools
 
-1. Install dependencies
+**Windows**
+- Install [Node.js](https://nodejs.org) (the LTS version).
+- Install [Git](https://git-scm.com/download/win).
 
-   ```bash
-   npm install
-   ```
+**Mac**
+- Install [Node.js](https://nodejs.org) (the LTS version).
+- Git comes with the Mac. The first time you run `git`, accept the prompt to install the developer tools.
 
-2. Start the app
+**Phone**
+- Install **Expo Go** from the App Store or Play Store.
 
-   ```bash
-   npx expo start
-   ```
+### 2. Get the code
 
-In the output, you'll find options to open the app in a
+Open a terminal (PowerShell on Windows, Terminal on Mac) and run:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+git clone https://github.com/MiloKesteloot/Receipts.git
+cd Receipts
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 3. Start it
 
-### Other setup steps
+```
+npx expo start
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Scan the QR code it prints. On iPhone use the Camera app; on Android use Expo Go. Your phone and computer must be on the same Wi-Fi.
 
-## Learn more
+On Windows, if a firewall popup asks about Node.js, click **Allow**.
 
-To learn more about developing your project with Expo, look at the following resources:
+To get new changes later, run `git pull` and `npm install`, then `npx expo start` again.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## The server (Supabase)
 
-## Join the community
+The app uses a shared Supabase database. Its connection details are already in `.env`, so you don't need to set anything up to run the app.
 
-Join our community of developers creating universal apps.
+To use your own Supabase project instead:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the dashboard, open **SQL Editor**, paste in [`supabase/setup.sql`](supabase/setup.sql) and click **Run**.
+3. Put your project's URL (**Project Settings → Data API**) and publishable key (**Project Settings → API Keys**) in `.env`.
+4. Restart `npx expo start`.
+
+Never put the secret key or database password in `.env`; it's committed to git.
+
+## Troubleshooting
+
+- **The app looks like the Expo welcome screen:** you opened an old project in Expo Go. Scan the QR code again.
+- **Phone can't connect:** check you're on the same Wi-Fi, or run `npx expo start --tunnel`.
+- **Something looks stale:** run `npx expo start --clear`.

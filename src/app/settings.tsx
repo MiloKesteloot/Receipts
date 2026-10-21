@@ -1,6 +1,11 @@
 import { PlaceholderScreen } from "@/components/placeholder-screen";
+import { JSX } from "react/jsx-runtime";
 
-export default function SettingsScreen() {
+/**
+ * TODO Write description
+ * @returns JSX element
+ */
+export default function SettingsScreen(): JSX.Element {
   return (
     <PlaceholderScreen
       title="Settings"
