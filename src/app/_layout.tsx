@@ -1,8 +1,13 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useColorScheme } from "react-native";
+import { JSX } from "react/jsx-runtime";
 
-export default function RootLayout() {
+/**
+ * TODO Write description
+ * @returns JSX element
+ */
+export default function RootLayout(): JSX.Element {
   const colorScheme = useColorScheme();
 
   return (
