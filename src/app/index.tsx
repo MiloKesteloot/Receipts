@@ -13,7 +13,7 @@ import {
 import { NewGroupButton } from "@/components/NewGroupButton";
 import { USE_MOCK, mockGroups } from "@/lib/mock";
 import { palette } from "@/lib/palette";
-import { supabase } from "@/lib/supabase";
+import { SUPABASE as supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Group = { id: string; name: string };

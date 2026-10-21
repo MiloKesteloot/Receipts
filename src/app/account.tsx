@@ -1,6 +1,11 @@
 import { PlaceholderScreen } from "@/components/placeholder-screen";
+import { JSX } from "react/jsx-runtime";
 
-export default function AccountScreen() {
+/**
+ * The accounts screen.
+ * @returns JSX element
+ */
+export default function AccountScreen(): JSX.Element {
   return (
     <PlaceholderScreen
       title="Account"
