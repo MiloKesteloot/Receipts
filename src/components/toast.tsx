@@ -39,7 +39,7 @@ export function Toast({
   onDismiss,
 }: ToastProps): JSX.Element | null {
   const insets = useSafeAreaInsets();
-  const [translateY] = useState(() => new Animated.Value(70));
+  const [translateY] = useState(() => new Animated.Value(-70));
   const [opacity] = useState(() => new Animated.Value(0));
 
   const useNative = Platform.OS !== "web";
@@ -47,7 +47,7 @@ export function Toast({
   const handleDismiss = useCallback(() => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: 70,
+        toValue: -70,
         duration: 180,
         useNativeDriver: useNative,
       }),
@@ -82,7 +82,7 @@ export function Toast({
 
       return () => clearTimeout(timer);
     } else {
-      translateY.setValue(70);
+      translateY.setValue(-70);
       opacity.setValue(0);
     }
   }, [visible, message, duration, handleDismiss, opacity, translateY, useNative]);
@@ -98,14 +98,14 @@ export function Toast({
         ? "#F28B82"
         : "#8AB4F8";
 
-  const bottomOffset = Math.max(insets.bottom, 16) + 16;
+  const topOffset = Math.max(insets.top, 16) + 12;
 
   return (
     <Animated.View
       style={[
         STYLES.container,
         {
-          bottom: bottomOffset,
+          top: topOffset,
           transform: [{ translateY }],
           opacity,
         },
