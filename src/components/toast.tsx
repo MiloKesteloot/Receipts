@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Animated,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
+
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { JSX } from "react/jsx-runtime";
@@ -37,25 +39,27 @@ export function Toast({
   onDismiss,
 }: ToastProps): JSX.Element | null {
   const insets = useSafeAreaInsets();
-  const [translateY] = useState(() => new Animated.Value(-70));
+  const [translateY] = useState(() => new Animated.Value(70));
   const [opacity] = useState(() => new Animated.Value(0));
+
+  const useNative = Platform.OS !== "web";
 
   const handleDismiss = useCallback(() => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: -70,
+        toValue: 70,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
       Animated.timing(opacity, {
         toValue: 0,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
     ]).start(() => {
       onDismiss();
     });
-  }, [opacity, translateY, onDismiss]);
+  }, [opacity, translateY, onDismiss, useNative]);
 
   useEffect(() => {
     if (visible) {
@@ -63,12 +67,12 @@ export function Toast({
         Animated.timing(translateY, {
           toValue: 0,
           duration: 220,
-          useNativeDriver: true,
+          useNativeDriver: useNative,
         }),
         Animated.timing(opacity, {
           toValue: 1,
           duration: 220,
-          useNativeDriver: true,
+          useNativeDriver: useNative,
         }),
       ]).start();
 
@@ -78,10 +82,10 @@ export function Toast({
 
       return () => clearTimeout(timer);
     } else {
-      translateY.setValue(-70);
+      translateY.setValue(70);
       opacity.setValue(0);
     }
-  }, [visible, message, duration, handleDismiss, opacity, translateY]);
+  }, [visible, message, duration, handleDismiss, opacity, translateY, useNative]);
 
   if (!visible) {
     return null;
@@ -94,14 +98,14 @@ export function Toast({
         ? "#F28B82"
         : "#8AB4F8";
 
-  const topOffset = Math.max(insets.top, 14) + 8;
+  const bottomOffset = Math.max(insets.bottom, 16) + 16;
 
   return (
     <Animated.View
       style={[
         STYLES.container,
         {
-          top: topOffset,
+          bottom: bottomOffset,
           transform: [{ translateY }],
           opacity,
         },
@@ -109,6 +113,7 @@ export function Toast({
       accessibilityLiveRegion="polite"
       accessibilityRole="alert"
     >
+
       <View style={[STYLES.indicatorBar, { backgroundColor: accentColor }]} />
       <View style={STYLES.contentRow}>
         <View style={STYLES.textContainer}>

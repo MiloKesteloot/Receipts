@@ -44,6 +44,7 @@ export function AddGroupModal({
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -53,6 +54,7 @@ export function AddGroupModal({
     if (!visible) {
       setCode("");
       setHasError(false);
+      setInlineError(null);
       setToastVisible(false);
       setToastMessage("");
     }
@@ -77,6 +79,7 @@ export function AddGroupModal({
     setCode(text.toUpperCase());
     if (hasError) {
       setHasError(false);
+      setInlineError(null);
     }
   }
 
@@ -87,6 +90,7 @@ export function AddGroupModal({
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) {
       setHasError(true);
+      setInlineError("Please enter an invite code");
       triggerToast("Please enter an invite code", "error");
       return;
     }
@@ -98,6 +102,7 @@ export function AddGroupModal({
 
       if (result.success) {
         setHasError(false);
+        setInlineError(null);
         setCode("");
         setToastVisible(false);
         setToastMessage("");
@@ -107,11 +112,13 @@ export function AddGroupModal({
         }
       } else {
         setHasError(true);
+        setInlineError(result.message);
         triggerToast(result.message, "error");
       }
     } catch (err: unknown) {
       setHasError(true);
       const msg = err instanceof Error ? err.message : "Failed to join group. Please try again.";
+      setInlineError(msg);
       triggerToast(msg, "error");
     } finally {
       setLoading(false);
@@ -124,6 +131,7 @@ export function AddGroupModal({
   function handleClose(): void {
     setCode("");
     setHasError(false);
+    setInlineError(null);
     setToastVisible(false);
     setToastMessage("");
     onClose();
@@ -136,12 +144,7 @@ export function AddGroupModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <Toast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onDismiss={() => setToastVisible(false)}
-      />
+
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -210,6 +213,9 @@ export function AddGroupModal({
               onSubmitEditing={handleJoin}
               editable={!loading}
             />
+            {hasError && inlineError ? (
+              <Text style={STYLES.inlineErrorText}>{inlineError}</Text>
+            ) : null}
 
             <Pressable
               style={({ pressed }) => [
@@ -229,6 +235,13 @@ export function AddGroupModal({
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onDismiss={() => setToastVisible(false)}
+      />
     </Modal>
   );
 }
@@ -323,7 +336,16 @@ const STYLES = StyleSheet.create({
   inputError: {
     borderColor: "#EF4444",
     backgroundColor: "#FEF2F2",
+    marginBottom: 4,
   },
+  inlineErrorText: {
+    color: "#EF4444",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 10,
+    marginTop: -2,
+  },
+
   disabledInput: {
     backgroundColor: "#F9FAFB",
     borderColor: "#E5E7EB",

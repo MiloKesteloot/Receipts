@@ -1,5 +1,5 @@
-import { router } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { JSX, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -7,32 +7,36 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { JoinGroupModal } from "@/components/join-group-modal";
 import { NewGroupButton } from "@/components/NewGroupButton";
-import { USE_MOCK, mockGroups } from "@/lib/mock";
+import { Toast, ToastType } from "@/components/toast";
+import { mockGroups, USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { SUPABASE as supabase } from "@/lib/supabase";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Group = { id: string; name: string };
 
-// TODO (create-group story): put the "new group" flow here, e.g. open a
-// name form and call supabase.rpc("create_group", { p_name }).
-// This is the only line the button needs, so nothing else has to change.
-const onNewGroup = () => {
-  console.log("New group pressed (placeholder)");
-};
-
-export default function Index() {
+/**
+ * Main groups list screen allowing user to view and join groups.
+ * @returns JSX element
+ */
+export default function Index(): JSX.Element {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true); // first load only
   const [refreshing, setRefreshing] = useState(false); // pull-to-refresh
   const [error, setError] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [toastState, setToastState] = useState<{
+    message: string;
+    type: ToastType;
+  } | null>(null);
 
   const insets = useSafeAreaInsets();
-  const topPadding = Platform.OS == "web" ? 80 : insets.top + 24;
+  const topPadding = Platform.OS === "web" ? 80 : insets.top + 24;
 
   const load = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     if (mode === "initial") setLoading(true);
@@ -40,7 +44,7 @@ export default function Index() {
     setError(null);
 
     if (USE_MOCK) {
-      setGroups(mockGroups);
+      setGroups([...mockGroups]);
       setLoading(false);
       setRefreshing(false);
       return;
@@ -70,9 +74,39 @@ export default function Index() {
     load("initial");
   }, [load]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (USE_MOCK) {
+        setGroups([...mockGroups]);
+      }
+    }, [])
+  );
+
+  const handleOpenModal = () => {
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+  };
+
+  const handleGroupJoined = (
+    _group: Group,
+    status: "JOINED" | "ALREADY_MEMBER",
+    message: string
+  ) => {
+    setModalVisible(false);
+    setGroups([...mockGroups]);
+    setToastState({
+      message,
+      type: status === "ALREADY_MEMBER" ? "info" : "success",
+    });
+  };
+
+
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={STYLES.center}>
         <ActivityIndicator color={palette.accent} />
       </View>
     );
@@ -80,73 +114,92 @@ export default function Index() {
 
   if (error) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error}</Text>
-        <Pressable onPress={() => load("initial")} style={styles.button}>
-          <Text style={styles.buttonText}>Try again</Text>
+      <View style={STYLES.center}>
+        <Text style={STYLES.error}>{error}</Text>
+        <Pressable onPress={() => load("initial")} style={STYLES.button}>
+          <Text style={STYLES.buttonText}>Try again</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <FlatList
-      style={styles.screen}
-      contentContainerStyle={[styles.list, { paddingTop: topPadding }]}
-      data={groups}
-      keyExtractor={(g) => g.id}
-      onRefresh={() => load("refresh")}
-      refreshing={refreshing}
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>Your groups</Text>
-          <Text style={styles.title}>Where are we splitting?</Text>
-          <View style={styles.subtitleRow}>
-            <Text style={styles.subtitle}>
-              Choose a group to see its members and receipts.
-            </Text>
-            <NewGroupButton onPress={onNewGroup} />
+    <View style={STYLES.container}>
+      <FlatList
+        style={STYLES.screen}
+        contentContainerStyle={[STYLES.list, { paddingTop: topPadding }]}
+        data={groups}
+        keyExtractor={(g) => g.id}
+        onRefresh={() => load("refresh")}
+        refreshing={refreshing}
+        ListHeaderComponent={
+          <View style={STYLES.header}>
+            <Text style={STYLES.eyebrow}>Your groups</Text>
+            <Text style={STYLES.title}>Where are we splitting?</Text>
+            <View style={STYLES.subtitleRow}>
+              <Text style={STYLES.subtitle}>
+                Choose a group to see its members and receipts.
+              </Text>
+              <NewGroupButton onPress={handleOpenModal} />
+            </View>
           </View>
-        </View>
-      }
-      ListEmptyComponent={
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>You're not in any groups yet.</Text>
-        </View>
-      }
-      renderItem={({ item, index }) => (
-        <Pressable
-          onPress={() =>
-            router.navigate({
-              pathname: "/groups/[id]",
-              params: { id: item.id },
-            })
-          }
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-        >
-          <View
-            style={[
-              styles.tile,
-              {
-                backgroundColor: palette.tiles[index % palette.tiles.length],
-              },
-            ]}
+        }
+        ListEmptyComponent={
+          <View style={STYLES.emptyCard}>
+            <Text style={STYLES.emptyText}>You&apos;re not in any groups yet.</Text>
+          </View>
+        }
+        renderItem={({ item, index }) => (
+          <Pressable
+            onPress={() =>
+              router.navigate({
+                pathname: "/groups/[id]",
+                params: { id: item.id },
+              })
+            }
+            style={({ pressed }) => [STYLES.row, pressed && STYLES.rowPressed]}
           >
-            <Text style={styles.tileText}>
-              {item.name.trim().charAt(0).toUpperCase()}
+            <View
+              style={[
+                STYLES.tile,
+                {
+                  backgroundColor: palette.tiles[index % palette.tiles.length],
+                },
+              ]}
+            >
+              <Text style={STYLES.tileText}>
+                {item.name.trim().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={STYLES.rowText} numberOfLines={1}>
+              {item.name}
             </Text>
-          </View>
-          <Text style={styles.rowText} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-      )}
-    />
+            <Text style={STYLES.chevron}>›</Text>
+          </Pressable>
+        )}
+      />
+      <JoinGroupModal
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        onSuccess={handleGroupJoined}
+      />
+      {toastState ? (
+        <Toast
+          visible={Boolean(toastState)}
+          message={toastState.message}
+          type={toastState.type}
+          onDismiss={() => setToastState(null)}
+        />
+      ) : null}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
+/**
+ * Styles for the Index screen.
+ */
+const STYLES = StyleSheet.create({
+  container: { flex: 1, backgroundColor: palette.bg },
   screen: { backgroundColor: palette.bg },
   center: {
     flex: 1,
@@ -213,3 +266,4 @@ const styles = StyleSheet.create({
   buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
   error: { color: palette.error, textAlign: "center" },
 });
+
