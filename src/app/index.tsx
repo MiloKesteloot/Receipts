@@ -23,9 +23,9 @@ export default function Index(): JSX.Element {
       .select("clicks")
       .eq("id", 1)
       .single()
-      .then(({ data, error }: any) => {
+      .then(({ data, error }: { data: { clicks: number } | null; error: { message: string } | null }) => {
         if (error) setError(error.message);
-        else setClicks(data.clicks);
+        else if (data) setClicks(data.clicks);
       });
   }, []);
 

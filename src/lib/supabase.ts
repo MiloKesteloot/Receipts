@@ -24,5 +24,3 @@ export const SUPABASE =
             },
         })
         : null;
-
-export const supabase = SUPABASE;

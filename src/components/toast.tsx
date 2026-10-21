@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { JSX } from "react/jsx-runtime";
 
 export type ToastType = "success" | "info" | "error";
 
@@ -18,13 +19,23 @@ export interface ToastProps {
   onDismiss: () => void;
 }
 
+/**
+ * Material Design 3 Toast component.
+ * @param root0 Toast props
+ * @param root0.visible Visibility state
+ * @param root0.message Message text
+ * @param root0.type Toast variant
+ * @param root0.duration Auto-dismiss duration
+ * @param root0.onDismiss Callback when dismissed
+ * @returns JSX element or null
+ */
 export function Toast({
   visible,
   message,
   type = "info",
   duration = 3500,
   onDismiss,
-}: ToastProps) {
+}: ToastProps): JSX.Element | null {
   const insets = useSafeAreaInsets();
   const [translateY] = useState(() => new Animated.Value(-70));
   const [opacity] = useState(() => new Animated.Value(0));
@@ -88,7 +99,7 @@ export function Toast({
   return (
     <Animated.View
       style={[
-        styles.container,
+        STYLES.container,
         {
           top: topOffset,
           transform: [{ translateY }],
@@ -98,10 +109,10 @@ export function Toast({
       accessibilityLiveRegion="polite"
       accessibilityRole="alert"
     >
-      <View style={[styles.indicatorBar, { backgroundColor: accentColor }]} />
-      <View style={styles.contentRow}>
-        <View style={styles.textContainer}>
-          <Text style={styles.messageText} numberOfLines={2}>
+      <View style={[STYLES.indicatorBar, { backgroundColor: accentColor }]} />
+      <View style={STYLES.contentRow}>
+        <View style={STYLES.textContainer}>
+          <Text style={STYLES.messageText} numberOfLines={2}>
             {message}
           </Text>
         </View>
@@ -110,18 +121,21 @@ export function Toast({
           hitSlop={8}
           onPress={handleDismiss}
           style={({ pressed }) => [
-            styles.dismissButton,
-            pressed && styles.dismissPressed,
+            STYLES.dismissButton,
+            pressed && STYLES.dismissPressed,
           ]}
         >
-          <Text style={[styles.dismissText, { color: accentColor }]}>Dismiss</Text>
+          <Text style={[STYLES.dismissText, { color: accentColor }]}>Dismiss</Text>
         </Pressable>
       </View>
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
+/**
+ * Toast styles definition.
+ */
+const STYLES = StyleSheet.create({
   container: {
     position: "absolute",
     left: 16,

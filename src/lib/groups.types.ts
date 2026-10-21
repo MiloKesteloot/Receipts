@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+
 /**
  * Group domain and service contracts for User Story 1.4: Join Group
  */
@@ -43,4 +45,3 @@ export type JoinGroupResult =
 export interface GroupService {
   joinGroupByCode(inviteCode: string, userId?: string): Promise<JoinGroupResult>;
 }
-

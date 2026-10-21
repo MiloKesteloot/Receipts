@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { JSX } from "react/jsx-runtime";
 import { joinGroup } from "../lib/groups";
 import { Group } from "../lib/groups.types";
 import { Toast, ToastType } from "./toast";
@@ -23,13 +24,23 @@ export interface AddGroupModalProps {
   renderCreateSection?: () => React.ReactNode;
 }
 
+/**
+ * Add Group modal overlay component.
+ * @param root0 Component props
+ * @param root0.visible Visibility flag
+ * @param root0.userId User ID of the joining user
+ * @param root0.onClose Callback when modal closes
+ * @param root0.onSuccess Callback when group is joined
+ * @param root0.renderCreateSection Custom renderer for group creation
+ * @returns JSX element
+ */
 export function AddGroupModal({
   visible,
   userId = "current-user",
   onClose,
   onSuccess,
   renderCreateSection,
-}: AddGroupModalProps) {
+}: AddGroupModalProps): JSX.Element {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -47,20 +58,32 @@ export function AddGroupModal({
     }
   }, [visible]);
 
-  function triggerToast(message: string, type: ToastType) {
+  /**
+   * Triggers an in-modal toast message.
+   * @param message Message to display
+   * @param type Variant of toast
+   */
+  function triggerToast(message: string, type: ToastType): void {
     setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
   }
 
-  function handleCodeChange(text: string) {
+  /**
+   * Handles uppercase input changes.
+   * @param text Input text
+   */
+  function handleCodeChange(text: string): void {
     setCode(text.toUpperCase());
     if (hasError) {
       setHasError(false);
     }
   }
 
-  async function handleJoin() {
+  /**
+   * Handles invite code submission.
+   */
+  async function handleJoin(): Promise<void> {
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) {
       setHasError(true);
@@ -86,16 +109,19 @@ export function AddGroupModal({
         setHasError(true);
         triggerToast(result.message, "error");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setHasError(true);
-      const msg = err?.message || "Failed to join group. Please try again.";
+      const msg = err instanceof Error ? err.message : "Failed to join group. Please try again.";
       triggerToast(msg, "error");
     } finally {
       setLoading(false);
     }
   }
 
-  function handleClose() {
+  /**
+   * Handles closing the modal and clearing state.
+   */
+  function handleClose(): void {
     setCode("");
     setHasError(false);
     setToastVisible(false);
@@ -119,24 +145,24 @@ export function AddGroupModal({
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.backdrop}
+        style={STYLES.backdrop}
       >
-        <Pressable style={styles.backdropTouch} onPress={handleClose} />
+        <Pressable style={STYLES.backdropTouch} onPress={handleClose} />
 
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <View style={styles.headerTextGroup}>
-              <Text style={styles.title}>Add a group</Text>
+        <View style={STYLES.card}>
+          <View style={STYLES.header}>
+            <View style={STYLES.headerTextGroup}>
+              <Text style={STYLES.title}>Add a group</Text>
             </View>
             <Pressable
               onPress={handleClose}
               hitSlop={12}
               style={({ pressed }) => [
-                styles.closeButton,
-                pressed && styles.closeButtonPressed,
+                STYLES.closeButton,
+                pressed && STYLES.closeButtonPressed,
               ]}
             >
-              <Text style={styles.closeIcon}>✕</Text>
+              <Text style={STYLES.closeIcon}>✕</Text>
             </Pressable>
           </View>
 
@@ -144,34 +170,34 @@ export function AddGroupModal({
           {renderCreateSection ? (
             renderCreateSection()
           ) : (
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionLabel}>Create a new group</Text>
+            <View style={STYLES.sectionContainer}>
+              <Text style={STYLES.sectionLabel}>Create a new group</Text>
               <TextInput
-                style={[styles.input, styles.disabledInput]}
+                style={[STYLES.input, STYLES.disabledInput]}
                 placeholder="Group name"
                 placeholderTextColor="#9CA3AF"
                 editable={false}
               />
-              <View style={styles.placeholderCreateButton}>
-                <Text style={styles.placeholderCreateButtonText}>
+              <View style={STYLES.placeholderCreateButton}>
+                <Text style={STYLES.placeholderCreateButtonText}>
                   Create group
                 </Text>
               </View>
             </View>
           )}
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
+          <View style={STYLES.dividerRow}>
+            <View style={STYLES.dividerLine} />
+            <Text style={STYLES.dividerText}>or</Text>
+            <View style={STYLES.dividerLine} />
           </View>
 
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionLabel}>Join an existing group</Text>
+          <View style={STYLES.sectionContainer}>
+            <Text style={STYLES.sectionLabel}>Join an existing group</Text>
             <TextInput
               style={[
-                styles.input,
-                hasError && styles.inputError,
+                STYLES.input,
+                hasError && STYLES.inputError,
               ]}
               placeholder="Enter 8-character invite code"
               placeholderTextColor="#9CA3AF"
@@ -187,9 +213,9 @@ export function AddGroupModal({
 
             <Pressable
               style={({ pressed }) => [
-                styles.joinButton,
-                pressed && styles.joinButtonPressed,
-                loading && styles.buttonDisabled,
+                STYLES.joinButton,
+                pressed && STYLES.joinButtonPressed,
+                loading && STYLES.buttonDisabled,
               ]}
               onPress={handleJoin}
               disabled={loading}
@@ -197,7 +223,7 @@ export function AddGroupModal({
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.joinButtonText}>Join group</Text>
+                <Text style={STYLES.joinButtonText}>Join group</Text>
               )}
             </Pressable>
           </View>
@@ -207,9 +233,15 @@ export function AddGroupModal({
   );
 }
 
+/**
+ * Backward-compatible alias for AddGroupModal.
+ */
 export const JoinGroupModal = AddGroupModal;
 
-const styles = StyleSheet.create({
+/**
+ * Modal stylesheet.
+ */
+const STYLES = StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.45)",

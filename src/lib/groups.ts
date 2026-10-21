@@ -1,11 +1,16 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+
+import { SUPABASE } from "./supabase";
 import {
   Group,
   GroupMembership,
   GroupService,
   JoinGroupResult,
 } from "./groups.types";
-import { supabase } from "./supabase";
 
+/**
+ * Initial seed groups for development and testing.
+ */
 export const SEED_GROUPS: Group[] = [
   {
     id: "group-apt402",
@@ -21,10 +26,18 @@ export const SEED_GROUPS: Group[] = [
   },
 ];
 
+/**
+ * In-memory Mock Group Service for development and offline testing.
+ */
 export class MockGroupService implements GroupService {
   private groups: Group[];
   private members: GroupMembership[];
 
+  /**
+   * Initializes mock groups and memberships.
+   * @param initialGroups Initial seed groups
+   * @param initialMembers Initial memberships
+   */
   constructor(
     initialGroups: Group[] = SEED_GROUPS,
     initialMembers: GroupMembership[] = []
@@ -33,14 +46,25 @@ export class MockGroupService implements GroupService {
     this.members = [...initialMembers];
   }
 
+  /**
+   * Resets mock data to seed values.
+   * @param initialGroups Groups to reset to
+   * @param initialMembers Memberships to reset to
+   */
   reset(
     initialGroups: Group[] = SEED_GROUPS,
     initialMembers: GroupMembership[] = []
-  ) {
+  ): void {
     this.groups = [...initialGroups];
     this.members = [...initialMembers];
   }
 
+  /**
+   * Joins a group by invite code in memory.
+   * @param inviteCode The 8-character invite code
+   * @param userId The user ID joining the group
+   * @returns Join result with status and group data
+   */
   async joinGroupByCode(
     inviteCode: string,
     userId: string = "current-user"
@@ -96,21 +120,34 @@ export class MockGroupService implements GroupService {
     };
   }
 
+  /**
+   * Gets current in-memory memberships.
+   * @returns List of memberships
+   */
   getMembers(): GroupMembership[] {
     return [...this.members];
   }
 
+  /**
+   * Gets current in-memory groups.
+   * @returns List of groups
+   */
   getGroups(): Group[] {
     return [...this.groups];
   }
 }
 
+/**
+ * Supabase-backed Group Service for production database RPC calls.
+ */
 export class SupabaseGroupService implements GroupService {
-  async joinGroupByCode(
-    inviteCode: string,
-    _userId?: string
-  ): Promise<JoinGroupResult> {
-    if (!supabase) {
+  /**
+   * Joins a group via Supabase RPC function.
+   * @param inviteCode The invite code to join with
+   * @returns Join result from server
+   */
+  async joinGroupByCode(inviteCode: string): Promise<JoinGroupResult> {
+    if (!SUPABASE) {
       return {
         success: false,
         error: "NETWORK_ERROR",
@@ -128,7 +165,7 @@ export class SupabaseGroupService implements GroupService {
     }
 
     try {
-      const { data, error } = await supabase.rpc("join_group", {
+      const { data, error } = await SUPABASE.rpc("join_group", {
         p_invite_code: trimmed,
       });
 
@@ -148,35 +185,51 @@ export class SupabaseGroupService implements GroupService {
       }
 
       return data as JoinGroupResult;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
       return {
         success: false,
         error: "NETWORK_ERROR",
-        message: err?.message || "An unexpected error occurred.",
+        message: msg,
       };
     }
   }
 }
 
-export const mockGroupService = new MockGroupService();
-export const supabaseGroupService = new SupabaseGroupService();
+/**
+ * Shared in-memory group service instance.
+ */
+export const MOCK_GROUP_SERVICE = new MockGroupService();
 
-// [TEAMMATE EDIT AREA]: Group creation (US 1.2) - wire up createGroup or register newly created groups with mock service here. Can be removed once implemented.
-export function registerMockGroup(group: Group) {
-  mockGroupService.getGroups().push(group);
+/**
+ * Shared Supabase group service instance.
+ */
+export const SUPABASE_GROUP_SERVICE = new SupabaseGroupService();
+
+/**
+ * [TEAMMATE EDIT AREA]: Group creation (US 1.2) - wire up createGroup or register newly created groups with mock service here. Can be removed once implemented.
+ * @param group Newly created group
+ */
+export function registerMockGroup(group: Group): void {
+  MOCK_GROUP_SERVICE.getGroups().push(group);
 }
 
+/**
+ * Primary joinGroup export: Uses Supabase when configured, otherwise falls back to MockGroupService.
+ * @param inviteCode Invite code entered by user
+ * @param userId User ID of the joining member
+ * @returns Join result with group data or error
+ */
 export async function joinGroup(
   inviteCode: string,
   userId: string = "current-user"
 ): Promise<JoinGroupResult> {
-  if (supabase) {
-    const result = await supabaseGroupService.joinGroupByCode(inviteCode, userId);
-    // Fall back to mock service if sign-in is not yet present or network is unavailable
+  if (SUPABASE) {
+    const result = await SUPABASE_GROUP_SERVICE.joinGroupByCode(inviteCode);
     if (!result.success && (result.error === "NETWORK_ERROR" || result.error === "NOT_SIGNED_IN")) {
-      return mockGroupService.joinGroupByCode(inviteCode, userId);
+      return MOCK_GROUP_SERVICE.joinGroupByCode(inviteCode, userId);
     }
     return result;
   }
-  return mockGroupService.joinGroupByCode(inviteCode, userId);
+  return MOCK_GROUP_SERVICE.joinGroupByCode(inviteCode, userId);
 }
