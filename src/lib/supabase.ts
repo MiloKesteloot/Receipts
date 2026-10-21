@@ -10,7 +10,6 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
  */
 const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-
 /**
  * TODO write description
  */

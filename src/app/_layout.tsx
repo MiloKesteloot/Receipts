@@ -4,7 +4,7 @@ import { useColorScheme } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
 /**
- * TODO Write description
+ * Root layout: system tab bar (Liquid Glass on iOS 26+, Material on Android).
  * @returns JSX element
  */
 export default function RootLayout(): JSX.Element {
@@ -12,7 +12,6 @@ export default function RootLayout(): JSX.Element {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      {/* The system tab bar: Liquid Glass on iOS 26+, Material on Android (max 5 tabs). */}
       <NativeTabs minimizeBehavior="onScrollDown">
         <NativeTabs.Trigger name="index">
           <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
@@ -56,6 +55,9 @@ export default function RootLayout(): JSX.Element {
             md="account_circle"
           />
         </NativeTabs.Trigger>
+
+        {/* The groups stack is reachable by navigation only, not as a tab. */}
+        <NativeTabs.Trigger name="groups" hidden />
       </NativeTabs>
     </ThemeProvider>
   );
