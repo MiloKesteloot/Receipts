@@ -3,12 +3,14 @@
  * pop-up sheet so it doesn't need a new route in the shared `_layout.tsx`.
  *
  * ============================== PLACEHOLDERS ==============================
- * 1. The success view only says "Created <name>". Task 1.2 replaces it
- *    with the invite code and a Share button (search: TASK-1.2).
+ * 1. (Done in Task 1.2: success view now shows the invite code card.)
  * 2. The "Demo mode" note shows while `USE_MOCK_GROUPS` is true, so fake
  *    groups are never mistaken for real ones in a demo.
  * 3. Colors come from the app theme plus the same blue (#208AEF) as the
  *    existing Home button. There's no design system yet; restyle later.
+ * 4. The form resets in `onDismiss`, which runs after the sheet finishes
+ *    closing on iOS. Other platforms reset immediately in `handleClose`
+ *    instead (untested; we only target iOS).
  * ==========================================================================
  */
 
@@ -17,6 +19,7 @@ import { JSX, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Modal,
+    Platform,
     Pressable,
     StyleSheet,
     Text,
@@ -24,6 +27,7 @@ import {
     View,
 } from "react-native";
 
+import { InviteCodeCard } from "@/components/invite-code-card";
 import {
     CreatedGroup,
     createGroup,
@@ -56,31 +60,50 @@ export function CreateGroupSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdGroup, setCreatedGroup] = useState<CreatedGroup | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   // State updates aren't instant, so a fast double tap could get past a
   // `saving` check. A ref changes immediately and blocks the second tap.
   const submittingRef = useRef(false);
 
+  // Same idea for the share sheet: closing this sheet while the share sheet
+  // is still on top can leave a frozen blank sheet on iOS.
+  const sharingRef = useRef(false);
+
   const canSubmit = validateGroupName(name) === null && !saving;
+  const busy = saving || sharing;
 
   /**
    * Clears the form so the next time the sheet opens it starts fresh.
+   * Runs after the sheet has finished closing, so the content doesn't
+   * change (and the keyboard doesn't pop up) mid-animation.
    */
   function reset() {
     setName("");
     setError(null);
     setSaving(false);
     setCreatedGroup(null);
+    setSharing(false);
     submittingRef.current = false;
+    sharingRef.current = false;
   }
 
   /**
-   * Closes the sheet. Ignored while a create request is in flight.
+   * Closes the sheet. Ignored while creating or while the share sheet is open.
    */
   function handleClose() {
-    if (submittingRef.current) return;
-    reset();
+    if (submittingRef.current || sharingRef.current) return;
     onClose();
+    if (Platform.OS !== "ios") reset(); // PLACEHOLDER #4: iOS resets in onDismiss
+  }
+
+  /**
+   * Tracks whether the share sheet is open, so Done waits for it.
+   * @param isSharing True while the share sheet is open or closing
+   */
+  function handleSharingChange(isSharing: boolean) {
+    sharingRef.current = isSharing;
+    setSharing(isSharing);
   }
 
   /**
@@ -119,14 +142,15 @@ export function CreateGroupSheet({
       animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
+      onDismiss={reset}
     >
       <View style={[STYLES.container, { backgroundColor: colors.background }]}>
         <View style={STYLES.header}>
           <Text style={[STYLES.title, { color: colors.text }]}>
             {createdGroup ? "Group created" : "New group"}
           </Text>
-          <Pressable onPress={handleClose} disabled={saving} hitSlop={12}>
-            <Text style={[STYLES.headerButton, saving && STYLES.disabled]}>
+          <Pressable onPress={handleClose} disabled={busy} hitSlop={12}>
+            <Text style={[STYLES.headerButton, busy && STYLES.disabled]}>
               {createdGroup ? "Done" : "Cancel"}
             </Text>
           </Pressable>
@@ -140,10 +164,10 @@ export function CreateGroupSheet({
         )}
 
         {createdGroup ? (
-          // PLACEHOLDER #1 / TASK-1.2: replace with the invite code card.
-          <Text style={[STYLES.successText, { color: colors.text }]}>
-            Created {createdGroup.name}
-          </Text>
+          <InviteCodeCard
+            group={createdGroup}
+            onSharingChange={handleSharingChange}
+          />
         ) : (
           <View style={STYLES.form}>
             <Text style={[STYLES.label, { color: colors.text }]}>
@@ -260,8 +284,5 @@ const STYLES = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
-  },
-  successText: {
-    fontSize: 17,
   },
 });
