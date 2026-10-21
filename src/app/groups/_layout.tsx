@@ -1,10 +1,14 @@
 import { Stack } from "expo-router";
+import { JSX } from "react/jsx-runtime";
 
-// The outer header already shows the back arrow, so this stack hides its own.
-export default function GroupsLayout() {
+/**
+ * Layout for the groups stack navigator. Outer header handles back navigation.
+ * @returns JSX element
+ */
+export default function GroupsLayout(): JSX.Element {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="[id]" />
     </Stack>
   );
-}
+}
