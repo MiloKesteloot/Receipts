@@ -13,7 +13,6 @@ import {
 import { JSX } from "react/jsx-runtime";
 import { joinGroup } from "../lib/groups";
 import { Group } from "../lib/groups.types";
-import { Toast, ToastType } from "./toast";
 
 export interface AddGroupModalProps {
   visible: boolean;
@@ -46,30 +45,13 @@ export function AddGroupModal({
   const [hasError, setHasError] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
 
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState<ToastType>("info");
-
   useEffect(() => {
     if (!visible) {
       setCode("");
       setHasError(false);
       setInlineError(null);
-      setToastVisible(false);
-      setToastMessage("");
     }
   }, [visible]);
-
-  /**
-   * Triggers an in-modal toast message.
-   * @param message Message to display
-   * @param type Variant of toast
-   */
-  function triggerToast(message: string, type: ToastType): void {
-    setToastMessage(message);
-    setToastType(type);
-    setToastVisible(true);
-  }
 
   /**
    * Handles uppercase input changes.
@@ -91,7 +73,6 @@ export function AddGroupModal({
     if (!trimmed) {
       setHasError(true);
       setInlineError("Please enter an invite code");
-      triggerToast("Please enter an invite code", "error");
       return;
     }
 
@@ -104,8 +85,6 @@ export function AddGroupModal({
         setHasError(false);
         setInlineError(null);
         setCode("");
-        setToastVisible(false);
-        setToastMessage("");
         onClose();
         if (onSuccess) {
           onSuccess(result.group, result.status, result.message);
@@ -113,13 +92,11 @@ export function AddGroupModal({
       } else {
         setHasError(true);
         setInlineError(result.message);
-        triggerToast(result.message, "error");
       }
     } catch (err: unknown) {
       setHasError(true);
       const msg = err instanceof Error ? err.message : "Failed to join group. Please try again.";
       setInlineError(msg);
-      triggerToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -132,8 +109,6 @@ export function AddGroupModal({
     setCode("");
     setHasError(false);
     setInlineError(null);
-    setToastVisible(false);
-    setToastMessage("");
     onClose();
   }
 
@@ -235,13 +210,6 @@ export function AddGroupModal({
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      <Toast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onDismiss={() => setToastVisible(false)}
-      />
     </Modal>
   );
 }
