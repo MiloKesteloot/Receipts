@@ -1,4 +1,7 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+
 import { router, useLocalSearchParams } from "expo-router";
+
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,6 +11,9 @@ import {
   Text,
   View,
 } from "react-native";
+
+import { Toast, ToastType } from "@/components/toast";
+import { JSX } from "react/jsx-runtime";
 
 import { USE_MOCK, mockGroupDetails } from "@/lib/mock";
 import { palette } from "@/lib/palette";
@@ -38,11 +44,37 @@ type GroupDetail = {
   receipts: Receipt[]; // empty until sprint 2
 };
 
-// Money is stored in cents (1250 = $12.50).
-const formatCents = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+/**
+ * Formats monetary amounts from cents to dollars string.
+ * @param cents Amount in cents
+ * @returns Formatted currency string
+ */
+const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 
-export default function GroupScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+/**
+ * Detailed view of a group showing members and receipts.
+ * @returns JSX element
+ */
+export default function GroupScreen(): JSX.Element {
+  const { id, toastMessage, toastType } = useLocalSearchParams<{
+    id: string;
+    toastMessage?: string;
+    toastType?: string;
+  }>();
+
+  const [toastState, setToastState] = useState<{
+    message: string;
+    type: ToastType;
+  } | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      setToastState({
+        message: toastMessage,
+        type: (toastType as ToastType) || "info",
+      });
+    }
+  }, [toastMessage, toastType]);
 
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,23 +124,31 @@ export default function GroupScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={STYLES.center}>
         <ActivityIndicator color={palette.accent} />
+        {toastState ? (
+          <Toast
+            visible={Boolean(toastState)}
+            message={toastState.message}
+            type={toastState.type}
+            onDismiss={() => setToastState(null)}
+          />
+        ) : null}
       </View>
     );
   }
 
   if (forbidden) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>You're not a member of this group.</Text>
+      <View style={STYLES.center}>
+        <Text style={STYLES.error}>You&apos;re not a member of this group.</Text>
         <Pressable
           onPress={() =>
             router.canGoBack() ? router.back() : router.replace("/")
           }
-          style={styles.button}
+          style={STYLES.button}
         >
-          <Text style={styles.buttonText}>Go back</Text>
+          <Text style={STYLES.buttonText}>Go back</Text>
         </Pressable>
       </View>
     );
@@ -116,10 +156,10 @@ export default function GroupScreen() {
 
   if (error || !detail) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error ?? "Group not found"}</Text>
-        <Pressable onPress={load} style={styles.button}>
-          <Text style={styles.buttonText}>Try again</Text>
+      <View style={STYLES.center}>
+        <Text style={STYLES.error}>{error ?? "Group not found"}</Text>
+        <Pressable onPress={load} style={STYLES.button}>
+          <Text style={STYLES.buttonText}>Try again</Text>
         </Pressable>
       </View>
     );
@@ -128,73 +168,89 @@ export default function GroupScreen() {
   const { group, members, receipts } = detail;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>Group</Text>
-        <Text style={styles.title}>{group.name}</Text>
-        <Text style={styles.subtitle}>
-          {members.length} {members.length === 1 ? "member" : "members"}
-        </Text>
-      </View>
+    <View style={STYLES.container}>
+      <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
+        <View style={STYLES.header}>
+          <Text style={STYLES.eyebrow}>Group</Text>
+          <Text style={STYLES.title}>{group.name}</Text>
+          <Text style={STYLES.subtitle}>
+            {members.length} {members.length === 1 ? "member" : "members"}
+          </Text>
+        </View>
 
-      <Text style={styles.sectionLabel}>Members ({members.length})</Text>
-      <View style={styles.card}>
-        {members.map((m, i) => {
-          const name = m.display_name ?? "Unknown";
-          return (
-            <View
-              key={m.user_id}
-              style={[styles.memberRow, i > 0 && styles.memberDivider]}
-            >
+        <Text style={STYLES.sectionLabel}>Members ({members.length})</Text>
+        <View style={STYLES.card}>
+          {members.map((m, i) => {
+            const name = m.display_name ?? "Unknown";
+            return (
               <View
-                style={[
-                  styles.avatar,
-                  { backgroundColor: palette.tiles[i % palette.tiles.length] },
-                ]}
+                key={m.user_id}
+                style={[STYLES.memberRow, i > 0 && STYLES.memberDivider]}
               >
-                <Text style={styles.avatarText}>
-                  {name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.memberName}>{name}</Text>
-              {m.role === "owner" ? (
-                <View style={styles.pill}>
-                  <Text style={styles.pillText}>Owner</Text>
+                <View
+                  style={[
+                    STYLES.avatar,
+                    { backgroundColor: palette.tiles[i % palette.tiles.length] },
+                  ]}
+                >
+                  <Text style={STYLES.avatarText}>
+                    {name.charAt(0).toUpperCase()}
+                  </Text>
                 </View>
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
+                <Text style={STYLES.memberName}>{name}</Text>
+                {m.role === "owner" ? (
+                  <View style={STYLES.pill}>
+                    <Text style={STYLES.pillText}>Owner</Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
 
-      <Text style={styles.sectionLabel}>Receipts</Text>
-      <View style={styles.card}>
-        {receipts.length === 0 ? (
-          <Text style={styles.emptyText}>Receipts will show up here.</Text>
-        ) : (
-          receipts.map((r, i) => (
-            <View
-              key={r.id}
-              style={[styles.receiptRow, i > 0 && styles.memberDivider]}
-            >
-              <Text style={styles.memberName}>{r.title}</Text>
-              <Text style={styles.amount}>{formatCents(r.total_cents)}</Text>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+        <Text style={STYLES.sectionLabel}>Receipts</Text>
+        <View style={STYLES.card}>
+          {receipts.length === 0 ? (
+            <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
+          ) : (
+            receipts.map((r, i) => (
+              <View
+                key={r.id}
+                style={[STYLES.receiptRow, i > 0 && STYLES.memberDivider]}
+              >
+                <Text style={STYLES.memberName}>{r.title}</Text>
+                <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+      {toastState ? (
+        <Toast
+          visible={Boolean(toastState)}
+          message={toastState.message}
+          type={toastState.type}
+          onDismiss={() => setToastState(null)}
+        />
+      ) : null}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
+/**
+ * Stylesheet for the Group details screen.
+ */
+const STYLES = StyleSheet.create({
+  container: { flex: 1, backgroundColor: palette.bg },
   screen: { backgroundColor: palette.bg },
+
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 16,
     paddingHorizontal: 24,
+
     backgroundColor: palette.bg,
   },
   content: { padding: 24, gap: 10 },

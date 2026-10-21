@@ -1,26 +1,34 @@
+import { JSX } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 
 import { palette } from "@/lib/palette";
 
 type Props = { onPress: () => void };
 
-// "+ New group" pill from the design. It only draws the button;
-// what happens on tap is decided by the `onPress` the screen passes in.
-export function NewGroupButton({ onPress }: Props) {
+/**
+ * "+ New group" pill button component.
+ * @param root0 Component props
+ * @param root0.onPress Press callback handler
+ * @returns JSX element
+ */
+export function NewGroupButton({ onPress }: Props): JSX.Element {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="New group"
-      style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+      style={({ pressed }) => [STYLES.button, pressed && STYLES.pressed]}
     >
-      <Text style={styles.plus}>+</Text>
-      <Text style={styles.label}>New group</Text>
+      <Text style={STYLES.plus}>+</Text>
+      <Text style={STYLES.label}>New group</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+/**
+ * Stylesheet for NewGroupButton.
+ */
+const STYLES = StyleSheet.create({
   button: {
     flexDirection: "row",
     alignItems: "center",
@@ -35,4 +43,4 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   plus: { fontSize: 20, lineHeight: 20, color: palette.text },
   label: { fontSize: 14, fontWeight: "700", color: palette.text },
-});
+});
