@@ -2,7 +2,7 @@
 
 import { mockGroupDetails, mockGroups, USE_MOCK } from "./mock";
 import { SUPABASE } from "./supabase";
-import {
+import type {
   Group,
   GroupMembership,
   GroupService,
@@ -181,6 +181,14 @@ export class MockGroupService implements GroupService {
   }
 
   /**
+   * Adds a group to the in-memory list so it can be joined by its code.
+   * @param group The group to add
+   */
+  addGroup(group: Group): void {
+    this.groups.push(group);
+  }
+
+  /**
    * Gets current in-memory groups.
    * @returns List of groups
    */
@@ -259,11 +267,12 @@ export const MOCK_GROUP_SERVICE = new MockGroupService();
 export const SUPABASE_GROUP_SERVICE = new SupabaseGroupService();
 
 /**
- * [TEAMMATE EDIT AREA]: Group creation (US 1.2) - wire up createGroup or register newly created groups with mock service here. Can be removed once implemented.
+ * Registers a newly created group (US 1.2) with the mock service so it can
+ * be joined by its invite code.
  * @param group Newly created group
  */
 export function registerMockGroup(group: Group): void {
-  MOCK_GROUP_SERVICE.getGroups().push(group);
+  MOCK_GROUP_SERVICE.addGroup(group);
 }
 
 /**

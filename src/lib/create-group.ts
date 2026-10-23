@@ -5,27 +5,38 @@
  * if the database function changes, only this file needs updating.
  *
  * ============================== PLACEHOLDERS ==============================
- * 1. `USE_MOCK_GROUPS = true` — the app uses the fake in-memory version
- *    below instead of the real database. Flip to `false` once BOTH:
+ * 1. `USE_MOCK` (the team flag in `mock.ts`) is true, so the app uses the
+ *    fake in-memory version below instead of the real database. The team
+ *    turns it off once BOTH:
  *      a) sign-in exists (or anonymous sign-in is enabled), because the
  *         real `create_group` refuses users who aren't signed in, and
  *      b) the team confirms `create_group` is in the shared database.
- * 2. `createGroupMock` — fake groups live only in memory and vanish when
- *    the app reloads. Nobody else can see or join them.
+ * 2. `createGroupMock` / `saveMockGroup` — fake groups live only in memory
+ *    and vanish when the app reloads. They're added to every mock store
+ *    the app reads (Home list, Kellar's join service, group page) so they
+ *    behave like real groups on this phone. Delete both when `USE_MOCK`
+ *    is turned off.
  * 3. `createGroupInDatabase` — written to match `create_group` in our SQL,
  *    but NOT yet tested against the real database (blocked by 1a/1b).
- * 4. This file is separate from Kellar's `groups.ts` (US 1.4) on purpose,
- *    until his work is on main. Then `createGroup` should move into his
+ * 4. This file is still separate from Kellar's `groups.ts` (US 1.4). Now
+ *    that his work is on main, `createGroup` should move into his
  *    `GroupService` in a small follow-up PR.
+ * 5. `MOCK_CURRENT_USER_ID = "current-user"` stands in for the signed-in
+ *    user. It matches the default user ID in Kellar's `joinGroup` and Add
+ *    Group modal, so joining your own group returns ALREADY_MEMBER.
+ *    Replace it with the real user's ID once sign-in exists.
  * ==========================================================================
  */
 
+import { registerMockGroup } from "@/lib/groups";
+import { mockGroupDetails, mockGroups, USE_MOCK } from "@/lib/mock";
 import { SUPABASE } from "@/lib/supabase";
 
 /**
- * PLACEHOLDER (see #1 above): true = fake in-memory groups, false = real database.
+ * PLACEHOLDER (see #5 above): the user who creates mock groups, until
+ * sign-in exists.
  */
-export const USE_MOCK_GROUPS = true;
+export const MOCK_CURRENT_USER_ID = "current-user";
 
 /**
  * Longest allowed group name. Must match the 50-character check in the
@@ -43,6 +54,12 @@ const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
  * Length of every invite code (team decision: 8 characters).
  */
 const INVITE_CODE_LENGTH = 8;
+
+/**
+ * PLACEHOLDER (part of #2 above): counts mock groups created since the app
+ * started, so two groups made in the same millisecond get different IDs.
+ */
+let mockGroupCount = 0;
 
 /**
  * A group as the app sees it (camelCase; the database uses snake_case).
@@ -132,7 +149,8 @@ export async function createGroup(name: string): Promise<CreateGroupResult> {
   const invalid = validateGroupName(name);
   if (invalid) return invalid;
 
-  return USE_MOCK_GROUPS
+  // PLACEHOLDER #1: the team's mock flag picks fake or real groups.
+  return USE_MOCK
     ? createGroupMock(name.trim())
     : createGroupInDatabase(name.trim());
 }
@@ -147,28 +165,79 @@ export async function createGroup(name: string): Promise<CreateGroupResult> {
 async function createGroupMock(name: string): Promise<CreateGroupResult> {
   await new Promise((resolve) => setTimeout(resolve, 600));
 
+  mockGroupCount += 1;
   const group: CreatedGroup = {
-    id: `mock-${Date.now()}`,
+    id: `mock-created-${Date.now()}-${mockGroupCount}`,
     name,
     inviteCode: generateMockInviteCode(),
     createdAt: new Date().toISOString(),
   };
+  saveMockGroup(group);
 
   return { success: true, group, message: `Created ${name}` };
 }
 
 /**
+ * PLACEHOLDER (part of #2 above): adds a new group to every mock store,
+ * the way the database would make it visible everywhere:
+ *   - `mockGroups`, so it shows in the Home list
+ *   - Kellar's mock join service, so it can be joined by its code
+ *   - `mockGroupDetails`, so its group page opens, with the creator as
+ *     owner (which also makes re-joining it return ALREADY_MEMBER)
+ * @param group The group that was just created
+ */
+function saveMockGroup(group: CreatedGroup): void {
+  /* eslint-disable @typescript-eslint/naming-convention -- database column names */
+  registerMockGroup({
+    id: group.id,
+    name: group.name,
+    invite_code: group.inviteCode,
+    created_by: MOCK_CURRENT_USER_ID,
+    created_at: group.createdAt,
+    role: "owner",
+  });
+
+  mockGroupDetails[group.id] = {
+    group: {
+      id: group.id,
+      name: group.name,
+      invite_code: group.inviteCode,
+      created_by: MOCK_CURRENT_USER_ID,
+      created_at: group.createdAt,
+    },
+    members: [
+      {
+        user_id: MOCK_CURRENT_USER_ID,
+        display_name: "You",
+        role: "owner",
+        joined_at: group.createdAt,
+      },
+    ],
+    receipts: [],
+  };
+  /* eslint-enable @typescript-eslint/naming-convention */
+
+  mockGroups.push({ id: group.id, name: group.name });
+}
+
+/**
  * PLACEHOLDER (part of #2 above): makes a random code from the same
- * alphabet as the database. It does not check for duplicates; the real
- * database does that.
+ * alphabet as the database, trying again if a mock group already uses it.
+ * The real database checks for duplicates itself.
  * @returns An 8-character invite code
  */
 function generateMockInviteCode(): string {
+  const usedCodes = new Set(
+    Object.values(mockGroupDetails).map((detail) => detail.group.invite_code),
+  );
   let code = "";
-  for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
-    const index = Math.floor(Math.random() * INVITE_CODE_ALPHABET.length);
-    code += INVITE_CODE_ALPHABET[index];
-  }
+  do {
+    code = "";
+    for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
+      const index = Math.floor(Math.random() * INVITE_CODE_ALPHABET.length);
+      code += INVITE_CODE_ALPHABET[index];
+    }
+  } while (usedCodes.has(code));
   return code;
 }
 
