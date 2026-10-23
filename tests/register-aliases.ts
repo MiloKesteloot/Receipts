@@ -5,6 +5,11 @@
  *   1. `@/lib/x` means `src/lib/x` (from tsconfig.json "paths")
  *   2. imports can leave off the `.ts` / `.tsx` extension
  * This file adds both, only while running tests. The app never loads it.
+ *
+ * Needs Node 22.15 or newer (for `module.registerHooks`).
+ *
+ * PLACEHOLDER: if the team adds a real test framework later (e.g. jest-expo),
+ * it handles this itself and this file can be deleted.
  */
 
 import { registerHooks, type ResolveHookSync } from "node:module";
