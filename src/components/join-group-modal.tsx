@@ -13,7 +13,6 @@ import {
 import { JSX } from "react/jsx-runtime";
 import { joinGroup } from "../lib/groups";
 import { Group } from "../lib/groups.types";
-import { Toast, ToastType } from "./toast";
 
 export interface AddGroupModalProps {
   visible: boolean;
@@ -44,30 +43,15 @@ export function AddGroupModal({
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
-
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState<ToastType>("info");
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) {
       setCode("");
       setHasError(false);
-      setToastVisible(false);
-      setToastMessage("");
+      setInlineError(null);
     }
   }, [visible]);
-
-  /**
-   * Triggers an in-modal toast message.
-   * @param message Message to display
-   * @param type Variant of toast
-   */
-  function triggerToast(message: string, type: ToastType): void {
-    setToastMessage(message);
-    setToastType(type);
-    setToastVisible(true);
-  }
 
   /**
    * Handles uppercase input changes.
@@ -77,6 +61,7 @@ export function AddGroupModal({
     setCode(text.toUpperCase());
     if (hasError) {
       setHasError(false);
+      setInlineError(null);
     }
   }
 
@@ -87,7 +72,7 @@ export function AddGroupModal({
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) {
       setHasError(true);
-      triggerToast("Please enter an invite code", "error");
+      setInlineError("Please enter an invite code");
       return;
     }
 
@@ -98,21 +83,20 @@ export function AddGroupModal({
 
       if (result.success) {
         setHasError(false);
+        setInlineError(null);
         setCode("");
-        setToastVisible(false);
-        setToastMessage("");
         onClose();
         if (onSuccess) {
           onSuccess(result.group, result.status, result.message);
         }
       } else {
         setHasError(true);
-        triggerToast(result.message, "error");
+        setInlineError(result.message);
       }
     } catch (err: unknown) {
       setHasError(true);
       const msg = err instanceof Error ? err.message : "Failed to join group. Please try again.";
-      triggerToast(msg, "error");
+      setInlineError(msg);
     } finally {
       setLoading(false);
     }
@@ -124,8 +108,7 @@ export function AddGroupModal({
   function handleClose(): void {
     setCode("");
     setHasError(false);
-    setToastVisible(false);
-    setToastMessage("");
+    setInlineError(null);
     onClose();
   }
 
@@ -136,12 +119,7 @@ export function AddGroupModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <Toast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onDismiss={() => setToastVisible(false)}
-      />
+
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -210,6 +188,9 @@ export function AddGroupModal({
               onSubmitEditing={handleJoin}
               editable={!loading}
             />
+            {hasError && inlineError ? (
+              <Text style={STYLES.inlineErrorText}>{inlineError}</Text>
+            ) : null}
 
             <Pressable
               style={({ pressed }) => [
@@ -323,7 +304,16 @@ const STYLES = StyleSheet.create({
   inputError: {
     borderColor: "#EF4444",
     backgroundColor: "#FEF2F2",
+    marginBottom: 4,
   },
+  inlineErrorText: {
+    color: "#EF4444",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 10,
+    marginTop: -2,
+  },
+
   disabledInput: {
     backgroundColor: "#F9FAFB",
     borderColor: "#E5E7EB",
