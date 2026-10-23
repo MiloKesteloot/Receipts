@@ -8,17 +8,23 @@
  * 2. Codes are sent as plain text, which is fine for sprint 1 but not
  *    secure: anyone who sees the message can join. Expiring codes or
  *    owner approval would be a future story.
- * 3. Colors use the same blue (#208AEF) as the rest of the app. There's
- *    no design system yet; restyle later.
+ * 3. Colors are copied from Kellar's Add Group modal (gray text, green
+ *    button) so the card matches the card it sits in. There's no design
+ *    system yet; restyle later.
  * 4. WORKAROUND: after the share sheet closes we wait
  *    `SHARE_SHEET_CLOSE_DELAY_MS` before allowing Done. iOS can still be
  *    animating the share sheet away (especially after AirDrop) when the
  *    promise resolves; closing our sheet then can leave a frozen blank
- *    sheet. 500 ms was picked by feel, not measured.
+ *    sheet. 500 ms was picked by feel, not measured. `onSharingChange`
+ *    reports this whole time so the Add Group modal can't be closed until
+ *    it's over (see `create-group-form.tsx`).
+ * 5. DARK MODE: colors are fixed for a light background, because Kellar's
+ *    Add Group modal card is always white. The whole modal (his card plus
+ *    this card and the create form) needs one dark-mode pass later. Not
+ *    part of US 1.2.
  * ==========================================================================
  */
 
-import { useTheme } from "expo-router";
 import { JSX, useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 
@@ -55,7 +61,6 @@ export function buildShareMessage(group: CreatedGroup): string {
  * @returns JSX element
  */
 export function InviteCodeCard({ group, onSharingChange }: Props): JSX.Element {
-  const { colors } = useTheme();
   const [shareError, setShareError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
 
@@ -80,14 +85,14 @@ export function InviteCodeCard({ group, onSharingChange }: Props): JSX.Element {
   }
 
   return (
-    <View style={[STYLES.card, { borderColor: colors.border }]}>
-      <Text style={[STYLES.label, { color: colors.text }]}>Invite code</Text>
+    <View style={STYLES.card}>
+      <Text style={STYLES.label}>Invite code</Text>
 
       {/* selectable: long-press to copy, without needing a clipboard package */}
       <Text
         selectable
         accessibilityLabel={`Invite code ${group.inviteCode.split("").join(" ")}`}
-        style={[STYLES.code, { color: colors.text }]}
+        style={STYLES.code}
       >
         {group.inviteCode}
       </Text>
@@ -114,10 +119,12 @@ export function InviteCodeCard({ group, onSharingChange }: Props): JSX.Element {
 
 /**
  * Styles for the card. PLACEHOLDER #3: no design system yet.
+ * PLACEHOLDER #5: light colors only.
  */
 const STYLES = StyleSheet.create({
   card: {
     borderWidth: 1,
+    borderColor: "#E5E7EB",
     borderRadius: 14,
     padding: 20,
     gap: 12,
@@ -126,6 +133,7 @@ const STYLES = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: "600",
+    color: "#374151",
     textTransform: "uppercase",
     letterSpacing: 0.8,
     opacity: 0.6,
@@ -134,15 +142,16 @@ const STYLES = StyleSheet.create({
     fontSize: 34,
     fontWeight: "700",
     letterSpacing: 4,
+    color: "#111827",
     fontVariant: ["tabular-nums"],
   },
   hint: {
     fontSize: 15,
-    color: "#8E8E93",
+    color: "#6B7280",
     textAlign: "center",
   },
   button: {
-    backgroundColor: "#208AEF",
+    backgroundColor: "#4F8A5B",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
