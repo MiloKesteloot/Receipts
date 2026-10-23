@@ -1,18 +1,27 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+/* eslint-disable jsdoc/require-param-description */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-    loadGroupDetail,
-    loadGroupList,
-    NOT_CONFIGURED,
-    type GroupDetail,
-    type GroupsClient,
-    type GroupSummary,
+  loadGroupDetail,
+  loadGroupList,
+  NOT_CONFIGURED,
+  type GroupDetail,
+  type GroupsClient,
+  type GroupSummary,
 } from "@/lib/group-data";
 import { mockGroupDetails, mockGroups } from "@/lib/mock";
 
 type DbError = { code?: string; message: string } | null;
 
+/**
+ * Builds a fake client whose groups query returns the given result.
+ * @param result The data and error to return
+ * @param result.data
+ * @param result.error
+ * @returns The fake client and a log of the calls it received
+ */
 function listClient(result: {
   data: GroupSummary[] | null;
   error: DbError;
@@ -40,6 +49,13 @@ function listClient(result: {
   return { client, calls };
 }
 
+/**
+ * Builds a fake client whose rpc call returns the given result.
+ * @param result The data and error to return from rpc
+ * @param result.data
+ * @param result.error
+ * @returns The fake client and a log of the rpc calls it received
+ */
 function rpcClient(result: { data: unknown; error: DbError }) {
   const calls: { fn: string; args: Record<string, unknown> }[] = [];
   const client: GroupsClient = {
@@ -54,16 +70,28 @@ function rpcClient(result: { data: unknown; error: DbError }) {
   return { client, calls };
 }
 
-const throwingClient: GroupsClient = {
+/**
+ * Fake client whose every call throws, to simulate a network failure.
+ */
+const THROWING_CLIENT: GroupsClient = {
+  /** Always throws, simulating a network failure. */
   from() {
     throw new Error("network down");
   },
+  /** Always throws, simulating a network failure. */
   rpc() {
     throw new Error("network down");
   },
 };
 
+/**
+ * Base options for server mode. Spread it and add a fake `client`.
+ */
 const REAL = { useMock: false } as const;
+
+/**
+ * Options for mock mode, where no client is needed.
+ */
 const MOCK = { useMock: true, client: null } as const;
 
 describe("Task 1.1: groups page lists my groups", () => {
@@ -163,7 +191,7 @@ describe("Task 1.3: loading, empty and error states", () => {
   });
 
   it("list: a thrown network error becomes an error state", async () => {
-    const r = await loadGroupList({ ...REAL, client: throwingClient });
+    const r = await loadGroupList({ ...REAL, client: THROWING_CLIENT });
     assert.deepEqual(r, { status: "error", message: "network down" });
   });
 
@@ -182,7 +210,7 @@ describe("Task 1.3: loading, empty and error states", () => {
   });
 
   it("detail: a thrown network error becomes an error state", async () => {
-    const r = await loadGroupDetail("g1", { ...REAL, client: throwingClient });
+    const r = await loadGroupDetail("g1", { ...REAL, client: THROWING_CLIENT });
     assert.deepEqual(r, { status: "error", message: "network down" });
   });
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import { mockGroupDetails, mockGroups } from "@/lib/mock";
 
 export type GroupSummary = { id: string; name: string };
@@ -59,10 +60,19 @@ export type GroupDetailResult =
   | { status: "forbidden" }
   | { status: "error"; message: string };
 
+/**
+ * Indicates that Postgres not configured
+ */
 export const NOT_CONFIGURED = "Add your Supabase URL and key to .env";
+
 /** Postgres "insufficient privilege": not a member, or group doesn't exist. */
 export const NOT_MEMBER_CODE = "42501";
 
+/**
+ * Turns a thrown value into a readable message.
+ * @param e The caught value
+ * @returns A message safe to show on screen
+ */
 const messageOf = (e: unknown): string =>
   e instanceof Error ? e.message : "Something went wrong";
 
