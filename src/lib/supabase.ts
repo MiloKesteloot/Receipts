@@ -24,3 +24,10 @@ export const SUPABASE =
             },
         })
         : null;
+
+/**
+ * Backwards-compatible alias for the Supabase client.
+ */
+// eslint-disable-next-line @typescript-eslint/naming-convention
+export const supabase = SUPABASE;
+

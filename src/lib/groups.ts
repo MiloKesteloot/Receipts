@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
+import { mockGroupDetails, mockGroups, USE_MOCK } from "./mock";
 import { SUPABASE } from "./supabase";
 import {
   Group,
@@ -15,7 +16,25 @@ export const SEED_GROUPS: Group[] = [
   {
     id: "group-apt402",
     name: "Apartment 402",
-    invite_code: "tsAPT402",
+    invite_code: "APT402",
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "mock-1",
+    name: "Apartment 402",
+    invite_code: "JEW5SW2M",
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "mock-2",
+    name: "Road Trip 2026",
+    invite_code: "K7Q2XPLM",
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "mock-3",
+    name: "Office Lunch Crew",
+    invite_code: "LUNCH123",
     created_at: new Date().toISOString(),
   },
   {
@@ -25,6 +44,7 @@ export const SEED_GROUPS: Group[] = [
     created_at: new Date().toISOString(),
   },
 ];
+
 
 /**
  * In-memory Mock Group Service for development and offline testing.
@@ -80,7 +100,10 @@ export class MockGroupService implements GroupService {
     }
 
     const group = this.groups.find(
-      (g) => g.invite_code.toUpperCase() === trimmed
+      (g) =>
+        g.invite_code.toUpperCase() === trimmed ||
+        (trimmed === "APT402" && (g.id === "group-apt402" || g.id === "mock-1")) ||
+        (trimmed === "TSAPT402" && (g.id === "group-apt402" || g.id === "mock-1"))
     );
 
     if (!group) {
@@ -91,11 +114,14 @@ export class MockGroupService implements GroupService {
       };
     }
 
-    const isMember = this.members.some(
+    const isMemberInService = this.members.some(
       (m) => m.group_id === group.id && m.user_id === userId
     );
+    const isMemberInMock = mockGroupDetails[group.id]?.members?.some(
+      (m: { user_id: string }) => m.user_id === userId
+    );
 
-    if (isMember) {
+    if (isMemberInService || isMemberInMock) {
       return {
         success: true,
         status: "ALREADY_MEMBER",
@@ -111,6 +137,32 @@ export class MockGroupService implements GroupService {
       joined_at: new Date().toISOString(),
     };
     this.members.push(newMembership);
+
+    // Sync with mockGroupDetails so the group page shows the new member
+    const targetIds = [group.id];
+    if (group.id === "mock-1") targetIds.push("group-apt402");
+    if (group.id === "group-apt402") targetIds.push("mock-1");
+
+    for (const tid of targetIds) {
+      if (mockGroupDetails[tid]) {
+        const alreadyMember = mockGroupDetails[tid].members.some(
+          (m: { user_id: string }) => m.user_id === userId
+        );
+        if (!alreadyMember) {
+          mockGroupDetails[tid].members.push({
+            user_id: userId,
+            display_name: "You",
+            role: "member",
+            joined_at: new Date().toISOString(),
+          });
+        }
+      }
+    }
+
+    // Ensure it appears in mockGroups list
+    if (!mockGroups.some((g) => g.id === group.id || (group.id === "group-apt402" && g.id === "mock-1"))) {
+      mockGroups.push({ id: group.id, name: group.name });
+    }
 
     return {
       success: true,
@@ -224,6 +276,9 @@ export async function joinGroup(
   inviteCode: string,
   userId: string = "current-user"
 ): Promise<JoinGroupResult> {
+  if (USE_MOCK) {
+    return MOCK_GROUP_SERVICE.joinGroupByCode(inviteCode, userId);
+  }
   if (SUPABASE) {
     const result = await SUPABASE_GROUP_SERVICE.joinGroupByCode(inviteCode);
     if (!result.success && (result.error === "NETWORK_ERROR" || result.error === "NOT_SIGNED_IN")) {
@@ -233,3 +288,4 @@ export async function joinGroup(
   }
   return MOCK_GROUP_SERVICE.joinGroupByCode(inviteCode, userId);
 }
+
