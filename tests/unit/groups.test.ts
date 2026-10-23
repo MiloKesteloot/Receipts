@@ -1,13 +1,26 @@
 /// <reference types="node" />
 import assert from "node:assert/strict";
-import test, { beforeEach, describe } from "node:test";
+import test, { afterEach, beforeEach, describe } from "node:test";
 import { MockGroupService, SEED_GROUPS } from "../../src/lib/groups";
+import { type MockMember, mockGroupDetails } from "../../src/lib/mock";
 
 describe("User Story 1.4: Join Group via Invite Code", () => {
   let service: MockGroupService;
+  let savedMembers: Record<string, MockMember[]>;
 
   beforeEach(() => {
     service = new MockGroupService(SEED_GROUPS, []);
+    // Joining also adds the user to the shared mockGroupDetails, so save
+    // every member list and put it back after each test.
+    savedMembers = Object.fromEntries(
+      Object.entries(mockGroupDetails).map(([id, d]) => [id, [...d.members]])
+    );
+  });
+
+  afterEach(() => {
+    for (const [id, members] of Object.entries(savedMembers)) {
+      mockGroupDetails[id].members = members;
+    }
   });
 
   describe("US1 - Join New Group with Valid Invite Code (P1)", () => {

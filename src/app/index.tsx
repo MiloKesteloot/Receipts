@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { JSX, useCallback, useEffect, useState } from "react";
+import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CreateGroupForm } from "@/components/create-group-form";
 import { JoinGroupModal } from "@/components/join-group-modal";
 import { NewGroupButton } from "@/components/NewGroupButton";
 import { Toast, ToastType } from "@/components/toast";
@@ -30,6 +31,8 @@ export default function Index(): JSX.Element {
   const [refreshing, setRefreshing] = useState(false); // pull-to-refresh
   const [error, setError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  // True while a group is being created or its share sheet is open (US 1.2).
+  const createBusyRef = useRef(false);
   const [toastState, setToastState] = useState<{
     message: string;
     type: ToastType;
@@ -87,7 +90,13 @@ export default function Index(): JSX.Element {
   };
 
   const handleCloseModal = () => {
+    // Closing under the iOS share sheet can freeze the app (US 1.2).
+    if (createBusyRef.current) return;
     setModalVisible(false);
+  };
+
+  const handleGroupCreated = () => {
+    setGroups([...mockGroups]);
   };
 
   const handleGroupJoined = (
@@ -182,6 +191,14 @@ export default function Index(): JSX.Element {
         visible={modalVisible}
         onClose={handleCloseModal}
         onSuccess={handleGroupJoined}
+        renderCreateSection={() => (
+          <CreateGroupForm
+            onCreated={handleGroupCreated}
+            onBusyChange={(busy) => {
+              createBusyRef.current = busy;
+            }}
+          />
+        )}
       />
       {toastState ? (
         <Toast
