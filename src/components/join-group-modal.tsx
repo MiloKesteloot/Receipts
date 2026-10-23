@@ -19,7 +19,6 @@ export interface AddGroupModalProps {
   userId?: string;
   onClose: () => void;
   onSuccess?: (group: Group, status: "JOINED" | "ALREADY_MEMBER", message: string) => void;
-  // [TEAMMATE EDIT AREA]: Optional custom renderer for US 1.2 group creation. Can be removed once implemented.
   renderCreateSection?: () => React.ReactNode;
 }
 
@@ -144,7 +143,6 @@ export function AddGroupModal({
             </Pressable>
           </View>
 
-          {/* [TEAMMATE EDIT AREA]: Group creation (US 1.2) - replace or wire up createGroup logic here. This comment can be removed once implemented. */}
           {renderCreateSection ? (
             renderCreateSection()
           ) : (
