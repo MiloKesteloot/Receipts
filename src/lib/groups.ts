@@ -2,7 +2,7 @@
 
 import { mockGroupDetails, mockGroups, USE_MOCK } from "./mock";
 import { SUPABASE } from "./supabase";
-import {
+import type {
   Group,
   GroupMembership,
   GroupService,

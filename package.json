@@ -6,6 +6,7 @@
     "@expo/ui": "~57.0.22",
     "@supabase/supabase-js": "^2.117.3",
     "expo": "~57.0.27",
+    "expo-apple-authentication": "~57.0.2",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.21",
     "expo-device": "~57.0.2",
@@ -16,6 +17,7 @@
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.25",
     "expo-splash-screen": "~57.0.9",
+    "expo-sqlite": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
@@ -49,7 +51,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --import ./tests/register-aliases.ts --test \"tests/unit/*.test.ts\""
   },
   "private": true
 }
