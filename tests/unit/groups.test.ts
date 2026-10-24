@@ -2,12 +2,28 @@
 import assert from "node:assert/strict";
 import test, { beforeEach, describe } from "node:test";
 import { MockGroupService, SEED_GROUPS } from "../../src/lib/groups";
+import { mockGroupDetails, mockGroups } from "../../src/lib/mock";
+
+/**
+ * Pristine copy of the shared mock data, which MockGroupService mutates on join.
+ */
+const INITIAL_DETAILS = structuredClone(mockGroupDetails);
+
+/**
+ * Pristine copy of the shared mock group list.
+ */
+const INITIAL_GROUPS = structuredClone(mockGroups);
 
 describe("User Story 1.4: Join Group via Invite Code", () => {
   let service: MockGroupService;
 
   beforeEach(() => {
     service = new MockGroupService(SEED_GROUPS, []);
+    // Undo joins from earlier tests so each test starts from the seed data.
+    for (const id of Object.keys(INITIAL_DETAILS)) {
+      mockGroupDetails[id] = structuredClone(INITIAL_DETAILS[id]);
+    }
+    mockGroups.splice(0, mockGroups.length, ...structuredClone(INITIAL_GROUPS));
   });
 
   describe("US1 - Join New Group with Valid Invite Code (P1)", () => {

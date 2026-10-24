@@ -1,26 +1,32 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { SESSION_STORAGE } from "./session-storage";
+
 /**
- * TODO write description
+ * Project URL from `.env` (Project Settings → Data API).
  */
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 
 /**
- * TODO write description
+ * Publishable key from `.env`. Safe to ship: Row Level Security decides what
+ * each user can read or change.
  */
 const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 /**
- * TODO write description
+ * Shared Supabase client, or null when `.env` is missing its keys.
  */
 export const SUPABASE =
     SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
         ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-            // No sign-in yet, so there is no session to store or refresh.
             auth: {
-                persistSession: false,
-                autoRefreshToken: false,
+                storage: SESSION_STORAGE,
+                persistSession: true,
+                // AuthProvider pauses refreshing while the app is in the background.
+                autoRefreshToken: true,
+                // Native apps have no page URL; OAuth redirects are handled in auth.ts.
                 detectSessionInUrl: false,
+                flowType: "pkce",
             },
         })
         : null;
@@ -30,4 +36,3 @@ export const SUPABASE =
  */
 // eslint-disable-next-line @typescript-eslint/naming-convention
 export const supabase = SUPABASE;
-

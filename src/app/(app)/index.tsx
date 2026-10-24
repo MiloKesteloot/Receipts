@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { JoinGroupModal } from "@/components/join-group-modal";
 import { NewGroupButton } from "@/components/NewGroupButton";
 import { Toast, ToastType } from "@/components/toast";
+import { useAuth } from "@/lib/auth-provider";
 import { mockGroups, USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { SUPABASE as supabase } from "@/lib/supabase";
@@ -25,6 +26,7 @@ type Group = { id: string; name: string };
  * @returns JSX element
  */
 export default function Index(): JSX.Element {
+  const { session } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true); // first load only
   const [refreshing, setRefreshing] = useState(false); // pull-to-refresh
@@ -180,6 +182,7 @@ export default function Index(): JSX.Element {
       />
       <JoinGroupModal
         visible={modalVisible}
+        userId={session?.user.id}
         onClose={handleCloseModal}
         onSuccess={handleGroupJoined}
       />
