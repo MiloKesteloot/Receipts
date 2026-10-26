@@ -15,7 +15,8 @@ import {
 import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
-import { USE_MOCK, mockGroupDetails } from "@/lib/mock";
+import { loadGroupDetail } from "@/lib/group-data";
+import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
 
@@ -86,35 +87,17 @@ export default function GroupScreen(): JSX.Element {
     setError(null);
     setForbidden(false);
 
-    if (USE_MOCK) {
-      const d = mockGroupDetails[id];
-      if (d) setDetail(d as GroupDetail);
-      else setForbidden(true); // unknown id behaves like "not a member"
-      setLoading(false);
-      return;
-    }
-
-    if (!supabase) {
-      setError("Add your Supabase URL and key to .env");
-      setLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase.rpc("get_group", {
-      p_group_id: id,
+    const result = await loadGroupDetail(id, {
+      useMock: USE_MOCK,
+      client: supabase,
     });
 
-    if (error) {
-      // 42501 = not a member (or group doesn't exist). Don't open the group.
-      if (error.code === "42501") {
-        setForbidden(true);
-        setDetail(null);
-      } else {
-        setError(error.message);
-      }
-    } else {
-      setDetail(data as GroupDetail);
-    }
+    if (result.status === "ok") setDetail(result.detail);
+    else if (result.status === "forbidden") {
+      setForbidden(true);
+      setDetail(null);
+    } else setError(result.message);
+
     setLoading(false);
   }, [id]);
 

@@ -13,7 +13,7 @@ export default function RootLayout(): JSX.Element {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <NativeTabs minimizeBehavior="onScrollDown">
-        <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger name="(home)">
           <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon
             sf={{ default: "house", selected: "house.fill" }}
@@ -55,9 +55,6 @@ export default function RootLayout(): JSX.Element {
             md="account_circle"
           />
         </NativeTabs.Trigger>
-
-        {/* The groups stack is reachable by navigation only, not as a tab. */}
-        <NativeTabs.Trigger name="groups" hidden />
       </NativeTabs>
     </ThemeProvider>
   );
