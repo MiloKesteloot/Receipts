@@ -1,14 +1,25 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Slot, ThemeProvider, usePathname, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useColorScheme } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
 /**
- * Root layout: system tab bar (Liquid Glass on iOS 26+, Material on Android).
+ * Root layout: system tab bar for app navigation, or Slot for public web screens.
  * @returns JSX element
  */
 export default function RootLayout(): JSX.Element {
   const colorScheme = useColorScheme();
+  const pathname = usePathname();
+  const segments = useSegments();
+
+  // If viewing a standalone public web route (like guest claiming), render without tab bar
+  if (segments[0] === "claim" || (pathname && pathname.startsWith("/claim"))) {
+    return (
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Slot />
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
