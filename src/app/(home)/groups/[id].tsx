@@ -197,13 +197,21 @@ export default function GroupScreen(): JSX.Element {
             <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
           ) : (
             receipts.map((r, i) => (
-              <View
+              <Pressable
                 key={r.id}
-                style={[STYLES.receiptRow, i > 0 && STYLES.memberDivider]}
+                onPress={() => router.push(`/(home)/receipts/${r.id}` as never)}
+                style={({ pressed }) => [
+                  STYLES.receiptRow,
+                  i > 0 && STYLES.memberDivider,
+                  pressed && STYLES.receiptRowPressed,
+                ]}
               >
-                <Text style={STYLES.memberName}>{r.title}</Text>
+                <View style={STYLES.receiptInfo}>
+                  <Text style={STYLES.memberName}>{r.title}</Text>
+                  <Text style={STYLES.receiptActionHint}>Tap to view & share ›</Text>
+                </View>
                 <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
-              </View>
+              </Pressable>
             ))
           )}
         </View>
@@ -290,6 +298,18 @@ const STYLES = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 14,
+  },
+  receiptRowPressed: {
+    opacity: 0.7,
+  },
+  receiptInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  receiptActionHint: {
+    fontSize: 12,
+    color: palette.accent,
+    fontWeight: "500",
   },
   amount: { fontSize: 16, fontWeight: "700", color: palette.text },
   emptyText: { paddingVertical: 16, color: palette.muted, fontSize: 15 },
