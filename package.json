@@ -49,7 +49,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --experimental-strip-types --import ./tests/register-aliases.ts tests/unit/groups.test.ts tests/unit/groups-page.test.ts tests/unit/group-data.test.ts tests/unit/create-group.test.ts tests/unit/guest-claim.test.ts"
   },
   "private": true
 }
