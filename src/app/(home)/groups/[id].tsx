@@ -26,7 +26,7 @@ import {
   type ReceiptDraft,
   type ReceiptStatus,
 } from "@/lib/receipt-form";
-import { saveReceipt } from "@/lib/receipts";
+import { deleteReceipt, saveReceipt } from "@/lib/receipts";
 
 type Member = {
   user_id: string;
@@ -41,6 +41,7 @@ type Receipt = {
   total_cents: number;
   created_at: string;
   status?: ReceiptStatus;
+  draft?: ReceiptDraft;
 };
 
 type GroupDetail = {
@@ -84,6 +85,8 @@ export default function GroupScreen(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [addReceiptVisible, setAddReceiptVisible] = useState(false);
+  const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
+  const [editSession, setEditSession] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,11 +160,22 @@ export default function GroupScreen(): JSX.Element {
    * Opens the receipt entry form for this group.
    */
   const handleAddReceipt = (): void => {
+    setEditingReceipt(null);
     setAddReceiptVisible(true);
   };
 
   /**
-   * Saves the entered receipt and adds it to the list when it works.
+   * Opens a saved draft in the form so it can be edited.
+   * @param receipt The draft to edit
+   */
+  const handleEditDraft = (receipt: Receipt): void => {
+    setEditingReceipt(receipt);
+    setEditSession((n) => n + 1);
+    setAddReceiptVisible(true);
+  };
+
+  /**
+   * Saves the entered receipt (or the edited draft) and updates the list.
    * @param draft The receipt as entered in the form
    * @param status Save as a draft or submit
    * @returns An error message, or null when the save worked
@@ -172,24 +186,50 @@ export default function GroupScreen(): JSX.Element {
   ): Promise<string | null> => {
     const result = await saveReceipt(group.id, draft, status, {
       useMock: USE_MOCK,
+      existingId: editingReceipt?.id,
     });
     if (result.status === "error") return result.message;
 
-    const saved = result.receipt;
+    const saved: Receipt = result.receipt;
     setDetail((prev) => {
       if (prev === null) return prev;
-      const alreadyListed = prev.receipts.some((r) => r.id === saved.id);
-      return {
-        ...prev,
-        receipts: alreadyListed ? prev.receipts : [saved, ...prev.receipts],
-      };
+      const exists = prev.receipts.some((r) => r.id === saved.id);
+      const next = exists
+        ? prev.receipts.map((r) => (r.id === saved.id ? saved : r))
+        : [saved, ...prev.receipts];
+      return { ...prev, receipts: next };
     });
     setAddReceiptVisible(false);
-    setToastState({
-      message: status === "submitted" ? "Receipt submitted." : "Draft saved.",
-      type: "success",
-    });
+
+    let message = "Draft saved.";
+    if (status === "submitted") message = "Receipt submitted.";
+    else if (editingReceipt !== null) message = "Draft updated.";
+    setToastState({ message, type: "success" });
     return null;
+  };
+
+  /**
+   * Closes the form. When a saved draft is open, deletes it from the group.
+   */
+  const handleDeleteReceipt = async (): Promise<void> => {
+    const target = editingReceipt;
+    setAddReceiptVisible(false);
+    if (target === null) return;
+
+    const result = await deleteReceipt(group.id, target.id, {
+      useMock: USE_MOCK,
+    });
+    if (result.status === "error") {
+      setToastState({ message: result.message, type: "error" });
+      return;
+    }
+    setDetail((prev) =>
+      prev === null
+        ? prev
+        : { ...prev, receipts: prev.receipts.filter((r) => r.id !== target.id) }
+    );
+    setEditingReceipt(null);
+    setToastState({ message: "Draft deleted.", type: "success" });
   };
 
   return (
@@ -251,37 +291,48 @@ export default function GroupScreen(): JSX.Element {
         {receipts.length === 0 ? (
           <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
         ) : (
-          receipts.map((r, i) => (
-            <View
-              key={r.id}
-              style={[STYLES.receiptRow, i > 0 && STYLES.memberDivider]}
-            >
-              <Text style={STYLES.memberName}>{r.title}</Text>
-              {r.status === "draft" ? (
-                <View style={STYLES.pill}>
-                  <Text style={STYLES.pillText}>Draft</Text>
-                </View>
-              ) : null}
-              <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
-            </View>
-          ))
+          receipts.map((r, i) => {
+            const rowStyle = [STYLES.receiptRow, i > 0 && STYLES.memberDivider];
+            const content = (
+              <>
+                <Text style={STYLES.memberName}>{r.title}</Text>
+                {r.status === "draft" ? (
+                  <View style={STYLES.pill}>
+                    <Text style={STYLES.pillText}>Draft</Text>
+                  </View>
+                ) : null}
+                <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
+              </>
+            );
+          
+            return r.status === "draft" ? (
+              <Pressable
+                key={r.id}
+                onPress={() => handleEditDraft(r)}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit draft ${r.title}`}
+                style={({ pressed }) => [...rowStyle, pressed && STYLES.addButtonPressed]}
+              >
+                {content}
+              </Pressable>
+            ) : (
+              <View key={r.id} style={rowStyle}>
+                {content}
+              </View>
+            );
+          })
         )}
       </View>
       </ScrollView>
       <AddReceiptModal
+        key={editingReceipt === null ? "new" : `edit-${editSession}`}
         visible={addReceiptVisible}
         onClose={() => setAddReceiptVisible(false)}
         onSubmit={(draft) => handleSaveReceipt(draft, "submitted")}
         onSaveDraft={(draft) => handleSaveReceipt(draft, "draft")}
+        onDelete={handleDeleteReceipt}
+        initialDraft={editingReceipt?.draft ?? null}
       />
-      {toastState ? (
-        <Toast
-          visible={Boolean(toastState)}
-          message={toastState.message}
-          type={toastState.type}
-          onDismiss={() => setToastState(null)}
-        />
-      ) : null}
     </View>
   );
 }

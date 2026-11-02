@@ -24,6 +24,16 @@ function createSaver(
 }
 
 /**
+ * A saved draft used to open the form in edit mode.
+ */
+const SAVED_DRAFT: ReceiptDraft = {
+  store: "Costco",
+  items: [{ id: "x", name: "Milk", price: "5" }],
+  tax: "0.50",
+  tip: "",
+};
+
+/**
  * Renders the modal open, with working no-op callbacks unless overridden.
  * @param props Optional prop overrides
  * @returns The Testing Library render result
@@ -37,6 +47,7 @@ function renderModal(
       onClose={jest.fn()}
       onSubmit={createSaver([], null)}
       onSaveDraft={createSaver([], null)}
+      onDelete={() => Promise.resolve()}
       {...props}
     />
   );
@@ -165,10 +176,10 @@ describe("AddReceiptModal (US 2.1 Tasks 2 and 3)", () => {
     expect(getByLabelText("Item 1 name").props.value).toBe("Milk");
   });
 
-  it("asks for confirmation before deleting", async () => {
-    const onClose = jest.fn();
+    it("asks for confirmation before deleting", async () => {
+    const onDelete = jest.fn(() => Promise.resolve());
     const { getByLabelText, findByText, findByLabelText } = await renderModal({
-      onClose,
+      onDelete,
     });
 
     await fireEvent.changeText(getByLabelText("Store"), "Costco");
@@ -178,19 +189,55 @@ describe("AddReceiptModal (US 2.1 Tasks 2 and 3)", () => {
       await findByText("Press Confirm delete to discard this receipt.")
     ).toBeTruthy();
     expect(await findByLabelText("Confirm delete")).toBeTruthy();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onDelete).not.toHaveBeenCalled();
     expect(getByLabelText("Store").props.value).toBe("Costco");
   });
 
-  it("clears the form and closes after Confirm delete", async () => {
-    const onClose = jest.fn();
-    const { getByLabelText, findByLabelText } = await renderModal({ onClose });
+  it("clears the form and calls onDelete after Confirm delete", async () => {
+    const onDelete = jest.fn(() => Promise.resolve());
+    const { getByLabelText, findByLabelText } = await renderModal({
+      onDelete,
+    });
 
     await fireEvent.changeText(getByLabelText("Store"), "Costco");
     await fireEvent.press(getByLabelText("Delete receipt"));
     await fireEvent.press(await findByLabelText("Confirm delete"));
 
     await waitFor(() => expect(getByLabelText("Store").props.value).toBe(""));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows New receipt as the heading when there is no draft", async () => {
+    const { findByText, queryByText } = await renderModal();
+
+    expect(await findByText("New receipt")).toBeTruthy();
+    expect(queryByText("Edit draft")).toBeNull();
+  });
+
+  it("opens prefilled when given a saved draft", async () => {
+    const { getByLabelText, findByText } = await renderModal({
+      initialDraft: SAVED_DRAFT,
+    });
+
+    expect(await findByText("Edit draft")).toBeTruthy();
+    expect(getByLabelText("Store").props.value).toBe("Costco");
+    expect(getByLabelText("Item 1 name").props.value).toBe("Milk");
+    expect(getByLabelText("Item 1 price").props.value).toBe("5");
+    expect(getByLabelText("Tax").props.value).toBe("0.50");
+  });
+
+  it("submits the edited values of a saved draft", async () => {
+    const received: ReceiptDraft[] = [];
+    const { getByLabelText } = await renderModal({
+      initialDraft: SAVED_DRAFT,
+      onSubmit: createSaver(received, null),
+    });
+
+    await fireEvent.changeText(getByLabelText("Store"), "Costco 2");
+    await fireEvent.press(getByLabelText("Submit receipt"));
+
+    await waitFor(() => expect(received.length).toBe(1));
+    expect(received[0].store).toBe("Costco 2");
+    expect(received[0].items[0].name).toBe("Milk");
   });
 });
