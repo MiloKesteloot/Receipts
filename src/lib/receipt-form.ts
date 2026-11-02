@@ -105,6 +105,7 @@ export type ReceiptRecord = {
   total_cents: number;
   created_at: string;
   status: ReceiptStatus;
+  draft?: ReceiptDraft;
 };
 
 /**
@@ -158,11 +159,20 @@ export function buildReceipt(
   status: ReceiptStatus,
   createdAt: string
 ): ReceiptRecord {
-  return {
+  const record: ReceiptRecord = {
     id,
     title: draft.store.trim(),
     total_cents: computeTotals(draft).totalCents,
     created_at: createdAt,
     status,
   };
+  if (status === "draft") {
+    record.draft = {
+      store: draft.store,
+      items: draft.items.map((item) => ({ ...item })),
+      tax: draft.tax,
+      tip: draft.tip,
+    };
+  }
+  return record;
 }

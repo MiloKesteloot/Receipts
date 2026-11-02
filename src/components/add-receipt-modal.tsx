@@ -2,24 +2,24 @@
 
 import { JSX, useRef, useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { palette } from "@/lib/palette";
 import {
-    computeTotals,
-    createEmptyItem,
-    formatCents,
-    type ReceiptDraft,
-    type ReceiptItemDraft,
+  computeTotals,
+  createEmptyItem,
+  formatCents,
+  type ReceiptDraft,
+  type ReceiptItemDraft,
 } from "@/lib/receipt-form";
 
 type SaveHandler = (draft: ReceiptDraft) => Promise<string | null>;
@@ -31,6 +31,10 @@ type AddReceiptModalProps = {
   onSubmit: SaveHandler;
   /** Resolves to an error message, or null when the draft was saved. */
   onSaveDraft: SaveHandler;
+  /** Called after the user confirms Delete. */
+  onDelete: () => Promise<void>;
+  /** Saved values when editing a draft, or null for a new receipt. */
+  initialDraft?: ReceiptDraft | null;
 };
 
 /**
@@ -42,6 +46,8 @@ type AddReceiptModalProps = {
  * @param props.onClose Called when the user closes the modal
  * @param props.onSubmit Called with the entered receipt on Submit
  * @param props.onSaveDraft Called with the entered receipt on Save draft
+ * @param props.onDelete Called after the user confirms Delete
+ * @param props.initialDraft Saved values when editing a draft
  * @returns JSX element
  */
 export function AddReceiptModal({
@@ -49,14 +55,18 @@ export function AddReceiptModal({
   onClose,
   onSubmit,
   onSaveDraft,
+  onDelete,
+  initialDraft = null,
 }: AddReceiptModalProps): JSX.Element {
-  const nextId = useRef(2);
-  const [store, setStore] = useState("");
-  const [items, setItems] = useState<ReceiptItemDraft[]>([
-    createEmptyItem("item-1"),
-  ]);
-  const [tax, setTax] = useState("");
-  const [tip, setTip] = useState("");
+  const initialItems: ReceiptItemDraft[] =
+    initialDraft !== null && initialDraft.items.length > 0
+      ? initialDraft.items.map((item, i) => ({ ...item, id: `item-${i + 1}` }))
+      : [createEmptyItem("item-1")];
+  const nextId = useRef(initialItems.length + 1);
+  const [store, setStore] = useState(initialDraft?.store ?? "");
+  const [items, setItems] = useState<ReceiptItemDraft[]>(initialItems);
+  const [tax, setTax] = useState(initialDraft?.tax ?? "");
+  const [tip, setTip] = useState(initialDraft?.tip ?? "");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -105,14 +115,14 @@ export function AddReceiptModal({
     else setFormError(message);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (saving) return;
     if (!confirmingDelete) {
       setConfirmingDelete(true);
       return;
     }
     resetForm();
-    onClose();
+    await onDelete();
   };
 
   return (
@@ -127,7 +137,9 @@ export function AddReceiptModal({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={STYLES.topBar}>
-          <Text style={STYLES.heading}>New receipt</Text>
+          <Text style={STYLES.heading}>
+            {initialDraft !== null ? "Edit draft" : "New receipt"}
+          </Text>
           <Pressable
             onPress={handleClose}
             accessibilityRole="button"

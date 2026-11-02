@@ -104,7 +104,7 @@ describe("receipt validation (US 2.1 Task 3)", () => {
     );
   });
 
-  it("builds a receipt record with trimmed title and total", () => {
+  it("builds a draft record with trimmed title, total and the entered fields", () => {
     const receipt = buildReceipt(
       "r9",
       { ...VALID_DRAFT, store: "  Corner Market " },
@@ -117,6 +117,23 @@ describe("receipt validation (US 2.1 Task 3)", () => {
       total_cents: 550,
       created_at: "2026-11-02T00:00:00.000Z",
       status: "draft",
+      draft: {
+        store: "  Corner Market ",
+        items: [{ id: "a", name: "Milk", price: "5.00" }],
+        tax: "0.50",
+        tip: "",
+      },
     });
+  });
+
+  it("does not keep the entered fields on a submitted record", () => {
+    const receipt = buildReceipt(
+      "r9",
+      VALID_DRAFT,
+      "submitted",
+      "2026-11-02T00:00:00.000Z"
+    );
+    assert.equal(receipt.status, "submitted");
+    assert.equal("draft" in receipt, false);
   });
 });

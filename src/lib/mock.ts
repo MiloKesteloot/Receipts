@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
+import type { ReceiptDraft } from "@/lib/receipt-form";
 
 /**
  * Toggle between local mock group data and Supabase backend.
@@ -26,6 +27,7 @@ export type MockReceipt = {
   total_cents: number;
   created_at: string;
   status?: "draft" | "submitted";
+  draft?: ReceiptDraft;
 };
 
 export type MockGroupDetail = {

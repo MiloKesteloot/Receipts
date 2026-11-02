@@ -3,7 +3,7 @@ import { afterEach, describe, it } from "node:test";
 
 import { mockGroupDetails } from "@/lib/mock";
 import type { ReceiptDraft } from "@/lib/receipt-form";
-import { saveReceipt } from "@/lib/receipts";
+import { deleteReceipt, saveReceipt } from "@/lib/receipts";
 
 /**
  * Group used for saving. It starts with no receipts.
@@ -89,5 +89,110 @@ describe("saveReceipt (US 2.1 Task 3)", () => {
 
     assert.equal(result.status, "error");
     assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 0);
+  });
+
+    it("keeps the entered fields on a saved draft", async () => {
+    const result = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
+      useMock: true,
+    });
+
+    assert.equal(result.status, "ok");
+    if (result.status !== "ok") return;
+    assert.deepEqual(result.receipt.draft, VALID_DRAFT);
+  });
+
+  it("updates an edited draft in place and keeps its position", async () => {
+    await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { useMock: true });
+    const saved = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
+      useMock: true,
+    });
+    await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { useMock: true });
+    if (saved.status !== "ok") throw new Error("setup failed");
+
+    const result = await saveReceipt(
+      GROUP_ID,
+      { ...VALID_DRAFT, store: "Renamed" },
+      "submitted",
+      { useMock: true, existingId: saved.receipt.id }
+    );
+
+    assert.equal(result.status, "ok");
+    const receipts = mockGroupDetails[GROUP_ID].receipts;
+    assert.equal(receipts.length, 3);
+    assert.equal(receipts[1].id, saved.receipt.id);
+    assert.equal(receipts[1].title, "Renamed");
+    assert.equal(receipts[1].status, "submitted");
+    assert.equal(receipts[1].created_at, saved.receipt.created_at);
+    assert.equal(receipts[1].draft, undefined);
+  });
+
+  it("replaces the receipts array instead of changing it in place", async () => {
+    const before = mockGroupDetails[GROUP_ID].receipts;
+    await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", { useMock: true });
+
+    assert.notEqual(mockGroupDetails[GROUP_ID].receipts, before);
+  });
+
+  it("refuses to edit a submitted receipt or an unknown id", async () => {
+    const submitted = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", {
+      useMock: true,
+    });
+    if (submitted.status !== "ok") throw new Error("setup failed");
+
+    const notDraft = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
+      useMock: true,
+      existingId: submitted.receipt.id,
+    });
+    const unknown = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
+      useMock: true,
+      existingId: "nope",
+    });
+
+    assert.deepEqual(notDraft, {
+      status: "error",
+      message: "Only drafts can be edited.",
+    });
+    assert.deepEqual(unknown, {
+      status: "error",
+      message: "Receipt not found.",
+    });
+  });
+
+  it("deletes a saved draft", async () => {
+    const saved = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
+      useMock: true,
+    });
+    if (saved.status !== "ok") throw new Error("setup failed");
+
+    const result = await deleteReceipt(GROUP_ID, saved.receipt.id, {
+      useMock: true,
+    });
+
+    assert.deepEqual(result, { status: "ok" });
+    assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 0);
+  });
+
+  it("refuses to delete submitted receipts, unknown ids and unknown groups", async () => {
+    const submitted = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", {
+      useMock: true,
+    });
+    if (submitted.status !== "ok") throw new Error("setup failed");
+
+    const notDraft = await deleteReceipt(GROUP_ID, submitted.receipt.id, {
+      useMock: true,
+    });
+    const unknownReceipt = await deleteReceipt(GROUP_ID, "nope", {
+      useMock: true,
+    });
+    const unknownGroup = await deleteReceipt("nope", "x", { useMock: true });
+    const mockOff = await deleteReceipt(GROUP_ID, submitted.receipt.id, {
+      useMock: false,
+    });
+
+    assert.equal(notDraft.status, "error");
+    assert.equal(unknownReceipt.status, "error");
+    assert.equal(unknownGroup.status, "error");
+    assert.equal(mockOff.status, "error");
+    assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 1);
   });
 });
