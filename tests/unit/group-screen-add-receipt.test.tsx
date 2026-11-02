@@ -22,11 +22,6 @@ jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/components/toast", () => ({ Toast: () => null }));
 
 /**
- * Loosely typed mock so mockResolvedValue / mockReturnValue accept any value.
- */
-type LooseMock = jest.Mock<(...args: unknown[]) => unknown>;
-
-/**
  * Mocked group loader, typed against the real function.
  */
 const MOCK_LOAD = loadGroupDetail as unknown as jest.Mock<
