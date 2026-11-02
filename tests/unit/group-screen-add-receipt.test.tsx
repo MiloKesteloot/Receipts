@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render } from "@testing-library/react-native";
 import { useLocalSearchParams } from "expo-router";
@@ -19,23 +21,47 @@ jest.mock("@/lib/group-data", () => ({ loadGroupDetail: jest.fn() }));
 jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/components/toast", () => ({ Toast: () => null }));
 
-// Loosely typed so mockResolvedValue / mockReturnValue accept any value.
-type LooseMock = jest.Mock<(...args: any[]) => any>;
-const mockLoad = loadGroupDetail as unknown as LooseMock;
-const mockParams = useLocalSearchParams as unknown as LooseMock;
+/**
+ * Loosely typed mock so mockResolvedValue / mockReturnValue accept any value.
+ */
+type LooseMock = jest.Mock<(...args: unknown[]) => unknown>;
 
-const groupWithReceipts = mockGroupDetails["mock-1"];
-const groupWithoutReceipts = mockGroupDetails["mock-2"];
+/**
+ * Mocked group loader, typed against the real function.
+ */
+const MOCK_LOAD = loadGroupDetail as unknown as jest.Mock<
+  () => Promise<unknown>
+>;
+
+/**
+ * Mocked route params hook.
+ */
+const MOCK_PARAMS = useLocalSearchParams as unknown as jest.Mock<
+  () => Record<string, string>
+>;
+
+/**
+ * Apartment 402: has receipts.
+ */
+const GROUP_WITH_RECEIPTS = mockGroupDetails["mock-1"];
+
+/**
+ * Road Trip 2026: no receipts (empty state).
+ */
+const GROUP_WITHOUT_RECEIPTS = mockGroupDetails["mock-2"];
 
 describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockParams.mockReturnValue({ id: "mock-1" });
+    MOCK_PARAMS.mockReturnValue({ id: "mock-1" });
   });
 
   it("shows the Add receipt button when the group has no receipts", async () => {
-    mockParams.mockReturnValue({ id: "mock-2" });
-    mockLoad.mockResolvedValue({ status: "ok", detail: groupWithoutReceipts });
+    MOCK_PARAMS.mockReturnValue({ id: "mock-2" });
+    MOCK_LOAD.mockResolvedValue({
+      status: "ok",
+      detail: GROUP_WITHOUT_RECEIPTS,
+    });
     const { findByLabelText, getByText } = await render(<GroupScreen />);
 
     expect(await findByLabelText("Add receipt")).toBeTruthy();
@@ -43,7 +69,7 @@ describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
   });
 
   it("shows the Add receipt button alongside existing receipts", async () => {
-    mockLoad.mockResolvedValue({ status: "ok", detail: groupWithReceipts });
+    MOCK_LOAD.mockResolvedValue({ status: "ok", detail: GROUP_WITH_RECEIPTS });
     const { findByLabelText, getByText } = await render(<GroupScreen />);
 
     expect(await findByLabelText("Add receipt")).toBeTruthy();
@@ -54,22 +80,22 @@ describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
   });
 
   it("renders the button label text", async () => {
-    mockLoad.mockResolvedValue({ status: "ok", detail: groupWithReceipts });
+    MOCK_LOAD.mockResolvedValue({ status: "ok", detail: GROUP_WITH_RECEIPTS });
     const { findByText } = await render(<GroupScreen />);
 
     expect(await findByText("+ Add receipt")).toBeTruthy();
   });
 
   it("does not crash when the button is pressed", async () => {
-    mockLoad.mockResolvedValue({ status: "ok", detail: groupWithReceipts });
+    MOCK_LOAD.mockResolvedValue({ status: "ok", detail: GROUP_WITH_RECEIPTS });
     const { findByLabelText } = await render(<GroupScreen />);
 
     const button = await findByLabelText("Add receipt");
-    await expect(fireEvent.press(button)).resolves.not.toThrow();
+    await fireEvent.press(button);
   });
 
   it("does not show the button when the user is forbidden", async () => {
-    mockLoad.mockResolvedValue({ status: "forbidden" });
+    MOCK_LOAD.mockResolvedValue({ status: "forbidden" });
     const { findByText, queryByLabelText } = await render(<GroupScreen />);
 
     expect(await findByText("You're not a member of this group.")).toBeTruthy();
@@ -77,7 +103,7 @@ describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
   });
 
   it("does not show the button when loading fails", async () => {
-    mockLoad.mockResolvedValue({ status: "error", message: "Network error" });
+    MOCK_LOAD.mockResolvedValue({ status: "error", message: "Network error" });
     const { findByText, queryByLabelText } = await render(<GroupScreen />);
 
     expect(await findByText("Network error")).toBeTruthy();
@@ -85,7 +111,7 @@ describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
   });
 
   it("does not show the button while loading", async () => {
-    mockLoad.mockReturnValue(new Promise(() => {})); // never resolves
+    MOCK_LOAD.mockReturnValue(new Promise(() => {})); // never resolves
     const { queryByLabelText } = await render(<GroupScreen />);
 
     expect(queryByLabelText("Add receipt")).toBeNull();

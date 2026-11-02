@@ -156,7 +156,7 @@ export default function GroupScreen(): JSX.Element {
   */
   const handleAddReceipt = (): void => {
     // TODO (Task 2): open the receipt entry form for 'groud.id'
-  }
+  };
 
   return (
     <View style={STYLES.container}>
