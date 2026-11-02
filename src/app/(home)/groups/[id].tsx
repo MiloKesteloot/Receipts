@@ -21,7 +21,12 @@ import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
 
 import { AddReceiptModal } from "@/components/add-receipt-modal";
-import { formatCents } from "@/lib/receipt-form";
+import {
+  formatCents,
+  type ReceiptDraft,
+  type ReceiptStatus,
+} from "@/lib/receipt-form";
+import { saveReceipt } from "@/lib/receipts";
 
 type Member = {
   user_id: string;
@@ -35,6 +40,7 @@ type Receipt = {
   title: string;
   total_cents: number;
   created_at: string;
+  status?: ReceiptStatus;
 };
 
 type GroupDetail = {
@@ -154,6 +160,38 @@ export default function GroupScreen(): JSX.Element {
     setAddReceiptVisible(true);
   };
 
+  /**
+   * Saves the entered receipt and adds it to the list when it works.
+   * @param draft The receipt as entered in the form
+   * @param status Save as a draft or submit
+   * @returns An error message, or null when the save worked
+   */
+  const handleSaveReceipt = async (
+    draft: ReceiptDraft,
+    status: ReceiptStatus
+  ): Promise<string | null> => {
+    const result = await saveReceipt(group.id, draft, status, {
+      useMock: USE_MOCK,
+    });
+    if (result.status === "error") return result.message;
+
+    const saved = result.receipt;
+    setDetail((prev) => {
+      if (prev === null) return prev;
+      const alreadyListed = prev.receipts.some((r) => r.id === saved.id);
+      return {
+        ...prev,
+        receipts: alreadyListed ? prev.receipts : [saved, ...prev.receipts],
+      };
+    });
+    setAddReceiptVisible(false);
+    setToastState({
+      message: status === "submitted" ? "Receipt submitted." : "Draft saved.",
+      type: "success",
+    });
+    return null;
+  };
+
   return (
     <View style={STYLES.container}>
       <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
@@ -219,6 +257,11 @@ export default function GroupScreen(): JSX.Element {
               style={[STYLES.receiptRow, i > 0 && STYLES.memberDivider]}
             >
               <Text style={STYLES.memberName}>{r.title}</Text>
+              {r.status === "draft" ? (
+                <View style={STYLES.pill}>
+                  <Text style={STYLES.pillText}>Draft</Text>
+                </View>
+              ) : null}
               <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
             </View>
           ))
@@ -228,6 +271,8 @@ export default function GroupScreen(): JSX.Element {
       <AddReceiptModal
         visible={addReceiptVisible}
         onClose={() => setAddReceiptVisible(false)}
+        onSubmit={(draft) => handleSaveReceipt(draft, "submitted")}
+        onSaveDraft={(draft) => handleSaveReceipt(draft, "draft")}
       />
       {toastState ? (
         <Toast
@@ -311,6 +356,7 @@ const STYLES = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 14,
+    gap: 8,
   },
   amount: { fontSize: 16, fontWeight: "700", color: palette.text },
   emptyText: { paddingVertical: 16, color: palette.muted, fontSize: 15 },
