@@ -20,6 +20,9 @@ import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
 
+import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { formatCents } from "@/lib/receipt-form";
+
 type Member = {
   user_id: string;
   display_name: string | null;
@@ -44,13 +47,6 @@ type GroupDetail = {
   members: Member[];
   receipts: Receipt[]; // empty until sprint 2
 };
-
-/**
- * Formats monetary amounts from cents to dollars string.
- * @param cents Amount in cents
- * @returns Formatted currency string
- */
-const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 
 /**
  * Detailed view of a group showing members and receipts.
@@ -81,6 +77,7 @@ export default function GroupScreen(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
+  const [addReceiptVisible, setAddReceiptVisible] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -151,11 +148,10 @@ export default function GroupScreen(): JSX.Element {
   const { group, members, receipts } = detail;
 
   /**
-    * Starts the add-receipt flow for this group.
-    * Task 2 will replace the body with navigation to / opening of the entry form.
-  */
+   * Opens the receipt entry form for this group.
+   */
   const handleAddReceipt = (): void => {
-    // TODO (Task 2): open the receipt entry form for 'groud.id'
+    setAddReceiptVisible(true);
   };
 
   return (
@@ -229,6 +225,10 @@ export default function GroupScreen(): JSX.Element {
         )}
       </View>
       </ScrollView>
+      <AddReceiptModal
+        visible={addReceiptVisible}
+        onClose={() => setAddReceiptVisible(false)}
+      />
       {toastState ? (
         <Toast
           visible={Boolean(toastState)}
