@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/naming-convention */
+ 
 
 import { JSX, useRef, useState } from "react";
 import {
@@ -14,29 +14,41 @@ import {
 } from "react-native";
 
 import { palette } from "@/lib/palette";
-import type { ReceiptItemDraft } from "@/lib/receipt-form";
 import {
     computeTotals,
     createEmptyItem,
     formatCents,
+    type ReceiptDraft,
+    type ReceiptItemDraft,
 } from "@/lib/receipt-form";
+
+type SaveHandler = (draft: ReceiptDraft) => Promise<string | null>;
 
 type AddReceiptModalProps = {
   visible: boolean;
   onClose: () => void;
+  /** Resolves to an error message, or null when the receipt was saved. */
+  onSubmit: SaveHandler;
+  /** Resolves to an error message, or null when the draft was saved. */
+  onSaveDraft: SaveHandler;
 };
 
 /**
  * Form for entering a receipt: store, items with prices, tax and tip.
- * Shows a live subtotal and total. Saving comes in Task 3.
+ * Shows a live total and has Submit, Save draft and Delete buttons.
+ * Delete asks for a second press before clearing the form.
  * @param props Component props
  * @param props.visible Whether the modal is open
  * @param props.onClose Called when the user closes the modal
+ * @param props.onSubmit Called with the entered receipt on Submit
+ * @param props.onSaveDraft Called with the entered receipt on Save draft
  * @returns JSX element
  */
 export function AddReceiptModal({
   visible,
   onClose,
+  onSubmit,
+  onSaveDraft,
 }: AddReceiptModalProps): JSX.Element {
   const nextId = useRef(2);
   const [store, setStore] = useState("");
@@ -45,8 +57,21 @@ export function AddReceiptModal({
   ]);
   const [tax, setTax] = useState("");
   const [tip, setTip] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const totals = computeTotals({ store, items, tax, tip });
+
+  const resetForm = () => {
+    nextId.current = 2;
+    setStore("");
+    setItems([createEmptyItem("item-1")]);
+    setTax("");
+    setTip("");
+    setFormError(null);
+    setConfirmingDelete(false);
+  };
 
   const addItem = () => {
     const id = `item-${nextId.current}`;
@@ -64,12 +89,38 @@ export function AddReceiptModal({
     );
   };
 
+  const handleClose = () => {
+    setConfirmingDelete(false);
+    onClose();
+  };
+
+  const runSave = async (action: SaveHandler) => {
+    if (saving) return;
+    setConfirmingDelete(false);
+    setFormError(null);
+    setSaving(true);
+    const message = await action({ store, items, tax, tip });
+    setSaving(false);
+    if (message === null) resetForm();
+    else setFormError(message);
+  };
+
+  const handleDelete = () => {
+    if (saving) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    resetForm();
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
         style={STYLES.container}
@@ -78,7 +129,7 @@ export function AddReceiptModal({
         <View style={STYLES.topBar}>
           <Text style={STYLES.heading}>New receipt</Text>
           <Pressable
-            onPress={onClose}
+            onPress={handleClose}
             accessibilityRole="button"
             accessibilityLabel="Close"
             hitSlop={8}
@@ -206,6 +257,60 @@ export function AddReceiptModal({
             </View>
           </View>
         </ScrollView>
+
+        <View style={STYLES.footer}>
+          {confirmingDelete ? (
+            <Text style={STYLES.confirmText}>
+              Press Confirm delete to discard this receipt.
+            </Text>
+          ) : null}
+          {formError ? <Text style={STYLES.error}>{formError}</Text> : null}
+          <View style={STYLES.actionRow}>
+            <Pressable
+              onPress={handleDelete}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel={
+                confirmingDelete ? "Confirm delete" : "Delete receipt"
+              }
+              style={({ pressed }) => [
+                STYLES.actionButton,
+                STYLES.deleteButton,
+                (pressed || saving) && STYLES.pressed,
+              ]}
+            >
+              <Text style={STYLES.deleteText}>
+                {confirmingDelete ? "Confirm delete" : "Delete"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => runSave(onSaveDraft)}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save draft"
+              style={({ pressed }) => [
+                STYLES.actionButton,
+                STYLES.draftButton,
+                (pressed || saving) && STYLES.pressed,
+              ]}
+            >
+              <Text style={STYLES.draftText}>Save draft</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => runSave(onSubmit)}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Submit receipt"
+              style={({ pressed }) => [
+                STYLES.actionButton,
+                STYLES.submitButton,
+                (pressed || saving) && STYLES.pressed,
+              ]}
+            >
+              <Text style={STYLES.submitText}>Submit</Text>
+            </Pressable>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -283,4 +388,28 @@ const STYLES = StyleSheet.create({
   summaryValue: { fontSize: 15, fontWeight: "600", color: palette.text },
   totalLabel: { fontSize: 17, fontWeight: "800", color: palette.text },
   totalValue: { fontSize: 17, fontWeight: "800", color: palette.text },
+  footer: {
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    backgroundColor: palette.bg,
+  },
+  confirmText: { color: palette.muted, fontSize: 14 },
+  actionRow: { flexDirection: "row", gap: 8 },
+  actionButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  deleteButton: { borderWidth: 1, borderColor: palette.error },
+  deleteText: { fontSize: 14, fontWeight: "700", color: palette.error },
+  draftButton: { backgroundColor: palette.accentSoft },
+  draftText: { fontSize: 14, fontWeight: "700", color: palette.accent },
+  submitButton: { backgroundColor: palette.accent },
+  submitText: { fontSize: 14, fontWeight: "700", color: "white" },
 });
