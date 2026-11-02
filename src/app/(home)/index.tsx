@@ -161,7 +161,7 @@ export default function Index(): JSX.Element {
         renderItem={({ item, index }) => (
           <Pressable
             onPress={() =>
-              router.navigate({
+              router.push({
                 pathname: "/groups/[id]",
                 params: { id: item.id },
               })
@@ -283,4 +283,4 @@ const STYLES = StyleSheet.create({
   buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
   error: { color: palette.error, textAlign: "center" },
 });
-
+
