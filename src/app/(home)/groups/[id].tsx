@@ -150,6 +150,14 @@ export default function GroupScreen(): JSX.Element {
 
   const { group, members, receipts } = detail;
 
+  /**
+    * Starts the add-receipt flow for this group.
+    * Task 2 will replace the body with navigation to / opening of the entry form.
+  */
+  const handleAddReceipt = (): void => {
+    // TODO (Task 2): open the receipt entry form for 'groud.id'
+  };
+
   return (
     <View style={STYLES.container}>
       <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
@@ -191,22 +199,35 @@ export default function GroupScreen(): JSX.Element {
           })}
         </View>
 
-        <Text style={STYLES.sectionLabel}>Receipts</Text>
-        <View style={STYLES.card}>
-          {receipts.length === 0 ? (
-            <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
-          ) : (
-            receipts.map((r, i) => (
-              <View
-                key={r.id}
-                style={[STYLES.receiptRow, i > 0 && STYLES.memberDivider]}
-              >
-                <Text style={STYLES.memberName}>{r.title}</Text>
-                <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
-              </View>
-            ))
-          )}
-        </View>
+        <View style={STYLES.sectionHeaderRow}>
+        <Text style={STYLES.sectionLabelFlush}>Receipts</Text>
+        <Pressable
+          onPress={handleAddReceipt}
+          accessibilityRole="button"
+          accessibilityLabel="Add receipt"
+          style={({ pressed }) => [
+            STYLES.addButton,
+            pressed && STYLES.addButtonPressed,
+          ]}
+        >
+          <Text style={STYLES.addButtonText}>+ Add receipt</Text>
+        </Pressable>
+      </View>
+      <View style={STYLES.card}>
+        {receipts.length === 0 ? (
+          <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
+        ) : (
+          receipts.map((r, i) => (
+            <View
+              key={r.id}
+              style={[STYLES.receiptRow, i > 0 && STYLES.memberDivider]}
+            >
+              <Text style={STYLES.memberName}>{r.title}</Text>
+              <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
+            </View>
+          ))
+        )}
+      </View>
       </ScrollView>
       {toastState ? (
         <Toast
@@ -301,4 +322,25 @@ const STYLES = StyleSheet.create({
   },
   buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
   error: { color: palette.error, textAlign: "center" },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  sectionLabelFlush: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: palette.muted,
+  },
+  addButton: {
+    backgroundColor: palette.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  addButtonPressed: { opacity: 0.7 },
+  addButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
 });
