@@ -123,3 +123,16 @@ export const mockGroupDetails: Record<string, MockGroupDetail> = {
     receipts: [],
   },
 };
+
+/**
+ * One person's claim on a receipt item.
+ */
+export type MockItemClaim = {
+  item_id: string;
+  user_id: string;
+};
+
+/**
+ * In-memory item claims for mock development (US 2.3).
+ */
+export const mockItemClaims: MockItemClaim[] = [];
