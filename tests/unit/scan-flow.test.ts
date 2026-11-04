@@ -10,6 +10,11 @@ import {
 } from "@/lib/scan-flow";
 import type { ScannedReceipt } from "@/lib/scan-receipt";
 
+/**
+ * Builds a complete scanner result with optional overrides.
+ * @param overrides Fields to replace in the default result
+ * @returns A complete scanned receipt
+ */
 const scanned = (overrides: Partial<ScannedReceipt> = {}): ScannedReceipt => ({
   merchant: "Cafe",
   date: null,
@@ -23,6 +28,11 @@ const scanned = (overrides: Partial<ScannedReceipt> = {}): ScannedReceipt => ({
   ...overrides,
 });
 
+/**
+ * Creates the smallest Supabase client shape needed by the scan helper.
+ * @param invoke Mock function invocation implementation
+ * @returns A client-shaped mock
+ */
 const clientWith = (invoke: () => Promise<unknown>) =>
   ({ functions: { invoke } }) as never;
 
