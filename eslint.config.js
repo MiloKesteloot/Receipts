@@ -6,6 +6,9 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
+    // Edge Functions run on Deno, not in the app.
+    { ignores: ["supabase/functions/**"] },
+
     {
         files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
         plugins: { js, jsdoc },
