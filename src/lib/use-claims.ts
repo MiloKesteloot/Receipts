@@ -14,6 +14,13 @@
  *    people's claims appear the next time they load. Revisit if the team wants
  *    Realtime.
  * ==========================================================================
+ *
+ * TODO(US 2.3 Task 1): after a rollback on the real path, refetch the claims.
+ * A request can save on the server but lose its response, and the rollback
+ * would then show the wrong state until the next load.
+ *
+ * TODO(US 2.3): when switching to `useAuth`, don't use `?? ""` for `userId`.
+ * Make it optional and have `toggle` do nothing while it's undefined.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
