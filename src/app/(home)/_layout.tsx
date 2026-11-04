@@ -13,6 +13,10 @@ export default function HomeLayout(): JSX.Element {
         name="groups/[id]"
         options={{ title: "Group", headerBackTitle: "Home" }}
       />
+      <Stack.Screen
+        name="scan-receipt"
+        options={{ title: "Scan receipt", headerBackTitle: "Back" }}
+      />
     </Stack>
   );
 }
