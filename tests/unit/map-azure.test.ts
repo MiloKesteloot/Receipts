@@ -1,3 +1,6 @@
+/* Azure's external payload uses PascalCase field names. */
+/* eslint-disable @typescript-eslint/naming-convention */
+
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -18,33 +21,33 @@ const FULL_RESULT = {
       {
         confidence: 0.93,
         fields: {
-          MerchantName: { valueString: "CAFE ROMA" },
-          TransactionDate: { valueDate: "2026-10-30" },
-          Items: {
+          "MerchantName": { valueString: "CAFE ROMA" },
+          "TransactionDate": { valueDate: "2026-10-30" },
+          "Items": {
             valueArray: [
               {
                 valueObject: {
-                  Description: { valueString: "Latte" },
-                  Quantity: { valueNumber: 1 },
-                  Price: { valueCurrency: { amount: 4.1, currencyCode: "USD" } },
-                  TotalPrice: {
+                  "Description": { valueString: "Latte" },
+                  "Quantity": { valueNumber: 1 },
+                  "Price": { valueCurrency: { amount: 4.1, currencyCode: "USD" } },
+                  "TotalPrice": {
                     valueCurrency: { amount: 4.1, currencyCode: "USD" },
                   },
                 },
               },
               {
                 valueObject: {
-                  Description: { content: "  Bagel  " },
-                  Quantity: { valueNumber: 2 },
-                  Price: { valueCurrency: { amount: 1.6, currencyCode: "USD" } },
+                  "Description": { content: "  Bagel  " },
+                  "Quantity": { valueNumber: 2 },
+                  "Price": { valueCurrency: { amount: 1.6, currencyCode: "USD" } },
                 },
               },
             ],
           },
-          Subtotal: { valueCurrency: { amount: 7.3, currencyCode: "USD" } },
-          TotalTax: { valueCurrency: { amount: 0.66, currencyCode: "USD" } },
-          Tip: { valueCurrency: { amount: 1.5, currencyCode: "USD" } },
-          Total: { valueCurrency: { amount: 9.46, currencyCode: "USD" } },
+          "Subtotal": { valueCurrency: { amount: 7.3, currencyCode: "USD" } },
+          "TotalTax": { valueCurrency: { amount: 0.66, currencyCode: "USD" } },
+          "Tip": { valueCurrency: { amount: 1.5, currencyCode: "USD" } },
+          "Total": { valueCurrency: { amount: 9.46, currencyCode: "USD" } },
         },
       },
     ],
@@ -93,7 +96,7 @@ describe("mapAzureResult", () => {
     const result = mapAzureResult({
       analyzeResult: {
         documents: [
-          { fields: { Items: { valueArray: [{ valueObject: {} }, {}] } } },
+          { fields: { "Items": { valueArray: [{ valueObject: {} }, {}] } } },
         ],
       },
     });
@@ -109,8 +112,8 @@ describe("mapAzureResult", () => {
         documents: [
           {
             fields: {
-              TotalTax: { valueCurrency: { amount: 0, currencyCode: "USD" } },
-              Tip: { valueNumber: 0 },
+              "TotalTax": { valueCurrency: { amount: 0, currencyCode: "USD" } },
+              "Tip": { valueNumber: 0 },
             },
           },
         ],
@@ -135,7 +138,7 @@ describe("isEmptyScan", () => {
     assert.equal(isEmptyScan(mapAzureResult(FULL_RESULT)), false);
     const totalOnly = mapAzureResult({
       analyzeResult: {
-        documents: [{ fields: { Total: { valueNumber: 5 } } }],
+        documents: [{ fields: { "Total": { valueNumber: 5 } } }],
       },
     });
     assert.equal(isEmptyScan(totalOnly), false);
