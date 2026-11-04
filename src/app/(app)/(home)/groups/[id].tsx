@@ -275,17 +275,30 @@ export default function GroupScreen(): JSX.Element {
 
         <View style={STYLES.sectionHeaderRow}>
           <Text style={STYLES.sectionLabelFlush}>Receipts</Text>
-          <Pressable
-            onPress={handleAddReceipt}
-            accessibilityRole="button"
-            accessibilityLabel="Add receipt"
-            style={({ pressed }) => [
-              STYLES.addButton,
-              pressed && STYLES.addButtonPressed,
-            ]}
-          >
-            <Text style={STYLES.addButtonText}>+ Add receipt</Text>
-          </Pressable>
+          <View style={STYLES.headerButtons}>
+            <Pressable
+              onPress={() => router.push("/scan-receipt")}
+              accessibilityRole="button"
+              accessibilityLabel="Scan receipt"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Scan</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleAddReceipt}
+              accessibilityRole="button"
+              accessibilityLabel="Add receipt"
+              style={({ pressed }) => [
+                STYLES.addButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.addButtonText}>+ Add receipt</Text>
+            </Pressable>
+          </View>
         </View>
         <View style={STYLES.card}>
           {receipts.length === 0 ? (
@@ -294,35 +307,35 @@ export default function GroupScreen(): JSX.Element {
             receipts.map((r, i) => {
               const rowStyle = [STYLES.receiptRow, i > 0 && STYLES.memberDivider];
               const content = (
+                <>
+                  <Text style={STYLES.memberName}>{r.title}</Text>
+                  {r.status === "draft" ? (
+                    <View style={STYLES.pill}>
+                      <Text style={STYLES.pillText}>Draft</Text>
+                    </View>
+                  ) : null}
+                  <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
+                </>
+              );
 
-                <Text style={STYLES.memberName}>{r.title}</Text>
-                {r.status === "draft" ? (
-                  <View style={STYLES.pill}>
-                    <Text style={STYLES.pillText}>Draft</Text>
-                  </View>
-                ) : null}
-                <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
-              </>
-            );
-          
-            return r.status === "draft" ? (
-              <Pressable
-                key={r.id}
-                onPress={() => handleEditDraft(r)}
-                accessibilityRole="button"
-                accessibilityLabel={`Edit draft ${r.title}`}
-                style={({ pressed }) => [...rowStyle, pressed && STYLES.addButtonPressed]}
-              >
-                {content}
-              </Pressable>
-            ) : (
-              <View key={r.id} style={rowStyle}>
-                {content}
-              </View>
-            );
-          })
-        )}
-      </View>
+              return r.status === "draft" ? (
+                <Pressable
+                  key={r.id}
+                  onPress={() => handleEditDraft(r)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit draft ${r.title}`}
+                  style={({ pressed }) => [...rowStyle, pressed && STYLES.addButtonPressed]}
+                >
+                  {content}
+                </Pressable>
+              ) : (
+                <View key={r.id} style={rowStyle}>
+                  {content}
+                </View>
+              );
+            })
+          )}
+        </View>
       </ScrollView>
       <AddReceiptModal
         key={editingReceipt === null ? "new" : `edit-${editSession}`}
@@ -402,15 +415,11 @@ const STYLES = StyleSheet.create({
     borderRadius: 999,
   },
   pillText: { fontSize: 12, fontWeight: "700", color: palette.accent },
-  sectionRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
+  headerButtons: { flexDirection: "row", gap: 8 },
   scanButton: {
     backgroundColor: palette.accentSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
   },
   receiptRow: {

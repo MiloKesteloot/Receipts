@@ -16,23 +16,11 @@ preventAutoHideAsync();
  */
 export default function RootLayout(): JSX.Element {
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <NativeTabs minimizeBehavior="onScrollDown">
-        <NativeTabs.Trigger name="(home)">
-          <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "house", selected: "house.fill" }}
-            md="home"
-          />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="stats">
-          <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "chart.bar", selected: "chart.bar.fill" }}
-            md="bar_chart"
-          />
-        </NativeTabs.Trigger>
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
 
 /**
  * Shows the app when signed in and the sign-in screen otherwise. Guards also
@@ -48,17 +36,17 @@ function RootNavigator(): JSX.Element {
     if (!isLoading) hideSplash();
   }, [isLoading]);
 
-        <NativeTabs.Trigger name="account">
-          <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{
-              default: "person.crop.circle",
-              selected: "person.crop.circle.fill",
-            }}
-            md="account_circle"
-          />
-        </NativeTabs.Trigger>
-      </NativeTabs>
+  return (
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" />
+        </Stack.Protected>
+      </Stack>
     </ThemeProvider>
   );
 }
