@@ -191,7 +191,15 @@ export default function GroupScreen(): JSX.Element {
           })}
         </View>
 
-        <Text style={STYLES.sectionLabel}>Receipts</Text>
+        <View style={STYLES.sectionRow}>
+          <Text style={STYLES.sectionLabel}>Receipts</Text>
+          <Pressable
+            onPress={() => router.push("/scan-receipt")}
+            style={STYLES.scanButton}
+          >
+            <Text style={STYLES.pillText}>Scan receipt</Text>
+          </Pressable>
+        </View>
         <View style={STYLES.card}>
           {receipts.length === 0 ? (
             <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
@@ -285,6 +293,17 @@ const STYLES = StyleSheet.create({
     borderRadius: 999,
   },
   pillText: { fontSize: 12, fontWeight: "700", color: palette.accent },
+  sectionRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  scanButton: {
+    backgroundColor: palette.accentSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
   receiptRow: {
     flexDirection: "row",
     alignItems: "center",
