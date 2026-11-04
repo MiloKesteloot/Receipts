@@ -35,6 +35,21 @@ export type CentsShare = {
   cents: number;
 };
 
+/** The parts of a receipt item that claiming needs. */
+export type ClaimableItem = {
+  id: string;
+  priceCents: number;
+};
+
+export type ItemShares = {
+  /** True when two or more people have claimed the item. */
+  isShared: boolean;
+  /** Everyone who claimed the item, in user id order. */
+  claimedBy: string[];
+  /** Each person's share, in user id order. Empty if nobody claimed it. */
+  shares: CentsShare[];
+};
+
 export type ClaimOptions = {
   useMock: boolean;
   /** PLACEHOLDER #3: who is acting in mock mode. */
@@ -181,4 +196,27 @@ export function splitCents(totalCents: number, userIds: string[]): CentsShare[] 
     userId,
     cents: baseCents + (i < leftoverCents ? 1 : 0),
   }));
+}
+
+/**
+ * Works out who claimed an item and what each of them pays.
+ * @param item The item
+ * @param claims Claims to look through. Claims on other items are ignored, so
+ *   it's fine to pass every claim on the receipt.
+ * @returns Whether it's shared, who claimed it, and each person's share
+ */
+export function getItemShares(
+  item: ClaimableItem,
+  claims: ItemClaim[]
+): ItemShares {
+  const userIds = claims
+    .filter((claim) => claim.itemId === item.id)
+    .map((claim) => claim.userId);
+  const shares = splitCents(item.priceCents, userIds);
+
+  return {
+    isShared: shares.length >= 2,
+    claimedBy: shares.map((share) => share.userId),
+    shares,
+  };
 }
