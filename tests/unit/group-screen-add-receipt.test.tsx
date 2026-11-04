@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { useLocalSearchParams } from "expo-router";
 
-import GroupScreen from "@/app/(home)/groups/[id]";
+import GroupScreen from "@/app/(app)/(home)/groups/[id]";
 import { loadGroupDetail } from "@/lib/group-data";
 import { mockGroupDetails } from "@/lib/mock";
 
