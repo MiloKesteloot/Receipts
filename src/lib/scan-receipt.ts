@@ -32,6 +32,15 @@ export type ReceiptCheck = {
 };
 
 /**
+ * True when the scanner found no line items and no printed total.
+ * @param receipt Receipt returned by the scan function
+ * @returns Whether the photo should be retaken
+ */
+export function isEmptyScan(receipt: ScannedReceipt): boolean {
+  return receipt.items.length === 0 && receipt.total === null;
+}
+
+/**
  * Sends a base64 JPEG to the `scan-receipt` Edge Function.
  * @param base64 Image data, without the `data:` prefix
  * @param client Supabase client
@@ -61,7 +70,7 @@ export async function scanReceipt(
  * @param dollars Amount in dollars
  * @returns Amount in cents
  */
-const toCents = (dollars: number | null): number =>
+export const toCents = (dollars: number | null): number =>
   Math.round((dollars ?? 0) * 100);
 
 /**
@@ -69,7 +78,7 @@ const toCents = (dollars: number | null): number =>
  * @param item Scanned line item
  * @returns Line total in cents
  */
-const itemCents = (item: ScannedItem): number => {
+export const itemCents = (item: ScannedItem): number => {
   if (item.totalPrice !== null) return toCents(item.totalPrice);
   return toCents((item.price ?? 0) * (item.quantity ?? 1));
 };

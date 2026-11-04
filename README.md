@@ -50,6 +50,32 @@ To use your own Supabase project instead:
 
 Never put the secret key or database password in `.env`; it's committed to git.
 
+### Receipt scanning
+
+The `scan-receipt` Edge Function sends receipt images to Azure Document Intelligence and maps the result into the fields used by the app. Set these Supabase Function secrets before deploying it:
+
+- `AZURE_DI_ENDPOINT`: your Azure Document Intelligence endpoint.
+- `AZURE_DI_KEY`: your Azure Document Intelligence key.
+
+Deploy the function with the Supabase CLI from the project directory:
+
+```
+supabase functions deploy scan-receipt
+```
+
+The app checks the image size, retries a failed request once, times out slow scans, and asks for a retake when Azure finds no readable receipt. If the web build is served from a browser origin, set the `APP_ORIGIN` Function secret to that exact origin to tighten CORS. Native requests do not need an origin value.
+
+### Camera
+
+The group receipt flow opens an in-app camera sheet. It includes camera permission handling, a library fallback, a photo review step, and a retake action. `expo-camera` is a native module, so use a development build for device testing after installing dependencies:
+
+```
+npx expo run:ios
+npx expo run:android
+```
+
+Expo Go can still exercise the library fallback. Test the camera on a real phone with long, dim, crumpled, non-US, and library photos before tuning capture quality.
+
 ### Sign-in
 
 You need an account to use the app. Every screen except sign-in is hidden until you sign in, and the database only lets signed-in users see groups they belong to.
