@@ -21,6 +21,7 @@ import {
   claimItem,
   type CentsShare,
   getClaims,
+  getItemShares,
   splitCents,
   unclaimItem,
 } from "@/lib/claims";
@@ -138,6 +139,64 @@ describe("US 2.3: splitCents", () => {
     assert.throws(() => splitCents(10.5, ["u1"]), RangeError);
     assert.throws(() => splitCents(-1, ["u1"]), RangeError);
     assert.throws(() => splitCents(Number.NaN, ["u1"]), RangeError);
+  });
+});
+
+describe("US 2.3: getItemShares", () => {
+  const item = { id: ITEM_ID, priceCents: 1000 };
+
+  test("an unclaimed item isn't shared and has no shares", () => {
+    assert.deepEqual(getItemShares(item, []), {
+      isShared: false,
+      claimedBy: [],
+      shares: [],
+    });
+  });
+
+  test("one claimer isn't shared and pays the whole price", () => {
+    assert.deepEqual(
+      getItemShares(item, [{ itemId: ITEM_ID, userId: "u1" }]),
+      {
+        isShared: false,
+        claimedBy: ["u1"],
+        shares: [{ userId: "u1", cents: 1000 }],
+      }
+    );
+  });
+
+  test("three claimers are shared and split the exact price", () => {
+    const claims = [
+      { itemId: ITEM_ID, userId: "u3" },
+      { itemId: ITEM_ID, userId: "u1" },
+      { itemId: ITEM_ID, userId: "u2" },
+    ];
+    assert.deepEqual(getItemShares(item, claims), {
+      isShared: true,
+      claimedBy: ["u1", "u2", "u3"],
+      shares: [
+        { userId: "u1", cents: 334 },
+        { userId: "u2", cents: 333 },
+        { userId: "u3", cents: 333 },
+      ],
+    });
+  });
+
+  test("claims on other items are ignored", () => {
+    const result = getItemShares(item, [
+      { itemId: ITEM_ID, userId: "u1" },
+      { itemId: "other-item", userId: "u2" },
+    ]);
+    assert.equal(result.isShared, false);
+    assert.deepEqual(result.claimedBy, ["u1"]);
+  });
+
+  test("a duplicate claim doesn't make an item shared", () => {
+    const result = getItemShares(item, [
+      { itemId: ITEM_ID, userId: "u1" },
+      { itemId: ITEM_ID, userId: "u1" },
+    ]);
+    assert.equal(result.isShared, false);
+    assert.deepEqual(result.shares, [{ userId: "u1", cents: 1000 }]);
   });
 });
 
