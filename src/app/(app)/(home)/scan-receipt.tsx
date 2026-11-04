@@ -1,7 +1,5 @@
 import {
-  launchCameraAsync,
   launchImageLibraryAsync,
-  requestCameraPermissionsAsync,
   type ImagePickerOptions,
 } from "expo-image-picker";
 
@@ -17,29 +15,22 @@ import {
 
 import { JSX } from "react/jsx-runtime";
 
+import { cleanItemName, formatDollars } from "@/lib/format-scan";
+import { ReceiptCheckVerdict } from "@/components/receipt-check-verdict";
 import { palette } from "@/lib/palette";
 import {
   checkReceipt,
-  scanReceipt,
+  itemCents,
   type ScannedReceipt,
 } from "@/lib/scan-receipt";
+import { scanReceiptPhoto } from "@/lib/scan-flow";
 import { supabase } from "@/lib/supabase";
 
 /**
  * Azure's free tier rejects files over 4 MB.
  */
-const MAX_BYTES = 4 * 1024 * 1024;
-
 /**
- * Formats a dollar amount, or a dash when the scanner didn't find it.
- * @param dollars Amount in dollars
- * @returns Formatted currency string
- */
-const money = (dollars: number | null): string =>
-  dollars === null ? "—" : `$${dollars.toFixed(2)}`;
-
-/**
- * Test screen: take a photo of a receipt and show what Azure read from it.
+ * Debug screen: choose a receipt photo and show what Azure read from it.
  * Nothing is saved; results are gone when you leave the screen.
  * @returns JSX element
  */
@@ -48,42 +39,22 @@ export default function ScanReceiptScreen(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const pick = async (source: "camera" | "library") => {
+  const pick = async () => {
     setError(null);
-
-    if (source === "camera") {
-      const perm = await requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        setError("Camera permission is needed to scan receipts.");
-        return;
-      }
-    }
 
     const options: ImagePickerOptions = {
       mediaTypes: "images",
       base64: true,
-      quality: 0.5,
+      quality: 0.8,
     };
-    const result =
-      source === "camera"
-        ? await launchCameraAsync(options)
-        : await launchImageLibraryAsync(options);
+    const result = await launchImageLibraryAsync(options);
     if (result.canceled) return;
 
     const base64 = result.assets[0]?.base64;
-    if (!base64) {
-      setError("Couldn't read the photo.");
-      return;
-    }
-    if (base64.length * 0.75 > MAX_BYTES) {
-      setError("Photo is over 4 MB. Try again a little further away.");
-      return;
-    }
-
     setLoading(true);
     setScan(null);
     try {
-      setScan(await scanReceipt(base64, supabase));
+      setScan(await scanReceiptPhoto(base64, supabase));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -105,20 +76,11 @@ export default function ScanReceiptScreen(): JSX.Element {
 
       <View style={STYLES.buttonRow}>
         <Pressable
-          onPress={() => pick("camera")}
+          onPress={pick}
           disabled={loading}
           style={[STYLES.button, loading && STYLES.disabled]}
         >
-          <Text style={STYLES.buttonText}>Take photo</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => pick("library")}
-          disabled={loading}
-          style={[STYLES.button, STYLES.buttonSecondary, loading && STYLES.disabled]}
-        >
-          <Text style={[STYLES.buttonText, STYLES.buttonSecondaryText]}>
-            Choose photo
-          </Text>
+          <Text style={STYLES.buttonText}>Choose photo</Text>
         </Pressable>
       </View>
 
@@ -141,50 +103,49 @@ export default function ScanReceiptScreen(): JSX.Element {
             {scan.items.length === 0 ? (
               <Text style={STYLES.emptyText}>No line items found.</Text>
             ) : (
-              scan.items.map((it, i) => (
-                <View key={i} style={[STYLES.row, i > 0 && STYLES.divider]}>
-                  <Text style={STYLES.itemName}>
-                    {it.quantity !== null && it.quantity !== 1
-                      ? `${it.quantity} × `
-                      : ""}
-                    {it.description}
-                  </Text>
-                  <Text style={STYLES.amount}>
-                    {money(it.totalPrice ?? it.price)}
-                  </Text>
-                </View>
-              ))
+              scan.items.map((it, i) => {
+                const itemAmount =
+                  it.totalPrice === null && it.price === null
+                    ? null
+                    : itemCents(it) / 100;
+                return (
+                  <View key={i} style={[STYLES.row, i > 0 && STYLES.divider]}>
+                    <Text style={STYLES.itemName}>
+                      {cleanItemName(it.description, it.quantity) || "Unnamed item"}
+                    </Text>
+                    <Text style={STYLES.amount}>
+                      {formatDollars(itemAmount, scan.currency)}
+                    </Text>
+                  </View>
+                );
+              })
             )}
           </View>
 
           <View style={STYLES.card}>
-            <TotalRow label="Items added up" value={money(check.itemsSum)} />
-            <TotalRow label="Subtotal (printed)" value={money(scan.subtotal)} />
-            <TotalRow label="Tax" value={money(scan.tax)} />
-            <TotalRow label="Tip" value={money(scan.tip)} />
+            <TotalRow
+              label="Items added up"
+              value={formatDollars(check.itemsSum, scan.currency)}
+            />
+            <TotalRow
+              label="Subtotal (printed)"
+              value={formatDollars(scan.subtotal, scan.currency)}
+            />
+            <TotalRow label="Tax" value={formatDollars(scan.tax, scan.currency)} />
+            <TotalRow label="Tip" value={formatDollars(scan.tip, scan.currency)} />
             <TotalRow
               label="Items + tax + tip"
-              value={money(check.computedTotal)}
+              value={formatDollars(check.computedTotal, scan.currency)}
               bold
             />
-            <TotalRow label="Total (printed)" value={money(scan.total)} bold />
+            <TotalRow
+              label="Total (printed)"
+              value={formatDollars(scan.total, scan.currency)}
+              bold
+            />
           </View>
 
-          <View
-            style={[
-              STYLES.verdict,
-              { backgroundColor: check.matches ? palette.tiles[0] : palette.accentSoft },
-            ]}
-          >
-            <Text style={STYLES.verdictText}>
-              {check.difference === null
-                ? "⚠️ No printed total found"
-                : check.matches
-                  ? "✅ Totals match"
-                  : `⚠️ Off by ${money(Math.abs(check.difference))} ` +
-                    `(printed is ${check.difference > 0 ? "higher" : "lower"})`}
-            </Text>
-          </View>
+          <ReceiptCheckVerdict check={check} currency={scan.currency} />
 
           {scan.confidence !== null ? (
             <Text style={STYLES.subtitle}>

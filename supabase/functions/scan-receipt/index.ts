@@ -4,12 +4,16 @@
 // Body: { "base64": "<jpeg as base64>" }
 // Secrets: AZURE_DI_ENDPOINT, AZURE_DI_KEY
 
+import { mapAzureResult } from "./map-azure.ts";
+
 const API_VERSION = "2024-11-30";
 const POLL_MS = 1000;
 const MAX_POLLS = 30;
 
+// Native clients do not send an Origin. For web, set APP_ORIGIN to the exact
+// deployed web origin so the function does not answer every browser origin.
 const CORS = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") ?? "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -21,9 +25,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
-
-const amount = (f: Field): number | null =>
-  f?.valueCurrency?.amount ?? f?.valueNumber ?? null;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -66,26 +67,5 @@ Deno.serve(async (req) => {
     return json({ error: `Azure analysis ${result?.status ?? "timed out"}`, detail: result?.error }, 502);
   }
 
-  const fields = result.analyzeResult?.documents?.[0]?.fields ?? {};
-  const items = (fields.Items?.valueArray ?? []).map((it: Field) => {
-    const o = it.valueObject ?? {};
-    return {
-      description: o.Description?.valueString ?? o.Description?.content ?? "(no description)",
-      quantity: o.Quantity?.valueNumber ?? null,
-      price: amount(o.Price),
-      totalPrice: amount(o.TotalPrice),
-    };
-  });
-
-  return json({
-    merchant: fields.MerchantName?.valueString ?? null,
-    date: fields.TransactionDate?.valueDate ?? null,
-    currency: fields.Total?.valueCurrency?.currencyCode ?? null,
-    items,
-    subtotal: amount(fields.Subtotal),
-    tax: amount(fields.TotalTax),
-    tip: amount(fields.Tip),
-    total: amount(fields.Total),
-    confidence: result.analyzeResult?.documents?.[0]?.confidence ?? null,
-  });
+  return json(mapAzureResult(result));
 });
