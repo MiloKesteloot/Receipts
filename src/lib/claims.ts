@@ -35,7 +35,12 @@ export type CentsShare = {
   cents: number;
 };
 
-/** The parts of a receipt item that claiming needs. */
+/**
+ * The parts of a receipt item that claiming needs.
+ * TODO(US 2.3): data loaders must convert prices to whole cents and validate
+ * them when mapping items to this type. `splitCents` throws on an invalid
+ * price, so a bad one would otherwise crash a render.
+ */
 export type ClaimableItem = {
   id: string;
   priceCents: number;
@@ -48,6 +53,13 @@ export type ItemShares = {
   claimedBy: string[];
   /** Each person's share, in user id order. Empty if nobody claimed it. */
   shares: CentsShare[];
+};
+
+export type MyTotal = {
+  /** The sum of my share of every item I claimed. */
+  totalCents: number;
+  /** How many items I claimed, shared or not. */
+  claimedCount: number;
 };
 
 export type ClaimOptions = {
@@ -219,4 +231,33 @@ export function getItemShares(
     claimedBy: shares.map((share) => share.userId),
     shares,
   };
+}
+
+/**
+ * Adds up what one person pays, using each item's shares from `getItemShares`,
+ * so the total always equals the sum of their shares.
+ * @param items The items to total
+ * @param claims Claims on those items. Claims on other items are ignored.
+ * @param userId The person to total for
+ * @returns Their total in cents and how many of the items they claimed
+ */
+export function getMyTotal(
+  items: ClaimableItem[],
+  claims: ItemClaim[],
+  userId: string
+): MyTotal {
+  let totalCents = 0;
+  let claimedCount = 0;
+
+  for (const item of items) {
+    const myShare = getItemShares(item, claims).shares.find(
+      (share) => share.userId === userId
+    );
+    if (myShare) {
+      totalCents += myShare.cents;
+      claimedCount += 1;
+    }
+  }
+
+  return { totalCents, claimedCount };
 }

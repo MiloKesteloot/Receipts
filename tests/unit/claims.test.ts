@@ -22,6 +22,7 @@ import {
   type CentsShare,
   getClaims,
   getItemShares,
+  getMyTotal,
   splitCents,
   unclaimItem,
 } from "@/lib/claims";
@@ -197,6 +198,87 @@ describe("US 2.3: getItemShares", () => {
     ]);
     assert.equal(result.isShared, false);
     assert.deepEqual(result.shares, [{ userId: "u1", cents: 1000 }]);
+  });
+});
+
+describe("US 2.3: getMyTotal", () => {
+  const items = [
+    { id: "shared-three", priceCents: 1000 },
+    { id: "shared-penny", priceCents: 1 },
+    { id: "just-u2", priceCents: 250 },
+    { id: "just-u3", priceCents: 500 },
+    { id: "unclaimed", priceCents: 999 },
+  ];
+  const claims = [
+    { itemId: "shared-three", userId: "u1" },
+    { itemId: "shared-three", userId: "u2" },
+    { itemId: "shared-three", userId: "u3" },
+    { itemId: "shared-penny", userId: "u1" },
+    { itemId: "shared-penny", userId: "u2" },
+    { itemId: "just-u2", userId: "u2" },
+    { itemId: "just-u3", userId: "u3" },
+  ];
+
+  test("adds my shares across shared and unshared items", () => {
+    assert.deepEqual(getMyTotal(items, claims, "u1"), {
+      totalCents: 335, // 334 + 1
+      claimedCount: 2,
+    });
+    assert.deepEqual(getMyTotal(items, claims, "u3"), {
+      totalCents: 833, // 333 + 500
+      claimedCount: 2,
+    });
+  });
+
+  test("an item whose share rounds down to $0.00 still counts as claimed", () => {
+    assert.deepEqual(getMyTotal(items, claims, "u2"), {
+      totalCents: 583, // 333 + 0 + 250
+      claimedCount: 3,
+    });
+  });
+
+  test("my total equals the sum of my shares", () => {
+    for (const userId of ["u1", "u2", "u3"]) {
+      const myShares = items.flatMap((item) =>
+        getItemShares(item, claims).shares.filter(
+          (share) => share.userId === userId
+        )
+      );
+      const total = getMyTotal(items, claims, userId);
+      assert.equal(total.totalCents, sumOf(myShares));
+      assert.equal(total.claimedCount, myShares.length);
+    }
+  });
+
+  test("everyone's totals add up to the price of every claimed item", () => {
+    const totals = ["u1", "u2", "u3"].map(
+      (userId) => getMyTotal(items, claims, userId).totalCents
+    );
+    assert.equal(
+      totals.reduce((sum, cents) => sum + cents, 0),
+      1751 // every item except "unclaimed"
+    );
+  });
+
+  test("claiming nothing gives a total of 0 and a count of 0", () => {
+    assert.deepEqual(getMyTotal(items, claims, "u4"), {
+      totalCents: 0,
+      claimedCount: 0,
+    });
+  });
+
+  test("no items gives a total of 0 and a count of 0", () => {
+    assert.deepEqual(getMyTotal([], claims, "u1"), {
+      totalCents: 0,
+      claimedCount: 0,
+    });
+  });
+
+  test("claims on items that aren't in the list are ignored", () => {
+    assert.deepEqual(
+      getMyTotal([{ id: "just-u2", priceCents: 250 }], claims, "u1"),
+      { totalCents: 0, claimedCount: 0 }
+    );
   });
 });
 
