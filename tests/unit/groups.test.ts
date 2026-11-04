@@ -2,7 +2,17 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach, describe } from "node:test";
 import { MockGroupService, SEED_GROUPS } from "../../src/lib/groups";
-import { type MockMember, mockGroupDetails } from "../../src/lib/mock";
+import { mockGroupDetails, mockGroups } from "../../src/lib/mock";
+
+/**
+ * Pristine copy of the shared mock data, which MockGroupService mutates on join.
+ */
+const INITIAL_DETAILS = structuredClone(mockGroupDetails);
+
+/**
+ * Pristine copy of the shared mock group list.
+ */
+const INITIAL_GROUPS = structuredClone(mockGroups);
 
 describe("User Story 1.4: Join Group via Invite Code", () => {
   let service: MockGroupService;

@@ -1,15 +1,20 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { hide as hideSplash, preventAutoHideAsync } from "expo-splash-screen";
+import { useEffect } from "react";
 import { useColorScheme } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
+import { isSignedIn } from "@/lib/auth";
+import { AuthProvider, useAuth } from "@/lib/auth-provider";
+
+// Keep the splash screen up until we know whether someone is signed in.
+preventAutoHideAsync();
+
 /**
- * Root layout: system tab bar (Liquid Glass on iOS 26+, Material on Android).
+ * Root layout: provides auth to every screen.
  * @returns JSX element
  */
 export default function RootLayout(): JSX.Element {
-  const colorScheme = useColorScheme();
-
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <NativeTabs minimizeBehavior="onScrollDown">
@@ -29,21 +34,19 @@ export default function RootLayout(): JSX.Element {
           />
         </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="payments">
-          <NativeTabs.Trigger.Label>Payments</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "creditcard", selected: "creditcard.fill" }}
-            md="credit_card"
-          />
-        </NativeTabs.Trigger>
+/**
+ * Shows the app when signed in and the sign-in screen otherwise. Guards also
+ * redirect away from any screen whose guard turns false (e.g. on sign-out).
+ * @returns JSX element
+ */
+function RootNavigator(): JSX.Element {
+  const colorScheme = useColorScheme();
+  const { session, isLoading } = useAuth();
+  const signedIn = isSignedIn(session);
 
-        <NativeTabs.Trigger name="settings">
-          <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "gearshape", selected: "gearshape.fill" }}
-            md="settings"
-          />
-        </NativeTabs.Trigger>
+  useEffect(() => {
+    if (!isLoading) hideSplash();
+  }, [isLoading]);
 
         <NativeTabs.Trigger name="account">
           <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>

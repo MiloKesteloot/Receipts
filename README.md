@@ -50,6 +50,25 @@ To use your own Supabase project instead:
 
 Never put the secret key or database password in `.env`; it's committed to git.
 
+### Sign-in
+
+You need an account to use the app. Every screen except sign-in is hidden until you sign in, and the database only lets signed-in users see groups they belong to.
+
+Set these up in the Supabase dashboard under **Authentication**:
+
+- **Email:** on by default. With **Confirm email** on, new accounts must click the link in their email before they can sign in.
+- **URL Configuration → Redirect URLs:** add `receipts://**` and `exp://**`. This is where Google, Apple and confirmation emails send people back to the app.
+- **Google:** under **Sign In / Providers**, turn on Google and paste in a Web client ID and secret from [Google Cloud](https://console.cloud.google.com/apis/credentials). Add the callback URL Supabase shows you to the Google client.
+- **Apple:** turn on Apple. On iPhone the app uses Apple's own sign-in sheet, so add the app's bundle ID to **Client IDs**. Expo Go uses `host.exp.Exponent`. Android and web use Apple's web sign-in, which also needs a Services ID and secret key from the [Apple Developer site](https://developer.apple.com/account/resources/identifiers/list/serviceId).
+
+Google and Apple sign-in redirect back into the app, which works best in a development build (`npx expo run:ios` / `run:android`) rather than Expo Go.
+
+## Tests
+
+```
+npm test
+```
+
 ## Troubleshooting
 
 - **The app looks like the Expo welcome screen:** you opened an old project in Expo Go. Scan the QR code again.
