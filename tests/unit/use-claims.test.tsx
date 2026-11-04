@@ -26,6 +26,7 @@ import {
 import { mockItemClaims } from "@/lib/mock";
 import { CLAIM_FORBIDDEN_MESSAGE, useClaims } from "@/lib/use-claims";
 
+// eslint-disable-next-line @typescript-eslint/naming-convention -- mirrors the real SUPABASE export
 jest.mock("@/lib/supabase", () => ({ SUPABASE: null, supabase: null }));
 jest.mock("@/lib/claims", () => {
   const actual = jest.requireActual<typeof import("@/lib/claims")>("@/lib/claims");
@@ -40,21 +41,21 @@ jest.mock("@/lib/claims", () => {
 /**
  * Mocked claim request, wrapping the real mock-mode function.
  */
-const MOCK_CLAIM = claimItem as unknown as jest.Mock<
+const mockClaim = claimItem as unknown as jest.Mock<
   () => Promise<ClaimActionResult>
 >;
 
 /**
  * Mocked unclaim request, wrapping the real mock-mode function.
  */
-const MOCK_UNCLAIM = unclaimItem as unknown as jest.Mock<
+const mockUnclaim = unclaimItem as unknown as jest.Mock<
   () => Promise<ClaimActionResult>
 >;
 
 /**
  * Mocked claims load, wrapping the real mock-mode function.
  */
-const MOCK_GET_CLAIMS = getClaims as unknown as jest.Mock<
+const mockGetClaims = getClaims as unknown as jest.Mock<
   () => Promise<GetClaimsResult>
 >;
 
@@ -133,7 +134,7 @@ describe("useClaims", () => {
 
     await act(() => result.current.toggle("milk"));
 
-    expect(MOCK_CLAIM).toHaveBeenCalledTimes(1);
+    expect(mockClaim).toHaveBeenCalledTimes(1);
     expect(result.current.claims).toEqual([{ itemId: "milk", userId: USER_ID }]);
     expect(result.current.myTotal).toEqual({ totalCents: 500, claimedCount: 1 });
     expect(result.current.error).toBeNull();
@@ -146,7 +147,7 @@ describe("useClaims", () => {
 
     await act(() => result.current.toggle("milk"));
 
-    expect(MOCK_UNCLAIM).toHaveBeenCalledTimes(1);
+    expect(mockUnclaim).toHaveBeenCalledTimes(1);
     expect(result.current.claims).toEqual([]);
     expect(result.current.myTotal).toEqual({ totalCents: 0, claimedCount: 0 });
     expect(mockItemClaims).toEqual([]);
@@ -155,7 +156,7 @@ describe("useClaims", () => {
   it("updates immediately, before the request finishes", async () => {
     const result = await renderClaims();
     const request = deferred<ClaimActionResult>();
-    MOCK_CLAIM.mockReturnValueOnce(request.promise);
+    mockClaim.mockReturnValueOnce(request.promise);
 
     await act(async () => {
       void result.current.toggle("milk");
@@ -171,7 +172,7 @@ describe("useClaims", () => {
 
   it("rolls back a failed claim and shows the request's message", async () => {
     const result = await renderClaims();
-    MOCK_CLAIM.mockResolvedValueOnce(FAILED);
+    mockClaim.mockResolvedValueOnce(FAILED);
 
     await act(() => result.current.toggle("milk"));
 
@@ -184,7 +185,7 @@ describe("useClaims", () => {
   it("rolls back a failed unclaim", async () => {
     const result = await renderClaims();
     await act(() => result.current.toggle("milk"));
-    MOCK_UNCLAIM.mockResolvedValueOnce(FAILED);
+    mockUnclaim.mockResolvedValueOnce(FAILED);
 
     await act(() => result.current.toggle("milk"));
 
@@ -194,7 +195,7 @@ describe("useClaims", () => {
 
   it("rolls back when the request throws", async () => {
     const result = await renderClaims();
-    MOCK_CLAIM.mockRejectedValueOnce(new Error("boom"));
+    mockClaim.mockRejectedValueOnce(new Error("boom"));
 
     await act(() => result.current.toggle("milk"));
 
@@ -204,7 +205,7 @@ describe("useClaims", () => {
 
   it("rolls back when forbidden, with its own message", async () => {
     const result = await renderClaims();
-    MOCK_CLAIM.mockResolvedValueOnce({ status: "forbidden" });
+    mockClaim.mockResolvedValueOnce({ status: "forbidden" });
 
     await act(() => result.current.toggle("milk"));
 
@@ -214,7 +215,7 @@ describe("useClaims", () => {
 
   it("clears the error on the next tap", async () => {
     const result = await renderClaims();
-    MOCK_CLAIM.mockResolvedValueOnce(FAILED);
+    mockClaim.mockResolvedValueOnce(FAILED);
     await act(() => result.current.toggle("milk"));
 
     await act(() => result.current.toggle("milk"));
@@ -225,7 +226,7 @@ describe("useClaims", () => {
   it("sends one request for a double tap", async () => {
     const result = await renderClaims();
     const request = deferred<ClaimActionResult>();
-    MOCK_CLAIM.mockReturnValueOnce(request.promise);
+    mockClaim.mockReturnValueOnce(request.promise);
 
     await act(async () => {
       void result.current.toggle("milk");
@@ -235,8 +236,8 @@ describe("useClaims", () => {
       void result.current.toggle("milk");
     });
 
-    expect(MOCK_CLAIM).toHaveBeenCalledTimes(1);
-    expect(MOCK_UNCLAIM).not.toHaveBeenCalled();
+    expect(mockClaim).toHaveBeenCalledTimes(1);
+    expect(mockUnclaim).not.toHaveBeenCalled();
     expect(result.current.claims).toEqual([{ itemId: "milk", userId: USER_ID }]);
 
     await act(async () => request.resolve({ status: "ok" }));
@@ -247,7 +248,7 @@ describe("useClaims", () => {
     const result = await renderClaims();
     const milk = deferred<ClaimActionResult>();
     const eggs = deferred<ClaimActionResult>();
-    MOCK_CLAIM.mockReturnValueOnce(milk.promise).mockReturnValueOnce(eggs.promise);
+    mockClaim.mockReturnValueOnce(milk.promise).mockReturnValueOnce(eggs.promise);
 
     await act(async () => {
       void result.current.toggle("milk");
@@ -269,7 +270,7 @@ describe("useClaims", () => {
       { item_id: "milk", user_id: "u2" }
     );
     const result = await renderClaims();
-    MOCK_CLAIM.mockResolvedValueOnce(FAILED);
+    mockClaim.mockResolvedValueOnce(FAILED);
 
     await act(() => result.current.toggle("milk"));
 
@@ -278,7 +279,7 @@ describe("useClaims", () => {
 
   it("a slow load doesn't overwrite a newer tap", async () => {
     const load = deferred<GetClaimsResult>();
-    MOCK_GET_CLAIMS.mockReturnValueOnce(load.promise);
+    mockGetClaims.mockReturnValueOnce(load.promise);
     const { result } = await renderHook(() => useClaims(ITEMS, GROUP_ID, USER_ID));
 
     await act(() => result.current.toggle("milk"));
@@ -300,7 +301,7 @@ describe("useClaims", () => {
 
   it("ignores a late failure from a group the user has left the screen of", async () => {
     const request = deferred<ClaimActionResult>();
-    MOCK_CLAIM.mockReturnValueOnce(request.promise);
+    mockClaim.mockReturnValueOnce(request.promise);
     const { result, rerender } = await renderHook(
       ({ groupId }: { groupId: string }) => useClaims(ITEMS, groupId, USER_ID),
       { initialProps: { groupId: GROUP_ID } }
@@ -318,7 +319,7 @@ describe("useClaims", () => {
   });
 
   it("shows the forbidden message when loading is forbidden", async () => {
-    MOCK_GET_CLAIMS.mockResolvedValueOnce({ status: "forbidden" });
+    mockGetClaims.mockResolvedValueOnce({ status: "forbidden" });
 
     const result = await renderClaims();
 
