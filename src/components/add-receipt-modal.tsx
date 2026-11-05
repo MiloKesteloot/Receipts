@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { palette } from "@/lib/palette";
+import { ReceiptCheckVerdict } from "@/components/receipt-check-verdict";
 import {
   computeTotals,
   createEmptyItem,
@@ -21,6 +22,7 @@ import {
   type ReceiptDraft,
   type ReceiptItemDraft,
 } from "@/lib/receipt-form";
+import type { ReceiptCheck } from "@/lib/scan-receipt";
 
 type SaveHandler = (draft: ReceiptDraft) => Promise<string | null>;
 
@@ -35,6 +37,14 @@ type AddReceiptModalProps = {
   onDelete: () => Promise<void>;
   /** Saved values when editing a draft, or null for a new receipt. */
   initialDraft?: ReceiptDraft | null;
+  /** Optional heading override, such as the scanned receipt review heading. */
+  title?: string;
+  /** Total check to show below a scanned draft's live totals. */
+  scanCheck?: { check: ReceiptCheck; currency: string | null } | null;
+  /** Overall scan confidence used to highlight fields that need checking. */
+  scanConfidence?: number | null;
+  /** Scanner notes about fields that need a manual fix. */
+  scanNotes?: string[];
 };
 
 /**
@@ -48,6 +58,10 @@ type AddReceiptModalProps = {
  * @param props.onSaveDraft Called with the entered receipt on Save draft
  * @param props.onDelete Called after the user confirms Delete
  * @param props.initialDraft Saved values when editing a draft
+ * @param props.title Optional heading override
+ * @param props.scanCheck Optional scanned total verdict
+ * @param props.scanConfidence Overall scanner confidence
+ * @param props.scanNotes Scanner notes about fields that need a manual fix
  * @returns JSX element
  */
 export function AddReceiptModal({
@@ -57,6 +71,10 @@ export function AddReceiptModal({
   onSaveDraft,
   onDelete,
   initialDraft = null,
+  title,
+  scanCheck = null,
+  scanConfidence = null,
+  scanNotes = [],
 }: AddReceiptModalProps): JSX.Element {
   const initialItems: ReceiptItemDraft[] =
     initialDraft !== null && initialDraft.items.length > 0
@@ -72,6 +90,7 @@ export function AddReceiptModal({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const totals = computeTotals({ store, items, tax, tip });
+  const lowConfidence = scanConfidence !== null && scanConfidence < 0.8;
 
   const resetForm = () => {
     nextId.current = 2;
@@ -138,7 +157,7 @@ export function AddReceiptModal({
       >
         <View style={STYLES.topBar}>
           <Text style={STYLES.heading}>
-            {initialDraft !== null ? "Edit draft" : "New receipt"}
+            {title ?? (initialDraft !== null ? "Edit draft" : "New receipt")}
           </Text>
           <Pressable
             onPress={handleClose}
@@ -161,8 +180,20 @@ export function AddReceiptModal({
             accessibilityLabel="Store"
             placeholder="Where was this?"
             placeholderTextColor={palette.muted}
-            style={STYLES.input}
+            style={[STYLES.input, lowConfidence && STYLES.lowConfidenceInput]}
           />
+
+          {lowConfidence ? (
+            <Text style={STYLES.confidenceWarning}>
+              Some scanned fields may need checking.
+            </Text>
+          ) : null}
+
+          {scanNotes.map((note) => (
+            <Text key={note} style={STYLES.confidenceWarning}>
+              {note}
+            </Text>
+          ))}
 
           <Text style={STYLES.sectionLabel}>Items</Text>
           <View style={STYLES.card}>
@@ -177,7 +208,11 @@ export function AddReceiptModal({
                   accessibilityLabel={`Item ${i + 1} name`}
                   placeholder="Item"
                   placeholderTextColor={palette.muted}
-                  style={[STYLES.input, STYLES.itemName]}
+                  style={[
+                    STYLES.input,
+                    STYLES.itemName,
+                    lowConfidence && STYLES.lowConfidenceInput,
+                  ]}
                 />
                 <TextInput
                   value={item.price}
@@ -186,7 +221,11 @@ export function AddReceiptModal({
                   placeholder="0.00"
                   placeholderTextColor={palette.muted}
                   keyboardType="decimal-pad"
-                  style={[STYLES.input, STYLES.itemPrice]}
+                  style={[
+                    STYLES.input,
+                    STYLES.itemPrice,
+                    lowConfidence && STYLES.lowConfidenceInput,
+                  ]}
                 />
                 {items.length > 1 ? (
                   <Pressable
@@ -223,7 +262,7 @@ export function AddReceiptModal({
               placeholder="Tax"
               placeholderTextColor={palette.muted}
               keyboardType="decimal-pad"
-              style={[STYLES.input, STYLES.taxInput]}
+              style={[STYLES.input, STYLES.taxInput, lowConfidence && STYLES.lowConfidenceInput]}
             />
             <TextInput
               value={tip}
@@ -232,7 +271,7 @@ export function AddReceiptModal({
               placeholder="Tip"
               placeholderTextColor={palette.muted}
               keyboardType="decimal-pad"
-              style={[STYLES.input, STYLES.taxInput]}
+              style={[STYLES.input, STYLES.taxInput, lowConfidence && STYLES.lowConfidenceInput]}
             />
           </View>
 
@@ -268,6 +307,13 @@ export function AddReceiptModal({
               </Text>
             </View>
           </View>
+
+          {scanCheck ? (
+            <ReceiptCheckVerdict
+              check={scanCheck.check}
+              currency={scanCheck.currency}
+            />
+          ) : null}
         </ScrollView>
 
         <View style={STYLES.footer}>
@@ -362,6 +408,8 @@ const STYLES = StyleSheet.create({
     fontSize: 16,
     color: palette.text,
   },
+  lowConfidenceInput: { borderColor: palette.accent },
+  confidenceWarning: { color: palette.accent, fontSize: 14, fontWeight: "600" },
   card: {
     backgroundColor: palette.card,
     borderWidth: 1,
