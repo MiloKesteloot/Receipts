@@ -50,6 +50,51 @@ To use your own Supabase project instead:
 
 Never put the secret key or database password in `.env`; it's committed to git.
 
+### Receipt scanning
+
+The `scan-receipt` Edge Function sends receipt images to Azure Document Intelligence and maps the result into the fields used by the app. Set these Supabase Function secrets before deploying it:
+
+- `AZURE_DI_ENDPOINT`: your Azure Document Intelligence endpoint.
+- `AZURE_DI_KEY`: your Azure Document Intelligence key.
+
+Deploy the function with the Supabase CLI from the project directory:
+
+```
+supabase functions deploy scan-receipt
+```
+
+The app checks the image size, retries a failed request once, times out slow scans, and asks for a retake when Azure finds no readable receipt. If the web build is served from a browser origin, set the `APP_ORIGIN` Function secret to that exact origin to tighten CORS. Native requests do not need an origin value.
+
+### Camera
+
+The group receipt flow opens an in-app camera sheet. It includes camera permission handling, a library fallback, a photo review step, and a retake action. `expo-camera` is a native module, so use a development build for device testing after installing dependencies:
+
+```
+npx expo run:ios
+npx expo run:android
+```
+
+Expo Go can still exercise the library fallback. Test the camera on a real phone with long, dim, crumpled, non-US, and library photos before tuning capture quality.
+
+### Sign-in
+
+You need an account to use the app. Every screen except sign-in is hidden until you sign in, and the database only lets signed-in users see groups they belong to.
+
+Set these up in the Supabase dashboard under **Authentication**:
+
+- **Email:** on by default. With **Confirm email** on, new accounts must click the link in their email before they can sign in.
+- **URL Configuration → Redirect URLs:** add `receipts://**` and `exp://**`. This is where Google, Apple and confirmation emails send people back to the app.
+- **Google:** under **Sign In / Providers**, turn on Google and paste in a Web client ID and secret from [Google Cloud](https://console.cloud.google.com/apis/credentials). Add the callback URL Supabase shows you to the Google client.
+- **Apple:** turn on Apple. On iPhone the app uses Apple's own sign-in sheet, so add the app's bundle ID to **Client IDs**. Expo Go uses `host.exp.Exponent`. Android and web use Apple's web sign-in, which also needs a Services ID and secret key from the [Apple Developer site](https://developer.apple.com/account/resources/identifiers/list/serviceId).
+
+Google and Apple sign-in redirect back into the app, which works best in a development build (`npx expo run:ios` / `run:android`) rather than Expo Go.
+
+## Tests
+
+```
+npm test
+```
+
 ## Troubleshooting
 
 - **The app looks like the Expo welcome screen:** you opened an old project in Expo Go. Scan the QR code again.

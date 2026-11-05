@@ -21,11 +21,15 @@ import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
 
 import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { ReceiptCameraSheet } from "@/components/receipt-camera-sheet";
 import {
   formatCents,
   type ReceiptDraft,
   type ReceiptStatus,
 } from "@/lib/receipt-form";
+import { scanReceiptPhoto } from "@/lib/scan-flow";
+import { checkReceipt, type ReceiptCheck } from "@/lib/scan-receipt";
+import { scannedToDraft } from "@/lib/scanned-to-draft";
 import { deleteReceipt, saveReceipt } from "@/lib/receipts";
 
 type Member = {
@@ -87,6 +91,15 @@ export default function GroupScreen(): JSX.Element {
   const [addReceiptVisible, setAddReceiptVisible] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
   const [editSession, setEditSession] = useState(0);
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [scanDraft, setScanDraft] = useState<ReceiptDraft | null>(null);
+  const [scanCheck, setScanCheck] = useState<{
+    check: ReceiptCheck;
+    currency: string | null;
+  } | null>(null);
+  const [scanConfidence, setScanConfidence] = useState<number | null>(null);
+  const [scanNotes, setScanNotes] = useState<string[]>([]);
+  const [scanSession, setScanSession] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,6 +174,36 @@ export default function GroupScreen(): JSX.Element {
    */
   const handleAddReceipt = (): void => {
     setEditingReceipt(null);
+    setScanDraft(null);
+    setScanCheck(null);
+    setScanConfidence(null);
+    setScanNotes([]);
+    setAddReceiptVisible(true);
+  };
+
+  /** Opens the in-app camera sheet for a new receipt. */
+  const handleScanReceipt = (): void => {
+    setEditingReceipt(null);
+    setScanDraft(null);
+    setScanCheck(null);
+    setScanConfidence(null);
+    setScanNotes([]);
+    setCameraVisible(true);
+  };
+
+  /**
+   * Scans a confirmed photo and opens the receipt review form.
+   * @param base64 Image data without a data URI prefix
+   */
+  const handleScanPhoto = async (base64: string): Promise<void> => {
+    const scan = await scanReceiptPhoto(base64, supabase);
+    const converted = scannedToDraft(scan);
+    setScanDraft(converted.draft);
+    setScanCheck({ check: checkReceipt(scan), currency: scan.currency });
+    setScanConfidence(scan.confidence);
+    setScanNotes(converted.notes);
+    setScanSession((n) => n + 1);
+    setCameraVisible(false);
     setAddReceiptVisible(true);
   };
 
@@ -186,7 +229,7 @@ export default function GroupScreen(): JSX.Element {
   ): Promise<string | null> => {
     const result = await saveReceipt(group.id, draft, status, {
       useMock: USE_MOCK,
-      existingId: editingReceipt?.id,
+      existingId: scanDraft === null ? editingReceipt?.id : undefined,
     });
     if (result.status === "error") return result.message;
 
@@ -200,6 +243,11 @@ export default function GroupScreen(): JSX.Element {
       return { ...prev, receipts: next };
     });
     setAddReceiptVisible(false);
+    setScanDraft(null);
+    setScanCheck(null);
+    setScanConfidence(null);
+    setScanNotes([]);
+    setEditingReceipt(null);
 
     let message = "Draft saved.";
     if (status === "submitted") message = "Receipt submitted.";
@@ -214,6 +262,11 @@ export default function GroupScreen(): JSX.Element {
   const handleDeleteReceipt = async (): Promise<void> => {
     const target = editingReceipt;
     setAddReceiptVisible(false);
+    setScanDraft(null);
+    setScanCheck(null);
+    setScanConfidence(null);
+    setScanNotes([]);
+    setEditingReceipt(null);
     if (target === null) return;
 
     const result = await deleteReceipt(group.id, target.id, {
@@ -274,65 +327,101 @@ export default function GroupScreen(): JSX.Element {
         </View>
 
         <View style={STYLES.sectionHeaderRow}>
-        <Text style={STYLES.sectionLabelFlush}>Receipts</Text>
-        <Pressable
-          onPress={handleAddReceipt}
-          accessibilityRole="button"
-          accessibilityLabel="Add receipt"
-          style={({ pressed }) => [
-            STYLES.addButton,
-            pressed && STYLES.addButtonPressed,
-          ]}
-        >
-          <Text style={STYLES.addButtonText}>+ Add receipt</Text>
-        </Pressable>
-      </View>
-      <View style={STYLES.card}>
-        {receipts.length === 0 ? (
-          <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
-        ) : (
-          receipts.map((r, i) => {
-            const rowStyle = [STYLES.receiptRow, i > 0 && STYLES.memberDivider];
-            const content = (
-              <>
-                <Text style={STYLES.memberName}>{r.title}</Text>
-                {r.status === "draft" ? (
-                  <View style={STYLES.pill}>
-                    <Text style={STYLES.pillText}>Draft</Text>
-                  </View>
-                ) : null}
-                <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
-              </>
-            );
-          
-            return r.status === "draft" ? (
-              <Pressable
-                key={r.id}
-                onPress={() => handleEditDraft(r)}
-                accessibilityRole="button"
-                accessibilityLabel={`Edit draft ${r.title}`}
-                style={({ pressed }) => [...rowStyle, pressed && STYLES.addButtonPressed]}
-              >
-                {content}
-              </Pressable>
-            ) : (
-              <View key={r.id} style={rowStyle}>
-                {content}
-              </View>
-            );
-          })
-        )}
-      </View>
+          <Text style={STYLES.sectionLabelFlush}>Receipts</Text>
+          <View style={STYLES.headerButtons}>
+            <Pressable
+              onPress={handleScanReceipt}
+              accessibilityRole="button"
+              accessibilityLabel="Scan receipt"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Scan</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleAddReceipt}
+              accessibilityRole="button"
+              accessibilityLabel="Add receipt"
+              style={({ pressed }) => [
+                STYLES.addButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.addButtonText}>+ Add receipt</Text>
+            </Pressable>
+          </View>
+        </View>
+        <View style={STYLES.card}>
+          {receipts.length === 0 ? (
+            <Text style={STYLES.emptyText}>Receipts will show up here.</Text>
+          ) : (
+            receipts.map((r, i) => {
+              const rowStyle = [STYLES.receiptRow, i > 0 && STYLES.memberDivider];
+              const content = (
+                <>
+                  <Text style={STYLES.memberName}>{r.title}</Text>
+                  {r.status === "draft" ? (
+                    <View style={STYLES.pill}>
+                      <Text style={STYLES.pillText}>Draft</Text>
+                    </View>
+                  ) : null}
+                  <Text style={STYLES.amount}>{formatCents(r.total_cents)}</Text>
+                </>
+              );
+
+              return r.status === "draft" ? (
+                <Pressable
+                  key={r.id}
+                  onPress={() => handleEditDraft(r)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit draft ${r.title}`}
+                  style={({ pressed }) => [...rowStyle, pressed && STYLES.addButtonPressed]}
+                >
+                  {content}
+                </Pressable>
+              ) : (
+                <View key={r.id} style={rowStyle}>
+                  {content}
+                </View>
+              );
+            })
+          )}
+        </View>
       </ScrollView>
       <AddReceiptModal
-        key={editingReceipt === null ? "new" : `edit-${editSession}`}
+        key={
+          scanDraft !== null
+            ? `scan-${scanSession}`
+            : editingReceipt === null
+              ? "new"
+              : `edit-${editSession}`
+        }
         visible={addReceiptVisible}
-        onClose={() => setAddReceiptVisible(false)}
+        onClose={() => {
+          setAddReceiptVisible(false);
+          setScanDraft(null);
+          setScanCheck(null);
+          setScanConfidence(null);
+          setScanNotes([]);
+        }}
         onSubmit={(draft) => handleSaveReceipt(draft, "submitted")}
         onSaveDraft={(draft) => handleSaveReceipt(draft, "draft")}
         onDelete={handleDeleteReceipt}
-        initialDraft={editingReceipt?.draft ?? null}
+        initialDraft={scanDraft ?? editingReceipt?.draft ?? null}
+        title={scanDraft !== null ? "Review scan" : undefined}
+        scanCheck={scanCheck}
+        scanConfidence={scanConfidence}
+        scanNotes={scanNotes}
       />
+      {cameraVisible ? (
+        <ReceiptCameraSheet
+          visible
+          onClose={() => setCameraVisible(false)}
+          onPhoto={handleScanPhoto}
+        />
+      ) : null}
     </View>
   );
 }
@@ -402,6 +491,13 @@ const STYLES = StyleSheet.create({
     borderRadius: 999,
   },
   pillText: { fontSize: 12, fontWeight: "700", color: palette.accent },
+  headerButtons: { flexDirection: "row", gap: 8 },
+  scanButton: {
+    backgroundColor: palette.accentSoft,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
   receiptRow: {
     flexDirection: "row",
     alignItems: "center",
