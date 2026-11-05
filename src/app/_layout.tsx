@@ -1,72 +1,56 @@
-import { DarkTheme, DefaultTheme, Slot, ThemeProvider, usePathname, useSegments } from "expo-router";
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { hide as hideSplash, preventAutoHideAsync } from "expo-splash-screen";
+import { useEffect } from "react";
 import { useColorScheme } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
+import { isSignedIn } from "@/lib/auth";
+import { AuthProvider, useAuth } from "@/lib/auth-provider";
+
+// Keep the splash screen up until we know whether someone is signed in.
+preventAutoHideAsync();
+
 /**
- * Root layout: system tab bar for app navigation, or Slot for public web screens.
+ * Root layout: provides auth to every screen.
  * @returns JSX element
  */
 export default function RootLayout(): JSX.Element {
-  const colorScheme = useColorScheme();
-  const pathname = usePathname();
-  const segments = useSegments();
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
 
-  // If viewing a standalone public web route (like guest claiming), render without tab bar
-  if (segments[0] === "claim" || (pathname && pathname.startsWith("/claim"))) {
-    return (
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Slot />
-      </ThemeProvider>
-    );
-  }
+/**
+ * Shows the app when signed in and the sign-in screen otherwise. Guards also
+ * redirect away from any screen whose guard turns false (e.g. on sign-out).
+ * Public screens outside of guards (like guest claiming) are accessible by anyone.
+ * @returns JSX element
+ */
+function RootNavigator(): JSX.Element {
+  const colorScheme = useColorScheme();
+  const { session, isLoading } = useAuth();
+  const signedIn = isSignedIn(session);
+
+  useEffect(() => {
+    if (!isLoading) hideSplash();
+  }, [isLoading]);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <NativeTabs minimizeBehavior="onScrollDown">
-        <NativeTabs.Trigger name="(home)">
-          <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "house", selected: "house.fill" }}
-            md="home"
-          />
-        </NativeTabs.Trigger>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
 
-        <NativeTabs.Trigger name="stats">
-          <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "chart.bar", selected: "chart.bar.fill" }}
-            md="bar_chart"
-          />
-        </NativeTabs.Trigger>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" />
+        </Stack.Protected>
 
-        <NativeTabs.Trigger name="payments">
-          <NativeTabs.Trigger.Label>Payments</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "creditcard", selected: "creditcard.fill" }}
-            md="credit_card"
-          />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="settings">
-          <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "gearshape", selected: "gearshape.fill" }}
-            md="settings"
-          />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="account">
-          <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{
-              default: "person.crop.circle",
-              selected: "person.crop.circle.fill",
-            }}
-            md="account_circle"
-          />
-        </NativeTabs.Trigger>
-      </NativeTabs>
+        {/* Public route: guest claiming screen does not require authentication */}
+        <Stack.Screen name="claim/[token]" />
+      </Stack>
     </ThemeProvider>
   );
 }
