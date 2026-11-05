@@ -3,8 +3,12 @@ import type { ReceiptDraft } from "@/lib/receipt-form";
 
 /**
  * Toggle between local mock group data and Supabase backend.
+ * In development, defaults to false so dev accounts connect to Supabase.
+ * In tests, set to true so mock-based unit tests execute reliably.
  */
-export const USE_MOCK = true;
+export const USE_MOCK =
+  (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_USE_MOCK === "true") ||
+  Boolean(typeof jest !== "undefined" || (typeof process !== "undefined" && process.env?.JEST_WORKER_ID !== undefined));
 
 /**
  * Seed groups list for offline development.

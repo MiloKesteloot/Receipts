@@ -20,9 +20,12 @@ import {
   formatClaimUrl,
   getReceiptByGuestToken,
   type GuestReceiptDetail,
+  type ItemClaimant,
+  type ReceiptItemWithClaims,
 } from "@/lib/guest-claim";
-import { mockGroupDetails, mockGuestTokens } from "@/lib/mock";
+import { mockGroupDetails, mockGuestTokens, USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
+import { SUPABASE } from "@/lib/supabase";
 
 /** Delay in ms after closing share sheet to allow animations to settle. */
 const SHARE_SHEET_CLOSE_DELAY_MS = 500;
@@ -49,6 +52,7 @@ export default function ReceiptScreen(): JSX.Element {
   const [generatingLink, setGeneratingLink] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /**
    * Loads or creates a token for this receipt and fetches items.
@@ -56,43 +60,161 @@ export default function ReceiptScreen(): JSX.Element {
   const loadReceiptData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
+    setErrorMessage(null);
 
+    // 1. Try to obtain or create a guest claim token for sharing
+    let token: string | null = null;
     try {
-      // Find existing token or generate one for this receipt
-      let token = mockGuestTokens.find((t) => t.receipt_id === id)?.token;
+      token = mockGuestTokens.find((t) => t.receipt_id === id)?.token ?? null;
       if (!token) {
         token = await createGuestClaimToken(id);
       }
+    } catch {
+      // Guest token generation is optional for viewing the receipt in-app
+    }
 
+    if (token) {
       const url = formatClaimUrl(token);
       setClaimUrl(url);
+    }
 
-      const res = await getReceiptByGuestToken(token);
-      if (res.success) {
-        setReceipt(res.receipt);
-      } else {
-        // Fallback info if token lookup had issues
+    try {
+      // 2. If we have a token, attempt to load via guest token RPC first
+      if (token) {
+        const res = await getReceiptByGuestToken(token);
+        if (res.success) {
+          setReceipt(res.receipt);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 3. Fallback for mock mode
+      if (USE_MOCK || !SUPABASE) {
         let receiptTitle = "Receipt";
         let receiptTotal = 0;
+        let found = false;
         for (const g of Object.values(mockGroupDetails)) {
           const match = g.receipts.find((r) => r.id === id);
           if (match) {
             receiptTitle = match.title;
             receiptTotal = match.total_cents;
+            found = true;
             break;
           }
         }
+
+        if (!found && !token) {
+          setReceipt(null);
+          setErrorMessage("Receipt not found.");
+          setLoading(false);
+          return;
+        }
+
         setReceipt({
-          token,
+          token: token ?? "",
           receipt_id: id,
           title: receiptTitle,
           total_cents: receiptTotal,
           created_at: new Date().toISOString(),
           items: [],
         });
+        setLoading(false);
+        return;
       }
+
+      // 4. Fallback for Supabase mode: direct query for logged-in group members
+      const { data: rRow, error: rError } = await SUPABASE
+        .from("receipts")
+        .select("id, title, total_cents, created_at, group_id, status")
+        .eq("id", id)
+        .single();
+
+      if (rError || !rRow) {
+        setReceipt(null);
+        setErrorMessage(rError?.message ?? "Receipt not found.");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch items
+      const { data: itemsData, error: itemsError } = await SUPABASE
+        .from("receipt_items")
+        .select("id, receipt_id, name, amount_cents, created_at")
+        .eq("receipt_id", id)
+        .order("created_at", { ascending: true });
+
+      if (itemsError) {
+        throw new Error(itemsError.message);
+      }
+
+      // Fetch claims
+      const { data: claimsData } = await SUPABASE
+        .from("item_claims")
+        .select("id, item_id, receipt_id, user_id, guest_name, claimed_at")
+        .eq("receipt_id", id);
+
+      // Fetch profile display names for claimants if any
+      const memberIds = Array.from(
+        new Set(
+          (claimsData || [])
+            .map((c) => c.user_id)
+            .filter((uid): uid is string => Boolean(uid))
+        )
+      );
+
+      let profilesMap: Record<string, string> = {};
+      if (memberIds.length > 0) {
+        const { data: profiles } = await SUPABASE
+          .from("profiles")
+          .select("id, display_name")
+          .in("id", memberIds);
+        if (profiles) {
+          profilesMap = Object.fromEntries(
+            profiles.map((p) => [p.id, p.display_name || "Member"])
+          );
+        }
+      }
+
+      const decoratedItems: ReceiptItemWithClaims[] = (itemsData || []).map(
+        (item) => {
+          const itemClaims = (claimsData || []).filter(
+            (c) => c.item_id === item.id
+          );
+          const claimants: ItemClaimant[] = itemClaims.map((c) => ({
+            id: c.id,
+            user_id: c.user_id,
+            guest_name: c.guest_name,
+            display_name:
+              c.guest_name ||
+              (c.user_id ? profilesMap[c.user_id] : null) ||
+              "Member",
+            is_guest: Boolean(c.guest_name),
+          }));
+          const count = Math.max(1, claimants.length);
+          return {
+            id: item.id,
+            receipt_id: item.receipt_id,
+            name: item.name,
+            amount_cents: item.amount_cents,
+            claims: claimants,
+            is_shared: claimants.length > 1,
+            per_person_cents: Math.round(item.amount_cents / count),
+          };
+        }
+      );
+
+      setReceipt({
+        token: token ?? "",
+        receipt_id: rRow.id,
+        title: rRow.title,
+        total_cents: rRow.total_cents,
+        created_at: rRow.created_at,
+        items: decoratedItems,
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to load receipt";
+      setErrorMessage(msg);
       setToast({ message: msg, type: "error" });
     } finally {
       setLoading(false);
@@ -190,13 +312,21 @@ async function copyToClipboard(text: string): Promise<boolean> {
   if (!receipt) {
     return (
       <View style={STYLES.center}>
-        <Text style={STYLES.errorText}>Receipt not found.</Text>
+        <Text style={STYLES.errorText}>{errorMessage || "Receipt not found."}</Text>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
           style={STYLES.actionButton}
         >
           <Text style={STYLES.actionButtonText}>Go back</Text>
         </Pressable>
+        {toast ? (
+          <Toast
+            visible={Boolean(toast)}
+            message={toast.message}
+            type={toast.type}
+            onDismiss={() => setToast(null)}
+          />
+        ) : null}
       </View>
     );
   }

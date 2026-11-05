@@ -6,6 +6,7 @@ import { JSX } from "react/jsx-runtime";
 
 import { isSignedIn } from "@/lib/auth";
 import { AuthProvider, useAuth } from "@/lib/auth-provider";
+import { USE_MOCK } from "@/lib/mock";
 
 // Keep the splash screen up until we know whether someone is signed in.
 preventAutoHideAsync();
@@ -31,7 +32,9 @@ export default function RootLayout(): JSX.Element {
 function RootNavigator(): JSX.Element {
   const colorScheme = useColorScheme();
   const { session, isLoading } = useAuth();
-  const signedIn = isSignedIn(session);
+  // When USE_MOCK is true, bypass authentication for demos and offline testing.
+  // When USE_MOCK is false, enforce real sign-in via Supabase session.
+  const signedIn = USE_MOCK ? true : isSignedIn(session);
 
   useEffect(() => {
     if (!isLoading) hideSplash();

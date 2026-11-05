@@ -83,8 +83,10 @@ export default function Index(): JSX.Element {
     useCallback(() => {
       if (USE_MOCK) {
         setGroups([...mockGroups]);
+      } else {
+        load("refresh");
       }
-    }, [])
+    }, [load])
   );
 
   const handleOpenModal = () => {
@@ -98,7 +100,11 @@ export default function Index(): JSX.Element {
   };
 
   const handleGroupCreated = () => {
-    setGroups([...mockGroups]);
+    if (USE_MOCK) {
+      setGroups([...mockGroups]);
+    } else {
+      load("refresh");
+    }
   };
 
   const handleGroupJoined = (
@@ -107,7 +113,11 @@ export default function Index(): JSX.Element {
     message: string
   ) => {
     setModalVisible(false);
-    setGroups([...mockGroups]);
+    if (USE_MOCK) {
+      setGroups([...mockGroups]);
+    } else {
+      load("refresh");
+    }
     setToastState({
       message,
       type: status === "ALREADY_MEMBER" ? "info" : "success",
