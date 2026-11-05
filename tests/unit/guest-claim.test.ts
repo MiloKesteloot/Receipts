@@ -14,6 +14,7 @@ import {
   getReceiptByGuestToken,
 } from "@/lib/guest-claim";
 import {
+  INITIAL_MOCK_ITEM_CLAIMS,
   mockGuestTokens,
   mockItemClaims,
   type MockGuestToken,
@@ -25,8 +26,10 @@ describe("User Story 2.5: Guest Claim Service & Edge Cases", () => {
   let savedClaims: MockItemClaim[];
 
   beforeEach(() => {
-    // Snapshot in-memory mock collections
+    // Snapshot in-memory mock collections and ensure seed claims are populated
     savedTokens = mockGuestTokens.map((t) => ({ ...t }));
+    mockItemClaims.length = 0;
+    mockItemClaims.push(...INITIAL_MOCK_ITEM_CLAIMS.map((c) => ({ ...c })));
     savedClaims = mockItemClaims.map((c) => ({ ...c }));
   });
 
