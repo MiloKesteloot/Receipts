@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
+import type { ReceiptDraft } from "@/lib/receipt-form";
 
 /**
  * Toggle between local mock group data and Supabase backend.
@@ -13,7 +14,6 @@ export const mockGroups = [
   { id: "mock-1", name: "Apartment 402" },
 ];
 
-
 export type MockMember = {
   user_id: string;
   display_name: string | null;
@@ -26,6 +26,8 @@ export type MockReceipt = {
   title: string;
   total_cents: number;
   created_at: string;
+  status?: "draft" | "submitted";
+  draft?: ReceiptDraft;
 };
 
 export type MockGroupDetail = {
@@ -44,8 +46,6 @@ export type MockGroupDetail = {
  * Detailed mock group records including members and receipts.
  */
 export const mockGroupDetails: Record<string, MockGroupDetail> = {
-
-
   "mock-1": {
     group: {
       id: "mock-1",
@@ -137,13 +137,13 @@ export type MockReceiptItem = {
  * Claim record associating an item with either a member or a guest.
  */
 export type MockItemClaim = {
-  id: string;
+  id?: string;
   item_id: string;
-  receipt_id: string;
+  receipt_id?: string;
   user_id?: string | null;
   display_name?: string | null;
   guest_name?: string | null;
-  claimed_at: string;
+  claimed_at?: string;
 };
 
 /**
@@ -174,9 +174,9 @@ export const mockReceiptItems: Record<string, MockReceiptItem[]> = {
 };
 
 /**
- * In-memory item claims for mock development.
+ * Initial seeded item claims for mock development.
  */
-export const mockItemClaims: MockItemClaim[] = [
+export const INITIAL_MOCK_ITEM_CLAIMS: MockItemClaim[] = [
   { id: "claim-1", item_id: "item-r1-1", receipt_id: "r1", user_id: "u1", display_name: "Alex", claimed_at: "2026-10-05T17:05:00Z" },
   { id: "claim-2", item_id: "item-r1-2", receipt_id: "r1", user_id: "u1", display_name: "Alex", claimed_at: "2026-10-05T17:05:00Z" },
   { id: "claim-3", item_id: "item-r1-6", receipt_id: "r1", user_id: "u1", display_name: "Alex", claimed_at: "2026-10-05T17:06:00Z" },
@@ -186,6 +186,11 @@ export const mockItemClaims: MockItemClaim[] = [
   { id: "claim-7", item_id: "item-r2-1", receipt_id: "r2", user_id: "u2", display_name: "Sam", claimed_at: "2026-10-08T10:05:00Z" },
   { id: "claim-8", item_id: "item-r2-1", receipt_id: "r2", user_id: "u3", display_name: "Jordan", claimed_at: "2026-10-08T10:05:00Z" },
 ];
+
+/**
+ * In-memory item claims for mock development (US 2.3 & US 2.5).
+ */
+export const mockItemClaims: MockItemClaim[] = [...INITIAL_MOCK_ITEM_CLAIMS];
 
 /**
  * In-memory guest claim tokens.
@@ -198,4 +203,3 @@ export const mockGuestTokens: MockGuestToken[] = [
     expires_at: null,
   },
 ];
-
