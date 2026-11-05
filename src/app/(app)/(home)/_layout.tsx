@@ -17,6 +17,10 @@ export default function HomeLayout(): JSX.Element {
         name="scan-receipt"
         options={{ title: "Scan receipt", headerBackTitle: "Back" }}
       />
+      <Stack.Screen
+        name="receipts/[id]"
+        options={{ title: "Receipt", headerBackTitle: "Group" }}
+      />
     </Stack>
   );
 }

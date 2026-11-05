@@ -175,9 +175,12 @@ export async function getClaims(
 
   if (mockMemberId(groupId, options) === null) return { status: "forbidden" };
 
-  const claims = mockItemClaims
-    .filter((claim) => itemIds.includes(claim.item_id))
-    .map((claim) => ({ itemId: claim.item_id, userId: claim.user_id }));
+  const claims: ItemClaim[] = mockItemClaims
+    .filter(
+      (claim) =>
+        itemIds.includes(claim.item_id) && typeof claim.user_id === "string"
+    )
+    .map((claim) => ({ itemId: claim.item_id, userId: claim.user_id as string }));
   return { status: "ok", claims };
 }
 
