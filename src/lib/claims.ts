@@ -24,6 +24,7 @@
 
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { mockGroupDetails, mockItemClaims } from "@/lib/mock";
+import { SUPABASE } from "@/lib/supabase";
 
 export type ItemClaim = {
   itemId: string;
@@ -112,8 +113,35 @@ export async function claimItem(
   itemId: string,
   options: ClaimOptions
 ): Promise<ClaimActionResult> {
-  // TODO(US 2.3 Task 1), PLACEHOLDER #1: call the real claim function.
-  if (!options.useMock) return { status: "error", message: SERVER_NOT_SET_UP };
+  if (!options.useMock) {
+    if (!SUPABASE) return { status: "error", message: SERVER_NOT_SET_UP };
+
+    try {
+      const {
+        data: { user },
+      } = await SUPABASE.auth.getUser();
+      if (!user) return { status: "forbidden" };
+
+      const { error } = await SUPABASE.from("item_claims").insert({
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        item_id: itemId,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        user_id: user.id,
+      });
+
+      if (error) {
+        if (error.code === "42501") return { status: "forbidden" };
+        if (error.code === "23505") return { status: "ok" };
+        return { status: "error", message: error.message };
+      }
+      return { status: "ok" };
+    } catch (err: unknown) {
+      return {
+        status: "error",
+        message: err instanceof Error ? err.message : "Network error occurred.",
+      };
+    }
+  }
 
   const userId = mockMemberId(groupId, options);
   if (userId === null) return { status: "forbidden" };
@@ -143,8 +171,33 @@ export async function unclaimItem(
   itemId: string,
   options: ClaimOptions
 ): Promise<ClaimActionResult> {
-  // TODO(US 2.3 Task 1), PLACEHOLDER #1: call the real unclaim function.
-  if (!options.useMock) return { status: "error", message: SERVER_NOT_SET_UP };
+  if (!options.useMock) {
+    if (!SUPABASE) return { status: "error", message: SERVER_NOT_SET_UP };
+
+    try {
+      const {
+        data: { user },
+      } = await SUPABASE.auth.getUser();
+      if (!user) return { status: "forbidden" };
+
+      const { error } = await SUPABASE
+        .from("item_claims")
+        .delete()
+        .eq("item_id", itemId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        if (error.code === "42501") return { status: "forbidden" };
+        return { status: "error", message: error.message };
+      }
+      return { status: "ok" };
+    } catch (err: unknown) {
+      return {
+        status: "error",
+        message: err instanceof Error ? err.message : "Network error occurred.",
+      };
+    }
+  }
 
   const userId = mockMemberId(groupId, options);
   if (userId === null) return { status: "forbidden" };
@@ -170,8 +223,35 @@ export async function getClaims(
   itemIds: string[],
   options: ClaimOptions
 ): Promise<GetClaimsResult> {
-  // TODO(US 2.3 Task 1), PLACEHOLDER #1: read from the real claims table.
-  if (!options.useMock) return { status: "error", message: SERVER_NOT_SET_UP };
+  if (!options.useMock) {
+    if (!SUPABASE) return { status: "error", message: SERVER_NOT_SET_UP };
+
+    try {
+      const { data, error } = await SUPABASE
+        .from("item_claims")
+        .select("item_id, user_id")
+        .in("item_id", itemIds);
+
+      if (error) {
+        if (error.code === "42501") return { status: "forbidden" };
+        return { status: "error", message: error.message };
+      }
+
+      const claims: ItemClaim[] = (data || [])
+        .filter((c) => typeof c.user_id === "string")
+        .map((c) => ({
+          itemId: c.item_id,
+          userId: c.user_id as string,
+        }));
+
+      return { status: "ok", claims };
+    } catch (err: unknown) {
+      return {
+        status: "error",
+        message: err instanceof Error ? err.message : "Network error occurred.",
+      };
+    }
+  }
 
   if (mockMemberId(groupId, options) === null) return { status: "forbidden" };
 

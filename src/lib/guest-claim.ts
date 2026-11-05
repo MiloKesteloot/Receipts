@@ -155,12 +155,35 @@ export async function createGuestClaimToken(receiptId: string): Promise<string> 
     return token;
   }
 
+  // Check if an existing unexpired token already exists in Supabase
+  try {
+    const { data: existing } = await SUPABASE
+      .from("receipt_guest_tokens")
+      .select("token")
+      .eq("receipt_id", receiptId)
+      .or("expires_at.is.null,expires_at.gt.now()")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.token) {
+      return existing.token;
+    }
+  } catch {
+    // If lookup fails, proceed to insert attempt
+  }
+
+  const {
+    data: { user },
+  } = await SUPABASE.auth.getUser();
+
   const randomSuffix = Math.random().toString(36).substring(2, 10);
   const token = `claim-${receiptId}-${randomSuffix}`;
 
   const { error } = await SUPABASE.from("receipt_guest_tokens").insert({
     receipt_id: receiptId,
     token,
+    created_by: user?.id,
   });
 
   if (error) {

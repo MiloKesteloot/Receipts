@@ -143,14 +143,19 @@ export function validateGroupName(name: string): CreateGroupResult | null {
  * Creates a group with the user as owner and returns its invite code.
  * This is the only function screens should call.
  * @param name The group name the user typed
+ * @param options Optional configuration
+ * @param options.useMock True to use mock data
  * @returns The new group, or the reason it failed
  */
-export async function createGroup(name: string): Promise<CreateGroupResult> {
+export async function createGroup(
+  name: string,
+  options?: { useMock?: boolean }
+): Promise<CreateGroupResult> {
   const invalid = validateGroupName(name);
   if (invalid) return invalid;
 
-  // PLACEHOLDER #1: the team's mock flag picks fake or real groups.
-  return USE_MOCK
+  const shouldUseMock = options?.useMock ?? (USE_MOCK || !SUPABASE);
+  return shouldUseMock
     ? createGroupMock(name.trim())
     : createGroupInDatabase(name.trim());
 }
@@ -274,17 +279,33 @@ async function createGroupInDatabase(name: string): Promise<CreateGroupResult> {
       return { success: false, error: "NETWORK_ERROR", message: error.message };
     }
 
-    const response = data as CreateGroupResponse;
-    if (!response.success) return response;
+    const raw = data as (CreateGroupResponse & Record<string, unknown>) | null;
+    if (!raw) {
+      return {
+        success: false,
+        error: "NETWORK_ERROR",
+        message: "No data returned from server.",
+      };
+    }
+
+    if (raw.success === false) {
+      return {
+        success: false,
+        error: (raw.error as CreateGroupError) || "NETWORK_ERROR",
+        message: (raw.message as string) || "Failed to create group",
+      };
+    }
+
+    const groupObj = (raw.group as GroupRow | undefined) ?? (raw as unknown as GroupRow);
 
     return {
       success: true,
-      message: response.message,
+      message: (raw.message as string) || `Created ${groupObj.name} successfully`,
       group: {
-        id: response.group.id,
-        name: response.group.name,
-        inviteCode: response.group.invite_code,
-        createdAt: response.group.created_at,
+        id: groupObj.id,
+        name: groupObj.name,
+        inviteCode: groupObj.invite_code,
+        createdAt: groupObj.created_at,
       },
     };
   } catch {
