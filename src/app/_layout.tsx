@@ -25,6 +25,7 @@ export default function RootLayout(): JSX.Element {
 /**
  * Shows the app when signed in and the sign-in screen otherwise. Guards also
  * redirect away from any screen whose guard turns false (e.g. on sign-out).
+ * Public screens outside of guards (like guest claiming) are accessible by anyone.
  * @returns JSX element
  */
 function RootNavigator(): JSX.Element {
@@ -46,6 +47,9 @@ function RootNavigator(): JSX.Element {
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
+
+        {/* Public route: guest claiming screen does not require authentication */}
+        <Stack.Screen name="claim/[token]" />
       </Stack>
     </ThemeProvider>
   );
