@@ -361,7 +361,12 @@ export default function GroupScreen(): JSX.Element {
               const rowStyle = [STYLES.receiptRow, i > 0 && STYLES.memberDivider];
               const content = (
                 <>
-                  <Text style={STYLES.memberName}>{r.title}</Text>
+                  <View style={STYLES.receiptInfo}>
+                    <Text style={STYLES.memberName}>{r.title}</Text>
+                    {r.status !== "draft" ? (
+                      <Text style={STYLES.receiptActionHint}>Tap to view & share ›</Text>
+                    ) : null}
+                  </View>
                   {r.status === "draft" ? (
                     <View style={STYLES.pill}>
                       <Text style={STYLES.pillText}>Draft</Text>
@@ -382,9 +387,15 @@ export default function GroupScreen(): JSX.Element {
                   {content}
                 </Pressable>
               ) : (
-                <View key={r.id} style={rowStyle}>
+                <Pressable
+                  key={r.id}
+                  onPress={() => router.push(`/(app)/(home)/receipts/${r.id}` as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View receipt ${r.title}`}
+                  style={({ pressed }) => [...rowStyle, pressed && STYLES.addButtonPressed]}
+                >
                   {content}
-                </View>
+                </Pressable>
               );
             })
           )}
@@ -504,6 +515,15 @@ const STYLES = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 14,
     gap: 8,
+  },
+  receiptInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  receiptActionHint: {
+    fontSize: 12,
+    color: palette.accent,
+    fontWeight: "500",
   },
   amount: { fontSize: 16, fontWeight: "700", color: palette.text },
   emptyText: { paddingVertical: 16, color: palette.muted, fontSize: 15 },
