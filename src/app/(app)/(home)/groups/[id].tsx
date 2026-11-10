@@ -2,9 +2,11 @@
 
 import { router, useLocalSearchParams } from "expo-router";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,7 +17,10 @@ import {
 import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
+import { useAuth } from "@/lib/auth-provider";
+import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
+import { deleteGroup, leaveGroup } from "@/lib/groups";
 import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
@@ -60,6 +65,41 @@ type GroupDetail = {
 };
 
 /**
+ * Asks the user to confirm a destructive action. Alert.alert has no buttons
+ * on web (react-native-web ignores them), so web uses window.confirm.
+ * @param title Dialog title
+ * @param message Dialog body
+ * @param confirmLabel Label of the destructive button
+ * @returns True when the user confirmed
+ */
+function confirmAction(
+  title: string,
+  message: string,
+  confirmLabel: string
+): Promise<boolean> {
+  if (Platform.OS === "web") {
+    const confirmFn = (globalThis as { confirm?: (text: string) => boolean })
+      .confirm;
+    return Promise.resolve(confirmFn ? confirmFn(`${title}\n\n${message}`) : false);
+  }
+  return new Promise((resolve) => {
+    Alert.alert(
+      title,
+      message,
+      [
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        {
+          text: confirmLabel,
+          style: "destructive",
+          onPress: () => resolve(true),
+        },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) }
+    );
+  });
+}
+
+/**
  * Detailed view of a group showing members and receipts.
  * @returns JSX element
  */
@@ -100,6 +140,12 @@ export default function GroupScreen(): JSX.Element {
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
   const [scanNotes, setScanNotes] = useState<string[]>([]);
   const [scanSession, setScanSession] = useState(0);
+  const { session } = useAuth();
+  // Mock data only knows the placeholder user (see create-group.ts).
+  const currentUserId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
+  // The ref blocks a second tap before the state update re-renders.
+  const groupActionBusyRef = useRef(false);
+  const [groupActionBusy, setGroupActionBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,7 +189,10 @@ export default function GroupScreen(): JSX.Element {
   if (forbidden) {
     return (
       <View style={STYLES.center}>
-        <Text style={STYLES.error}>You&apos;re not a member of this group.</Text>
+        <Text style={STYLES.error}>
+          Group not found. It may have been deleted, or you&apos;re no longer a
+          member.
+        </Text>
         <Pressable
           onPress={() =>
             router.canGoBack() ? router.back() : router.replace("/")
@@ -168,6 +217,68 @@ export default function GroupScreen(): JSX.Element {
   }
 
   const { group, members, receipts } = detail;
+
+  const currentMember = members.find((m) => m.user_id === currentUserId);
+  const isOwner =
+    currentUserId !== undefined &&
+    (currentMember?.role === "owner" || group.created_by === currentUserId);
+  const canLeaveOrDelete = isOwner || currentMember !== undefined;
+
+  /**
+   * Confirms, then leaves the group (members) or deletes it (owner). On
+   * success, goes back to the group list with a toast. The group screen is
+   * removed from history so Back can't reopen it.
+   */
+  const handleLeaveOrDelete = async (): Promise<void> => {
+    if (groupActionBusyRef.current) return;
+    groupActionBusyRef.current = true;
+    setGroupActionBusy(true);
+
+    try {
+      const confirmed = isOwner
+        ? await confirmAction(
+            "Delete Group",
+            `Are you sure you want to delete ${group.name}? This will permanently delete the group and all receipts for all members.`,
+            "Delete"
+          )
+        : await confirmAction(
+            "Leave Group",
+            `Are you sure you want to leave ${group.name}?`,
+            "Leave"
+          );
+      if (!confirmed) return;
+
+      const userId = currentUserId ?? MOCK_CURRENT_USER_ID;
+      const result = isOwner
+        ? await deleteGroup(group.id, userId)
+        : await leaveGroup(group.id, userId);
+
+      if (!result.success) {
+        setToastState({ message: result.message, type: "error" });
+        return;
+      }
+
+      const href = {
+        pathname: "/" as const,
+        params: {
+          toastMessage: isOwner
+            ? `${group.name} deleted`
+            : `Left ${group.name}`,
+          toastType: "success",
+          removedGroupId: group.id,
+          // Makes the same message show again for a second leave/delete.
+          toastKey: String(Date.now()),
+        },
+      };
+      // dismissTo pops back to the existing list; replace covers deep links
+      // where the group screen is the only screen on the stack.
+      if (router.canGoBack()) router.dismissTo(href);
+      else router.replace(href);
+    } finally {
+      groupActionBusyRef.current = false;
+      setGroupActionBusy(false);
+    }
+  };
 
   /**
    * Opens the receipt entry form for this group.
@@ -400,6 +511,34 @@ export default function GroupScreen(): JSX.Element {
             })
           )}
         </View>
+
+        {canLeaveOrDelete ? (
+          <Pressable
+            onPress={handleLeaveOrDelete}
+            disabled={groupActionBusy}
+            accessibilityRole="button"
+            accessibilityLabel={isOwner ? "Delete Group" : "Leave Group"}
+            accessibilityState={{ disabled: groupActionBusy, busy: groupActionBusy }}
+            style={({ pressed }) => [
+              STYLES.groupActionButton,
+              isOwner && STYLES.groupActionButtonDestructive,
+              (pressed || groupActionBusy) && STYLES.addButtonPressed,
+            ]}
+          >
+            {groupActionBusy ? (
+              <ActivityIndicator color={isOwner ? "white" : palette.error} />
+            ) : (
+              <Text
+                style={[
+                  STYLES.groupActionText,
+                  isOwner && STYLES.groupActionTextDestructive,
+                ]}
+              >
+                {isOwner ? "Delete Group" : "Leave Group"}
+              </Text>
+            )}
+          </Pressable>
+        ) : null}
       </ScrollView>
       <AddReceiptModal
         key={
@@ -431,6 +570,14 @@ export default function GroupScreen(): JSX.Element {
           visible
           onClose={() => setCameraVisible(false)}
           onPhoto={handleScanPhoto}
+        />
+      ) : null}
+      {toastState ? (
+        <Toast
+          visible={Boolean(toastState)}
+          message={toastState.message}
+          type={toastState.type}
+          onDismiss={() => setToastState(null)}
         />
       ) : null}
     </View>
@@ -556,4 +703,17 @@ const STYLES = StyleSheet.create({
   },
   addButtonPressed: { opacity: 0.7 },
   addButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
+  groupActionButton: {
+    marginTop: 28,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.error,
+    backgroundColor: palette.card,
+  },
+  groupActionButtonDestructive: { backgroundColor: palette.error },
+  groupActionText: { fontSize: 16, fontWeight: "700", color: palette.error },
+  groupActionTextDestructive: { color: "white" },
 });

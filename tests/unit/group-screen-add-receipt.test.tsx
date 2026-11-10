@@ -20,6 +20,7 @@ jest.mock("expo-router", () => ({
 jest.mock("@/lib/group-data", () => ({ loadGroupDetail: jest.fn() }));
 jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/components/toast", () => ({ Toast: () => null }));
+jest.mock("@/lib/auth-provider", () => ({ useAuth: () => ({ session: null }) }));
 
 /**
  * Mocked group loader, typed against the real function.
@@ -96,7 +97,7 @@ describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
     MOCK_LOAD.mockResolvedValue({ status: "forbidden" });
     const { findByText, queryByLabelText } = await render(<GroupScreen />);
 
-    expect(await findByText("You're not a member of this group.")).toBeTruthy();
+    expect(await findByText(/Group not found/)).toBeTruthy();
     expect(queryByLabelText("Add receipt")).toBeNull();
   });
 

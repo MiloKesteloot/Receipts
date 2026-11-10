@@ -42,6 +42,34 @@ export type JoinGroupResult =
       message: string;
     };
 
+/**
+ * Why leaving or deleting a group failed (User Story 2.4).
+ * - NOT_FOUND: the group doesn't exist, or the caller can't see it.
+ * - FORBIDDEN: the caller is a member but isn't allowed (non-owner deleting).
+ * - OWNER_CANNOT_LEAVE: owners must delete the group (or transfer ownership).
+ */
+export type GroupActionError =
+  | "NOT_FOUND"
+  | "FORBIDDEN"
+  | "OWNER_CANNOT_LEAVE"
+  | "NOT_SIGNED_IN"
+  | "NETWORK_ERROR";
+
+export type GroupActionResult =
+  | {
+      success: true;
+      group_id: string;
+      group_name: string;
+      message: string;
+    }
+  | {
+      success: false;
+      error: GroupActionError;
+      message: string;
+    };
+
 export interface GroupService {
   joinGroupByCode(inviteCode: string, userId?: string): Promise<JoinGroupResult>;
+  leaveGroup(groupId: string, userId?: string): Promise<GroupActionResult>;
+  deleteGroup(groupId: string, userId?: string): Promise<GroupActionResult>;
 }
