@@ -7,7 +7,8 @@
 -- Covers:
 -- 1. Profiles & Auth triggers (Google / Apple / Email)
 -- 2. Groups & Group Memberships + RLS
--- 3. Group RPCs (create_group, join_group, get_group, leave_group, remove_group_member)
+-- 3. Group RPCs (create_group, join_group, get_group, leave_group, delete_group,
+--    remove_group_member)
 -- 4. Receipts & Receipt Items (US 2.1) + RLS
 -- 5. Item Claims (US 2.3 Member Claims) + RLS
 -- 6. Receipt Guest Tokens & Anonymous Web Claiming (US 2.5) + Public RPCs
@@ -785,8 +786,9 @@ $$;
 revoke execute on function public.get_group(text) from public, anon;
 grant execute on function public.get_group(text) to authenticated;
 
--- RPC: leave_group(p_group_id text)
--- Teammate helper: allows a member to leave a group
+-- RPC: leave_group(p_group_id text) (US 2.4)
+-- Removes the caller from a group. Owners are refused; they must delete it.
+-- Kept in sync with supabase/migrations/20261110_leave_delete_group.sql.
 drop function if exists public.leave_group(text) cascade;
 drop function if exists public.leave_group(uuid) cascade;
 create or replace function public.leave_group(p_group_id text)
@@ -797,40 +799,144 @@ set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();
-  v_group_uuid uuid := p_group_id::uuid;
+  v_group_uuid uuid;
+  v_group public.groups%rowtype;
   v_role text;
 begin
   if v_user is null then
-    raise exception 'Not signed in' using errcode = '42501';
+    raise exception 'Sign in to leave a group' using errcode = '42501';
+  end if;
+
+  begin
+    v_group_uuid := p_group_id::uuid;
+  exception when others then
+    return jsonb_build_object('success', false, 'error', 'NOT_FOUND', 'message', 'Group not found');
+  end;
+
+  select * into v_group from public.groups where id = v_group_uuid;
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'NOT_FOUND', 'message', 'Group not found');
   end if;
 
   select role into v_role
   from public.group_members
   where group_id = v_group_uuid and user_id = v_user;
 
-  if not found then
-    return jsonb_build_object('success', false, 'message', 'You are not a member of this group');
+  if v_group.created_by = v_user or v_role = 'owner' then
+    return jsonb_build_object(
+      'success', false,
+      'error', 'OWNER_CANNOT_LEAVE',
+      'message', 'Owners can''t leave their group. Delete the group or transfer ownership instead.'
+    );
   end if;
 
-  if v_role = 'owner' then
-    -- If owner is leaving, check if there are other members
-    if (select count(*) from public.group_members where group_id = v_group_uuid) > 1 then
-      return jsonb_build_object('success', false, 'message', 'Owners cannot leave while other members remain. Delete group or transfer ownership.');
-    else
-      delete from public.groups where id = v_group_uuid;
-      return jsonb_build_object('success', true, 'message', 'Group deleted');
-    end if;
+  if v_role is null then
+    return jsonb_build_object('success', false, 'error', 'NOT_FOUND', 'message', 'Group not found');
   end if;
 
   delete from public.group_members
   where group_id = v_group_uuid and user_id = v_user;
 
-  return jsonb_build_object('success', true, 'message', 'Left group successfully');
+  return jsonb_build_object(
+    'success', true,
+    'group_id', v_group.id,
+    'group_name', v_group.name,
+    'message', format('Left %s', v_group.name)
+  );
 end;
 $$;
 
 revoke execute on function public.leave_group(text) from public, anon;
 grant execute on function public.leave_group(text) to authenticated;
+
+-- RPC: delete_group(p_group_id text) (US 2.4)
+-- Owner-only: permanently deletes the group for every member.
+-- The foreign keys already cascade (groups -> group_members, receipts ->
+-- receipt_items -> item_claims, receipts -> receipt_guest_tokens), but older
+-- databases built from 20261027_guest_claim_tokens.sql may lack some of them,
+-- so each table is cleared explicitly. Everything runs in one transaction.
+drop function if exists public.delete_group(text) cascade;
+drop function if exists public.delete_group(uuid) cascade;
+create or replace function public.delete_group(p_group_id text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_group_uuid uuid;
+  v_group public.groups%rowtype;
+  v_is_member boolean;
+begin
+  if v_user is null then
+    raise exception 'Sign in to delete a group' using errcode = '42501';
+  end if;
+
+  begin
+    v_group_uuid := p_group_id::uuid;
+  exception when others then
+    return jsonb_build_object('success', false, 'error', 'NOT_FOUND', 'message', 'Group not found');
+  end;
+
+  -- Lock the row so a concurrent join/receipt insert can't race the delete.
+  select * into v_group from public.groups where id = v_group_uuid for update;
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'NOT_FOUND', 'message', 'Group not found');
+  end if;
+
+  if v_group.created_by is distinct from v_user then
+    select exists (
+      select 1 from public.group_members
+      where group_id = v_group_uuid and user_id = v_user
+    ) into v_is_member;
+
+    if v_is_member then
+      return jsonb_build_object(
+        'success', false,
+        'error', 'FORBIDDEN',
+        'message', 'Only the group owner can delete this group'
+      );
+    end if;
+    return jsonb_build_object('success', false, 'error', 'NOT_FOUND', 'message', 'Group not found');
+  end if;
+
+  delete from public.item_claims
+  where receipt_id::text in (
+    select id::text from public.receipts where group_id = v_group_uuid
+  )
+  or item_id::text in (
+    select i.id::text
+    from public.receipt_items i
+    join public.receipts r on r.id::text = i.receipt_id::text
+    where r.group_id = v_group_uuid
+  );
+
+  delete from public.receipt_items
+  where receipt_id::text in (
+    select id::text from public.receipts where group_id = v_group_uuid
+  );
+
+  delete from public.receipt_guest_tokens
+  where receipt_id::text in (
+    select id::text from public.receipts where group_id = v_group_uuid
+  );
+
+  delete from public.receipts where group_id = v_group_uuid;
+  delete from public.group_members where group_id = v_group_uuid;
+  delete from public.groups where id = v_group_uuid;
+
+  return jsonb_build_object(
+    'success', true,
+    'group_id', v_group.id,
+    'group_name', v_group.name,
+    'message', format('%s deleted', v_group.name)
+  );
+end;
+$$;
+
+revoke execute on function public.delete_group(text) from public, anon;
+grant execute on function public.delete_group(text) to authenticated;
 
 -- RPC: remove_group_member(p_group_id text, p_target_user_id text)
 -- Teammate helper: allows group owner to remove another member
@@ -1082,3 +1188,6 @@ $$;
 
 revoke execute on function public.increment_clicks() from public, anon;
 grant execute on function public.increment_clicks() to authenticated;
+
+-- Make the Data API pick up new or changed functions immediately.
+notify pgrst, 'reload schema';
