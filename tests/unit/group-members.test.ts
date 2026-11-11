@@ -246,7 +246,8 @@ describe("removeGroupMembers (mock mode)", () => {
       client: null,
     });
     assert.deepEqual(r, { removed: ["u2", "u3"], failed: [] });
-    assert.deepEqual(GROUP.members.map((m) => m.user_id), ["u1"]);
+    // The mock signed-in user is also seeded in mock-1 (US 2.3) and stays.
+    assert.deepEqual(GROUP.members.map((m) => m.user_id), ["u1", "current-user"]);
     assert.equal(GROUP.members, membersRef, "array edited in place, not replaced");
   });
 

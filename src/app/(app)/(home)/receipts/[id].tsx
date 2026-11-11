@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -11,24 +12,54 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { JSX } from "react/jsx-runtime";
 
 import { Toast, ToastType } from "@/components/toast";
+import { useAuth } from "@/lib/auth-provider";
+import { isGuestClaimKey, toClaimableItems, type ItemShares } from "@/lib/claims";
+import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
+import { loadGroupDetail } from "@/lib/group-data";
 import {
   createGuestClaimLink,
   createGuestClaimToken,
   formatClaimUrl,
-  getReceiptByGuestToken,
-  type GuestReceiptDetail,
-  type ItemClaimant,
-  type ReceiptItemWithClaims,
 } from "@/lib/guest-claim";
-import { mockGroupDetails, mockGuestTokens, USE_MOCK } from "@/lib/mock";
+import {
+  mockGroupDetails,
+  mockGuestTokens,
+  mockReceiptItems,
+  USE_MOCK,
+} from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { SUPABASE } from "@/lib/supabase";
+import { useClaims } from "@/lib/use-claims";
 
 /** Delay in ms after closing share sheet to allow animations to settle. */
 const SHARE_SHEET_CLOSE_DELAY_MS = 500;
+
+/** One line item as loaded. The price is validated before claiming. */
+type ReceiptLine = { id: string; name: string; amount_cents: unknown };
+
+/** What the screen shows about the receipt itself. */
+type ScreenReceipt = {
+  /** Guest share token, or "" if one couldn't be made. */
+  token: string;
+  title: string;
+  total_cents: number;
+  items: ReceiptLine[];
+};
+
+type LoadResult =
+  | {
+      status: "ok";
+      receipt: ScreenReceipt;
+      /** The receipt's group, needed to claim. Undefined if unknown. */
+      groupId: string | undefined;
+      /** Member display names by user id. */
+      memberNames: Record<string, string>;
+    }
+  | { status: "error"; message: string };
 
 /**
  * Formats monetary amounts from cents to dollars string.
@@ -40,13 +71,103 @@ function formatCents(cents: number): string {
 }
 
 /**
- * Receipt screen displaying itemized breakdown and guest claim sharing actions.
+ * Loads a receipt for a signed-in member, with its group and the group's
+ * member names. Members always load directly (not through the guest token),
+ * so the group id comes from the receipt itself and the rows shown are the
+ * ones member RLS allows, the same rows claiming uses.
+ * @param id Receipt id
+ * @param token Guest share token for the share card, or "" if none
+ * @returns The receipt, its group and names, or an error message
+ */
+async function loadMemberReceipt(id: string, token: string): Promise<LoadResult> {
+  if (USE_MOCK || !SUPABASE) {
+    const group = Object.values(mockGroupDetails).find((g) =>
+      g.receipts.some((r) => r.id === id)
+    );
+    const match = group?.receipts.find((r) => r.id === id);
+    if (!group && !token) return { status: "error", message: "Receipt not found." };
+
+    return {
+      status: "ok",
+      receipt: {
+        token,
+        title: match?.title ?? "Receipt",
+        total_cents: match?.total_cents ?? 0,
+        items: mockReceiptItems[id] ?? [],
+      },
+      groupId: group?.group.id,
+      memberNames: Object.fromEntries(
+        (group?.members ?? []).map((m) => [m.user_id, m.display_name ?? "Member"])
+      ),
+    };
+  }
+
+  const { data: rRow, error: rError } = await SUPABASE
+    .from("receipts")
+    .select("id, title, total_cents, created_at, group_id, status")
+    .eq("id", id)
+    .single();
+  if (rError || !rRow) {
+    return { status: "error", message: rError?.message ?? "Receipt not found." };
+  }
+
+  const { data: itemsData, error: itemsError } = await SUPABASE
+    .from("receipt_items")
+    .select("id, receipt_id, name, amount_cents, created_at")
+    .eq("receipt_id", id)
+    .order("created_at", { ascending: true });
+  if (itemsError) return { status: "error", message: itemsError.message };
+
+  // Names for everyone in the group, so a claim made after this load still
+  // has a name. A failure here only costs the names.
+  const groupId = String(rRow.group_id);
+  const group = await loadGroupDetail(groupId, {
+    useMock: false,
+    client: SUPABASE,
+  });
+  const memberNames =
+    group.status === "ok"
+      ? Object.fromEntries(
+          group.detail.members.map((m) => [m.user_id, m.display_name ?? "Member"])
+        )
+      : {};
+
+  return {
+    status: "ok",
+    receipt: {
+      token,
+      title: rRow.title,
+      total_cents: Number(rRow.total_cents),
+      items: (itemsData ?? []).map((item) => ({
+        id: String(item.id),
+        name: item.name,
+        amount_cents: item.amount_cents,
+      })),
+    },
+    groupId,
+    memberNames,
+  };
+}
+
+/**
+ * Receipt screen: members tap items to claim them (US 2.3), see shared items
+ * split to the cent, and see their running total. Also shares the guest
+ * claim link (US 2.5).
  * @returns JSX element
  */
 export default function ReceiptScreen(): JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { session } = useAuth();
+  // Mock data only knows the placeholder user (see create-group.ts).
+  const userId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
+  const insets = useSafeAreaInsets();
+  // On iOS each native tab has its own safe area, which includes the tab bar.
+  // Android already pads the tab's content above the tab bar.
+  const bottomInset = Platform.OS === "ios" ? insets.bottom : 0;
 
-  const [receipt, setReceipt] = useState<GuestReceiptDetail | null>(null);
+  const [receipt, setReceipt] = useState<ScreenReceipt | null>(null);
+  const [groupId, setGroupId] = useState<string | undefined>(undefined);
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [claimUrl, setClaimUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generatingLink, setGeneratingLink] = useState(false);
@@ -55,7 +176,7 @@ export default function ReceiptScreen(): JSX.Element {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /**
-   * Loads or creates a token for this receipt and fetches items.
+   * Gets (or makes) the guest share token, then loads the receipt.
    */
   const loadReceiptData = useCallback(async () => {
     if (!id) return;
@@ -78,140 +199,17 @@ export default function ReceiptScreen(): JSX.Element {
       setClaimUrl(url);
     }
 
+    // 2. Load the receipt as a member (the token is only for sharing)
     try {
-      // 2. If we have a token, attempt to load via guest token RPC first
-      if (token) {
-        const res = await getReceiptByGuestToken(token);
-        if (res.success) {
-          setReceipt(res.receipt);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 3. Fallback for mock mode
-      if (USE_MOCK || !SUPABASE) {
-        let receiptTitle = "Receipt";
-        let receiptTotal = 0;
-        let found = false;
-        for (const g of Object.values(mockGroupDetails)) {
-          const match = g.receipts.find((r) => r.id === id);
-          if (match) {
-            receiptTitle = match.title;
-            receiptTotal = match.total_cents;
-            found = true;
-            break;
-          }
-        }
-
-        if (!found && !token) {
-          setReceipt(null);
-          setErrorMessage("Receipt not found.");
-          setLoading(false);
-          return;
-        }
-
-        setReceipt({
-          token: token ?? "",
-          receipt_id: id,
-          title: receiptTitle,
-          total_cents: receiptTotal,
-          created_at: new Date().toISOString(),
-          items: [],
-        });
-        setLoading(false);
-        return;
-      }
-
-      // 4. Fallback for Supabase mode: direct query for logged-in group members
-      const { data: rRow, error: rError } = await SUPABASE
-        .from("receipts")
-        .select("id, title, total_cents, created_at, group_id, status")
-        .eq("id", id)
-        .single();
-
-      if (rError || !rRow) {
+      const result = await loadMemberReceipt(id, token ?? "");
+      if (result.status === "ok") {
+        setReceipt(result.receipt);
+        setGroupId(result.groupId);
+        setMemberNames(result.memberNames);
+      } else {
         setReceipt(null);
-        setErrorMessage(rError?.message ?? "Receipt not found.");
-        setLoading(false);
-        return;
+        setErrorMessage(result.message);
       }
-
-      // Fetch items
-      const { data: itemsData, error: itemsError } = await SUPABASE
-        .from("receipt_items")
-        .select("id, receipt_id, name, amount_cents, created_at")
-        .eq("receipt_id", id)
-        .order("created_at", { ascending: true });
-
-      if (itemsError) {
-        throw new Error(itemsError.message);
-      }
-
-      // Fetch claims
-      const { data: claimsData } = await SUPABASE
-        .from("item_claims")
-        .select("id, item_id, receipt_id, user_id, guest_name, claimed_at")
-        .eq("receipt_id", id);
-
-      // Fetch profile display names for claimants if any
-      const memberIds = Array.from(
-        new Set(
-          (claimsData || [])
-            .map((c) => c.user_id)
-            .filter((uid): uid is string => Boolean(uid))
-        )
-      );
-
-      let profilesMap: Record<string, string> = {};
-      if (memberIds.length > 0) {
-        const { data: profiles } = await SUPABASE
-          .from("profiles")
-          .select("id, display_name")
-          .in("id", memberIds);
-        if (profiles) {
-          profilesMap = Object.fromEntries(
-            profiles.map((p) => [p.id, p.display_name || "Member"])
-          );
-        }
-      }
-
-      const decoratedItems: ReceiptItemWithClaims[] = (itemsData || []).map(
-        (item) => {
-          const itemClaims = (claimsData || []).filter(
-            (c) => c.item_id === item.id
-          );
-          const claimants: ItemClaimant[] = itemClaims.map((c) => ({
-            id: c.id,
-            user_id: c.user_id,
-            guest_name: c.guest_name,
-            display_name:
-              c.guest_name ||
-              (c.user_id ? profilesMap[c.user_id] : null) ||
-              "Member",
-            is_guest: Boolean(c.guest_name),
-          }));
-          const count = Math.max(1, claimants.length);
-          return {
-            id: item.id,
-            receipt_id: item.receipt_id,
-            name: item.name,
-            amount_cents: item.amount_cents,
-            claims: claimants,
-            is_shared: claimants.length > 1,
-            per_person_cents: Math.round(item.amount_cents / count),
-          };
-        }
-      );
-
-      setReceipt({
-        token: token ?? "",
-        receipt_id: rRow.id,
-        title: rRow.title,
-        total_cents: rRow.total_cents,
-        created_at: rRow.created_at,
-        items: decoratedItems,
-      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to load receipt";
       setErrorMessage(msg);
@@ -224,6 +222,60 @@ export default function ReceiptScreen(): JSX.Element {
   useEffect(() => {
     loadReceiptData();
   }, [loadReceiptData]);
+
+  // Memoized so useClaims only reloads when the items change.
+  const claimable = useMemo(
+    () => toClaimableItems(receipt?.items ?? []).items,
+    [receipt]
+  );
+  const {
+    claims,
+    loading: claimsLoading,
+    error: claimError,
+    inFlightItemIds,
+    sharesByItem,
+    myTotal,
+    toggle,
+  } = useClaims(claimable, groupId, userId);
+
+  useEffect(() => {
+    if (claimError) setToast({ message: claimError, type: "error" });
+  }, [claimError]);
+
+  // Guests have no profile, so their names come from their claims.
+  const guestNames = useMemo(
+    () =>
+      Object.fromEntries(
+        claims
+          .filter((c) => c.guestName !== undefined)
+          .map((c) => [c.userId, c.guestName as string])
+      ),
+    [claims]
+  );
+
+  /**
+   * The name to show for a claim key.
+   * @param key A member's user id or a guest claim key
+   * @returns "You", the member's name, or the guest's name marked as a guest
+   */
+  const nameFor = (key: string): string => {
+    if (key === userId) return "You";
+    if (isGuestClaimKey(key)) return `${guestNames[key] ?? "Guest"} (Guest)`;
+    return memberNames[key] ?? "Member";
+  };
+
+  /**
+   * The line under an item's name: who claimed it and what each pays.
+   * @param shares The item's shares from useClaims
+   * @returns The text to show
+   */
+  const claimSummary = (shares: ItemShares): string => {
+    if (shares.claimedBy.length === 0) return "Tap to claim";
+    if (!shares.isShared) return nameFor(shares.claimedBy[0]);
+    return shares.shares
+      .map((share) => `${nameFor(share.userId)} ${formatCents(share.cents)}`)
+      .join(" · ");
+  };
 
   /**
    * Generates or retrieves the claim link and triggers the native share sheet.
@@ -412,74 +464,111 @@ async function copyToClipboard(text: string): Promise<boolean> {
         </View>
 
         {/* Items Section */}
-        <Text style={STYLES.sectionLabel}>
-          Line Items ({receipt.items.length})
-        </Text>
+        <View style={STYLES.sectionHeaderRow}>
+          <Text style={STYLES.sectionLabel}>
+            Line Items ({receipt.items.length})
+          </Text>
+          {claimsLoading && claimable.length > 0 && groupId !== undefined ? (
+            <Text style={STYLES.loadingHint}>Loading claims…</Text>
+          ) : null}
+        </View>
 
         <View style={STYLES.itemsCard}>
           {receipt.items.length === 0 ? (
             <Text style={STYLES.emptyText}>No items added to this receipt yet.</Text>
           ) : (
-            receipt.items.map((item, idx) => (
-              <View
-                key={item.id}
-                style={[STYLES.itemRow, idx > 0 && STYLES.itemDivider]}
-              >
-                <View style={STYLES.itemMain}>
-                  <View style={STYLES.itemTitleRow}>
-                    <Text style={STYLES.itemName}>{item.name}</Text>
-                    {item.is_shared ? (
-                      <View style={STYLES.sharedBadge}>
-                        <Text style={STYLES.sharedBadgeText}>
-                          Shared ({item.claims.length})
-                        </Text>
-                      </View>
+            receipt.items.map((item, idx) => {
+              const shares = sharesByItem[item.id];
+              // Items with a bad price aren't claimable (see toClaimableItems).
+              if (!shares) {
+                return (
+                  <View
+                    key={item.id}
+                    style={[STYLES.itemRow, idx > 0 && STYLES.itemDivider]}
+                  >
+                    <View style={STYLES.itemMain}>
+                      <Text style={STYLES.itemName}>{item.name}</Text>
+                      <Text style={STYLES.unclaimedText}>
+                        Price unavailable, can&apos;t be claimed
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              const isMine = userId !== undefined && shares.claimedBy.includes(userId);
+              const inFlight = inFlightItemIds.has(item.id);
+              const priceCents = claimable.find((c) => c.id === item.id)?.priceCents ?? 0;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => {
+                    // The hook updates the screen itself; nothing to wait for.
+                    void toggle(item.id);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isMine, busy: inFlight }}
+                  accessibilityLabel={`${isMine ? "Unclaim" : "Claim"} ${item.name}`}
+                  style={({ pressed }) => [
+                    STYLES.itemRow,
+                    idx > 0 && STYLES.itemDivider,
+                    isMine && STYLES.itemRowMine,
+                    (pressed || inFlight) && STYLES.pressed,
+                  ]}
+                >
+                  <View style={STYLES.itemMain}>
+                    <View style={STYLES.itemTitleRow}>
+                      <Text style={STYLES.itemName}>{item.name}</Text>
+                      {isMine ? (
+                        <View style={STYLES.mineBadge}>
+                          <Text style={STYLES.mineBadgeText}>✓ Mine</Text>
+                        </View>
+                      ) : null}
+                      {shares.isShared ? (
+                        <View style={STYLES.sharedBadge}>
+                          <Text style={STYLES.sharedBadgeText}>Shared</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text
+                      style={
+                        shares.claimedBy.length === 0
+                          ? STYLES.unclaimedText
+                          : STYLES.claimantText
+                      }
+                    >
+                      {claimSummary(shares)}
+                    </Text>
+                  </View>
+
+                  <View style={STYLES.itemPricing}>
+                    <Text style={STYLES.itemAmount}>{formatCents(priceCents)}</Text>
+                    {inFlight ? (
+                      <ActivityIndicator size="small" color={palette.accent} />
                     ) : null}
                   </View>
-
-                  {/* Claimants */}
-                  <View style={STYLES.claimantsRow}>
-                    {item.claims.length === 0 ? (
-                      <Text style={STYLES.unclaimedText}>Unclaimed</Text>
-                    ) : (
-                      item.claims.map((claimant, cIdx) => (
-                        <View
-                          key={claimant.id ?? cIdx}
-                          style={[
-                            STYLES.claimantChip,
-                            claimant.is_guest && STYLES.guestClaimantChip,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              STYLES.claimantChipText,
-                              claimant.is_guest && STYLES.guestClaimantChipText,
-                            ]}
-                          >
-                            {claimant.display_name}
-                            {claimant.is_guest ? " (Guest)" : ""}
-                          </Text>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </View>
-
-                <View style={STYLES.itemPricing}>
-                  <Text style={STYLES.itemAmount}>
-                    {formatCents(item.amount_cents)}
-                  </Text>
-                  {item.is_shared ? (
-                    <Text style={STYLES.perPersonHint}>
-                      {formatCents(item.per_person_cents)} ea
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            ))
+                </Pressable>
+              );
+            })
           )}
         </View>
       </ScrollView>
+
+      {/* Running total (US 2.3 Task 5) */}
+      {claimable.length > 0 ? (
+        <View
+          style={[STYLES.totalBar, { paddingBottom: 14 + bottomInset }]}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={STYLES.totalBarText}>
+            {myTotal.claimedCount === 0
+              ? "Tap items you bought to claim them"
+              : `Your total ${formatCents(myTotal.totalCents)} · ${myTotal.claimedCount} ${
+                  myTotal.claimedCount === 1 ? "item" : "items"
+                }`}
+          </Text>
+        </View>
+      ) : null}
 
       {toast ? (
         <Toast
@@ -684,48 +773,65 @@ const STYLES = StyleSheet.create({
     fontWeight: "700",
     color: palette.accent,
   },
-  claimantsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
   unclaimedText: {
     fontSize: 13,
     color: palette.muted,
     fontStyle: "italic",
   },
-  claimantChip: {
-    backgroundColor: "#EEF2F6",
+  claimantText: {
+    fontSize: 13,
+    color: palette.text,
+  },
+  itemRowMine: {
+    backgroundColor: palette.accentSoft,
+    borderWidth: 1.5,
+    borderColor: palette.accent,
+    borderRadius: 12,
+    marginHorizontal: -10,
+    paddingHorizontal: 10,
+  },
+  mineBadge: {
+    backgroundColor: palette.accent,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 6,
   },
-  claimantChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#334155",
-  },
-  guestClaimantChip: {
-    backgroundColor: "#E0F2FE",
-    borderColor: "#BAE6FD",
-    borderWidth: 1,
-  },
-  guestClaimantChipText: {
-    color: "#0369A1",
+  mineBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: palette.card,
   },
   itemPricing: {
     alignItems: "flex-end",
-    gap: 2,
+    gap: 4,
   },
   itemAmount: {
     fontSize: 16,
     fontWeight: "700",
     color: palette.text,
   },
-  perPersonHint: {
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  loadingHint: {
     fontSize: 12,
-    color: palette.accent,
-    fontWeight: "600",
+    color: palette.muted,
+    marginTop: 4,
+  },
+  totalBar: {
+    backgroundColor: palette.card,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+  },
+  totalBarText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: palette.text,
+    textAlign: "center",
   },
   emptyText: {
     paddingVertical: 20,
