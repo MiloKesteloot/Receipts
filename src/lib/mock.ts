@@ -62,6 +62,9 @@ export const mockGroupDetails: Record<string, MockGroupDetail> = {
       { user_id: "u1", display_name: "Alex", role: "owner", joined_at: "2026-10-01T12:00:00Z" },
       { user_id: "u2", display_name: "Sam", role: "member", joined_at: "2026-10-02T09:30:00Z" },
       { user_id: "u3", display_name: "Jordan", role: "member", joined_at: "2026-10-03T18:10:00Z" },
+      // The signed-in mock user (MOCK_CURRENT_USER_ID in create-group.ts, which
+      // imports this file), so mock mode can claim items on r1 and r2 (US 2.3).
+      { user_id: "current-user", display_name: "You", role: "member", joined_at: "2026-10-04T08:00:00Z" },
     ],
     receipts: [
       { id: "r1", title: "Costco run", total_cents: 8423, created_at: "2026-10-05T17:00:00Z" },
@@ -105,6 +108,9 @@ export const mockGroupDetails: Record<string, MockGroupDetail> = {
       { user_id: "u1", display_name: "Alex", role: "owner", joined_at: "2026-10-01T12:00:00Z" },
       { user_id: "u2", display_name: "Sam", role: "member", joined_at: "2026-10-02T09:30:00Z" },
       { user_id: "u3", display_name: "Jordan", role: "member", joined_at: "2026-10-03T18:10:00Z" },
+      // The signed-in mock user (MOCK_CURRENT_USER_ID in create-group.ts, which
+      // imports this file), so mock mode can claim items on r1 and r2 (US 2.3).
+      { user_id: "current-user", display_name: "You", role: "member", joined_at: "2026-10-04T08:00:00Z" },
     ],
     receipts: [
       { id: "r1", title: "Costco run", total_cents: 8423, created_at: "2026-10-05T17:00:00Z" },

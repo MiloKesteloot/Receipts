@@ -3,24 +3,22 @@
  * claims on screen, updates them right away when an item is tapped, and undoes
  * just that item's change if the request fails.
  *
+ * After a rollback on the real path, the claims are loaded again. A request
+ * can save on the server but lose its response, and the rollback alone would
+ * then show the wrong state until the next load.
+ *
+ * `groupId` and `userId` may be undefined while the screen is still loading
+ * the receipt or the session. Nothing loads and `toggle` does nothing until
+ * both are known.
+ *
  * ============================== PLACEHOLDERS ==============================
- * 1. `USE_MOCK` picks mock or real claims. The real paths in `claims.ts` aren't
- *    written, so every request fails with an error when it's off. This hook
- *    shouldn't need changes when they are.
- * 2. `userId` is also passed on as `mockUserId`, so the call site can switch
- *    from a mock user to the signed-in user without changing this hook. Real
- *    requests will ignore it and use the session's user on the server.
+ * 1. `USE_MOCK` picks mock or real claims.
+ * 2. `userId` is also passed on as `mockUserId` for mock mode. Real requests
+ *    ignore it and use the session's user on the server.
  * 3. Claims load when the screen opens, and there's no live updating. Other
  *    people's claims appear the next time they load. Revisit if the team wants
  *    Realtime.
  * ==========================================================================
- *
- * TODO(US 2.3 Task 1): after a rollback on the real path, refetch the claims.
- * A request can save on the server but lose its response, and the rollback
- * would then show the wrong state until the next load.
- *
- * TODO(US 2.3): when switching to `useAuth`, don't use `?? ""` for `userId`.
- * Make it optional and have `toggle` do nothing while it's undefined.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -104,16 +102,21 @@ function failureMessage(result: Exclude<ClaimActionResult, { status: "ok" }>): s
 }
 
 /**
+ * Total when there is no user yet.
+ */
+const NO_TOTAL: MyTotal = { totalCents: 0, claimedCount: 0 };
+
+/**
  * Tracks a receipt's claims and lets the user claim and unclaim its items.
- * @param items The receipt's items
- * @param groupId The group the receipt belongs to
- * @param userId The current user (PLACEHOLDER #2)
+ * @param items The receipt's items. Memoize them: a new set of ids reloads.
+ * @param groupId The group the receipt belongs to, or undefined while unknown
+ * @param userId The current user (PLACEHOLDER #2), or undefined while unknown
  * @returns The claims, a toggle function, and everything derived from them
  */
 export function useClaims(
   items: ClaimableItem[],
-  groupId: string,
-  userId: string
+  groupId: string | undefined,
+  userId: string | undefined
 ): UseClaimsResult {
   const [claims, setClaims] = useState<ItemClaim[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,16 +175,20 @@ export function useClaims(
     setLoading(true);
   }, [groupId, userId]);
 
-  useEffect(() => {
-    latestLoadRef.current += 1;
-    const loadId = latestLoadRef.current;
-    // Requests still in flight are newer than anything this load returns.
-    tappedRef.current = new Set(inFlightRef.current);
+  /**
+   * Loads the claims and merges them in, keeping any newer taps.
+   * @param keepError True to leave the current error alone if this fails
+   *   (used by the refetch after a rollback, whose error is the useful one)
+   */
+  const load = useCallback(
+    async (keepError: boolean): Promise<void> => {
+      if (groupId === undefined || userId === undefined) return;
 
-    /**
-     * Loads the claims and merges them in, keeping any newer taps.
-     */
-    const load = async (): Promise<void> => {
+      latestLoadRef.current += 1;
+      const loadId = latestLoadRef.current;
+      // Requests still in flight are newer than anything this load returns.
+      tappedRef.current = new Set(inFlightRef.current);
+
       const itemIds = JSON.parse(itemIdsKey) as string[];
       const options = { useMock: USE_MOCK, mockUserId: userId };
       let result: Awaited<ReturnType<typeof getClaims>>;
@@ -199,17 +206,21 @@ export function useClaims(
           ...loaded.filter((claim) => !tapped.has(claim.itemId)),
           ...current.filter((claim) => tapped.has(claim.itemId)),
         ]);
-      } else {
+      } else if (!keepError) {
         setError(failureMessage(result));
       }
       setLoading(false);
-    };
+    },
+    [groupId, userId, itemIdsKey, updateClaims]
+  );
 
-    load();
-  }, [groupId, userId, itemIdsKey, updateClaims]);
+  useEffect(() => {
+    load(false);
+  }, [load]);
 
   const toggle = useCallback(
     async (itemId: string): Promise<void> => {
+      if (groupId === undefined || userId === undefined) return;
       // A ref changes immediately, so this also stops a fast double tap.
       if (inFlightRef.current.has(itemId)) return;
 
@@ -245,8 +256,12 @@ export function useClaims(
           : withoutClaim(current, itemId, userId)
       );
       setError(failureMessage(result));
+
+      // The request may have reached the server even though it failed here,
+      // so load the server's view. Mock data has no such gap.
+      if (!USE_MOCK) await load(true);
     },
-    [groupId, userId, setItemInFlight, updateClaims]
+    [groupId, userId, setItemInFlight, updateClaims, load]
   );
 
   const sharesByItem = useMemo(
@@ -257,7 +272,7 @@ export function useClaims(
     [items, claims]
   );
   const myTotal = useMemo(
-    () => getMyTotal(items, claims, userId),
+    () => (userId === undefined ? NO_TOTAL : getMyTotal(items, claims, userId)),
     [items, claims, userId]
   );
 

@@ -564,17 +564,41 @@ create policy "Members view claims"
     )
   );
 
+-- Only members of the receipt's group can claim or unclaim (US 2.3). Same as
+-- supabase/migrations/20261111_item_claims_member_only.sql. The check joins
+-- from item_id and doesn't trust item_claims.receipt_id.
 drop policy if exists "Users insert own claim" on public.item_claims;
 create policy "Users insert own claim"
   on public.item_claims for insert
   to authenticated
-  with check (user_id = auth.uid());
+  with check (
+    user_id = auth.uid()
+    -- Members claim as themselves, never under a guest name.
+    and guest_name is null
+    and exists (
+      select 1
+      from public.receipt_items i
+      join public.receipts r on r.id = i.receipt_id
+      where i.id = item_claims.item_id
+        and (item_claims.receipt_id is null or item_claims.receipt_id = i.receipt_id)
+        and public.is_group_member(r.group_id)
+    )
+  );
 
 drop policy if exists "Users delete own claim" on public.item_claims;
 create policy "Users delete own claim"
   on public.item_claims for delete
   to authenticated
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    and exists (
+      select 1
+      from public.receipt_items i
+      join public.receipts r on r.id = i.receipt_id
+      where i.id = item_claims.item_id
+        and public.is_group_member(r.group_id)
+    )
+  );
 
 drop policy if exists "Public read claims with valid guest token" on public.item_claims;
 create policy "Public read claims with valid guest token"

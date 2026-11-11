@@ -318,6 +318,58 @@ describe("useClaims", () => {
     expect(result.current.inFlightItemIds.size).toBe(0);
   });
 
+  it("does nothing while the user is unknown, then loads once known", async () => {
+    const { result, rerender } = await renderHook(
+      ({ userId }: { userId: string | undefined }) =>
+        useClaims(ITEMS, GROUP_ID, userId),
+      { initialProps: { userId: undefined as string | undefined } }
+    );
+    await act(() => result.current.toggle("milk"));
+
+    expect(mockGetClaims).not.toHaveBeenCalled();
+    expect(mockClaim).not.toHaveBeenCalled();
+    expect(result.current.claims).toEqual([]);
+    expect(result.current.myTotal).toEqual({ totalCents: 0, claimedCount: 0 });
+
+    await rerender({ userId: USER_ID });
+    await act(async () => {});
+    expect(mockGetClaims).toHaveBeenCalledTimes(1);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("does nothing while the group is unknown", async () => {
+    const { result } = await renderHook(() => useClaims(ITEMS, undefined, USER_ID));
+    await act(() => result.current.toggle("milk"));
+
+    expect(mockGetClaims).not.toHaveBeenCalled();
+    expect(mockClaim).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
+  });
+
+  it("counts a guest as a sharer but leaves their claim alone", async () => {
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- database column names
+    mockItemClaims.push({ item_id: "milk", guest_name: "Casey" });
+    const result = await renderClaims();
+
+    await act(() => result.current.toggle("milk"));
+    expect(result.current.sharesByItem.milk.isShared).toBe(true);
+    expect(result.current.myTotal.totalCents).toBe(250);
+
+    await act(() => result.current.toggle("milk"));
+    expect(result.current.claims).toEqual([
+      { itemId: "milk", userId: "guest:casey", guestName: "Casey" },
+    ]);
+  });
+
+  it("doesn't refetch after a rollback in mock mode", async () => {
+    const result = await renderClaims();
+    mockClaim.mockResolvedValueOnce(FAILED);
+
+    await act(() => result.current.toggle("milk"));
+
+    expect(mockGetClaims).toHaveBeenCalledTimes(1); // just the first load
+  });
+
   it("shows the forbidden message when loading is forbidden", async () => {
     mockGetClaims.mockResolvedValueOnce({ status: "forbidden" });
 
