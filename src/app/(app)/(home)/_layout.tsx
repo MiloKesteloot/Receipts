@@ -21,6 +21,14 @@ export default function HomeLayout(): JSX.Element {
         name="receipts/[id]"
         options={{ title: "Receipt", headerBackTitle: "Group" }}
       />
+      <Stack.Screen
+        name="remove-members/index"
+        options={{ title: "Remove members", headerBackTitle: "Group" }}
+      />
+      <Stack.Screen
+        name="remove-members/[groupId]"
+        options={{ title: "Select members", headerBackTitle: "Groups" }}
+      />
     </Stack>
   );
 }

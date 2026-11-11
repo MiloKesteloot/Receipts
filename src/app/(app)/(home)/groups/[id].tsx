@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +16,10 @@ import {
 import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
+import { useAuth } from "@/lib/auth-provider";
+import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
+import { isGroupOwner } from "@/lib/group-members";
 import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
@@ -100,9 +104,16 @@ export default function GroupScreen(): JSX.Element {
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
   const [scanNotes, setScanNotes] = useState<string[]>([]);
   const [scanSession, setScanSession] = useState(0);
+  const { session } = useAuth();
+  // Mock data only knows the placeholder user (see create-group.ts).
+  const currentUserId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
+  const [refreshing, setRefreshing] = useState(false);
+  // True once a load succeeded, so later refreshes keep the page on screen.
+  const hasDetailRef = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (pull = false) => {
+    if (pull) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     setForbidden(false);
 
@@ -111,20 +122,58 @@ export default function GroupScreen(): JSX.Element {
       client: supabase,
     });
 
-    if (result.status === "ok") setDetail(result.detail);
-    else if (result.status === "forbidden") {
+    if (result.status === "ok") {
+      hasDetailRef.current = true;
+      // Copy so in-place mock edits (e.g. a member removed) re-render.
+      setDetail({ ...result.detail, members: [...result.detail.members] });
+    } else if (result.status === "forbidden") {
+      // e.g. the owner removed this user (US 3.2).
+      hasDetailRef.current = false;
       setForbidden(true);
       setDetail(null);
+    } else if (hasDetailRef.current) {
+      setToastState({ message: result.message, type: "error" });
     } else setError(result.message);
 
     setLoading(false);
+    setRefreshing(false);
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reload on every focus so members removed elsewhere disappear (US 3.2).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
-  if (loading) {
+  // Optional live updates (US 3.2). Needs group_members in the
+  // supabase_realtime publication; focus reload and pull-to-refresh work
+  // without it.
+  useEffect(() => {
+    const client = supabase;
+    if (USE_MOCK || !client) return;
+    const channel = client
+      .channel(`group-members-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "group_members",
+          filter: `group_id=eq.${id}`,
+        },
+        () => {
+          load();
+        }
+      )
+      .subscribe();
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [id, load]);
+
+  // Full-screen loader on the first load only; refreshes keep the page.
+  if (loading && detail === null) {
     return (
       <View style={STYLES.center}>
         <ActivityIndicator color={palette.accent} />
@@ -160,7 +209,7 @@ export default function GroupScreen(): JSX.Element {
     return (
       <View style={STYLES.center}>
         <Text style={STYLES.error}>{error ?? "Group not found"}</Text>
-        <Pressable onPress={load} style={STYLES.button}>
+        <Pressable onPress={() => load()} style={STYLES.button}>
           <Text style={STYLES.buttonText}>Try again</Text>
         </Pressable>
       </View>
@@ -168,6 +217,7 @@ export default function GroupScreen(): JSX.Element {
   }
 
   const { group, members, receipts } = detail;
+  const isOwner = isGroupOwner(detail, currentUserId);
 
   /**
    * Opens the receipt entry form for this group.
@@ -287,7 +337,18 @@ export default function GroupScreen(): JSX.Element {
 
   return (
     <View style={STYLES.container}>
-      <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
+      <ScrollView
+        style={STYLES.screen}
+        contentContainerStyle={STYLES.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load(true)}
+            tintColor={palette.accent}
+            colors={[palette.accent]}
+          />
+        }
+      >
         <View style={STYLES.header}>
           <Text style={STYLES.eyebrow}>Group</Text>
           <Text style={STYLES.title}>{group.name}</Text>
@@ -296,7 +357,31 @@ export default function GroupScreen(): JSX.Element {
           </Text>
         </View>
 
-        <Text style={STYLES.sectionLabel}>Members ({members.length})</Text>
+        {isOwner ? (
+          <View style={STYLES.sectionHeaderRow}>
+            <Text style={STYLES.sectionLabelFlush}>
+              Members ({members.length})
+            </Text>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/remove-members",
+                  params: { from: group.id },
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Remove members"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Remove members</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={STYLES.sectionLabel}>Members ({members.length})</Text>
+        )}
         <View style={STYLES.card}>
           {members.map((m, i) => {
             const name = m.display_name ?? "Unknown";
@@ -431,6 +516,14 @@ export default function GroupScreen(): JSX.Element {
           visible
           onClose={() => setCameraVisible(false)}
           onPhoto={handleScanPhoto}
+        />
+      ) : null}
+      {toastState ? (
+        <Toast
+          visible={Boolean(toastState)}
+          message={toastState.message}
+          type={toastState.type}
+          onDismiss={() => setToastState(null)}
         />
       ) : null}
     </View>
