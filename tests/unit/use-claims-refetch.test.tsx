@@ -39,10 +39,10 @@ jest.mock("@/lib/claims", () => {
 });
 
 /** Mocked claim request. */
-const MOCK_CLAIM = claimItem as unknown as jest.Mock<() => Promise<ClaimActionResult>>;
+const mockClaim = claimItem as unknown as jest.Mock<() => Promise<ClaimActionResult>>;
 
 /** Mocked claims load. */
-const MOCK_GET_CLAIMS = getClaims as unknown as jest.Mock<
+const mockGetClaims = getClaims as unknown as jest.Mock<
   () => Promise<GetClaimsResult>
 >;
 
@@ -52,24 +52,24 @@ const ITEMS: ClaimableItem[] = [{ id: "milk", priceCents: 500 }];
 describe("useClaims: refetch after rollback (real path)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    MOCK_GET_CLAIMS.mockResolvedValue({ status: "ok", claims: [] });
+    mockGetClaims.mockResolvedValue({ status: "ok", claims: [] });
   });
 
   it("reloads after a failed claim and shows what the server has", async () => {
     const { result } = await renderHook(() => useClaims(ITEMS, "g1", "me"));
     await act(async () => {});
-    expect(MOCK_GET_CLAIMS).toHaveBeenCalledTimes(1);
+    expect(mockGetClaims).toHaveBeenCalledTimes(1);
 
     // The claim saved, but its response was lost.
-    MOCK_CLAIM.mockResolvedValueOnce({ status: "error", message: "Network down" });
-    MOCK_GET_CLAIMS.mockResolvedValueOnce({
+    mockClaim.mockResolvedValueOnce({ status: "error", message: "Network down" });
+    mockGetClaims.mockResolvedValueOnce({
       status: "ok",
       claims: [{ itemId: "milk", userId: "me" }],
     });
 
     await act(() => result.current.toggle("milk"));
 
-    expect(MOCK_GET_CLAIMS).toHaveBeenCalledTimes(2);
+    expect(mockGetClaims).toHaveBeenCalledTimes(2);
     expect(result.current.claims).toEqual([{ itemId: "milk", userId: "me" }]);
     expect(result.current.error).toBe("Network down");
   });
@@ -78,8 +78,8 @@ describe("useClaims: refetch after rollback (real path)", () => {
     const { result } = await renderHook(() => useClaims(ITEMS, "g1", "me"));
     await act(async () => {});
 
-    MOCK_CLAIM.mockResolvedValueOnce({ status: "forbidden" });
-    MOCK_GET_CLAIMS.mockResolvedValueOnce({ status: "error", message: "offline" });
+    mockClaim.mockResolvedValueOnce({ status: "forbidden" });
+    mockGetClaims.mockResolvedValueOnce({ status: "error", message: "offline" });
 
     await act(() => result.current.toggle("milk"));
 
@@ -90,10 +90,10 @@ describe("useClaims: refetch after rollback (real path)", () => {
   it("doesn't reload after a successful claim", async () => {
     const { result } = await renderHook(() => useClaims(ITEMS, "g1", "me"));
     await act(async () => {});
-    MOCK_CLAIM.mockResolvedValueOnce({ status: "ok" });
+    mockClaim.mockResolvedValueOnce({ status: "ok" });
 
     await act(() => result.current.toggle("milk"));
 
-    expect(MOCK_GET_CLAIMS).toHaveBeenCalledTimes(1);
+    expect(mockGetClaims).toHaveBeenCalledTimes(1);
   });
 });

@@ -16,9 +16,12 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { useLocalSearchParams } from "expo-router";
 
-import ReceiptScreen from "@/app/(app)/(home)/receipts/[id]";
+import * as receiptRoute from "@/app/(app)/(home)/receipts/[id]";
 import { claimItem, type ClaimActionResult, unclaimItem } from "@/lib/claims";
 import { INITIAL_MOCK_ITEM_CLAIMS, mockItemClaims } from "@/lib/mock";
+
+/** The receipt screen under test (the route's default export). */
+const ReceiptScreen = receiptRoute.default;
 
 jest.mock("expo-router", () => ({
   router: {
@@ -32,15 +35,11 @@ jest.mock("expo-router", () => ({
 // eslint-disable-next-line @typescript-eslint/naming-convention -- mirrors the real SUPABASE export
 jest.mock("@/lib/supabase", () => ({ SUPABASE: null, supabase: null }));
 jest.mock("@/lib/auth-provider", () => ({ useAuth: () => ({ session: null }) }));
+// Zero insets for the total bar and the real Toast, which shows its message
+// as text, so the tests can read it.
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock("@/components/toast", () => {
-  const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
-  return {
-    Toast: ({ message }: { message: string }) => <Text>{message}</Text>,
-  };
-});
 jest.mock("@/lib/claims", () => {
   const actual = jest.requireActual<typeof import("@/lib/claims")>("@/lib/claims");
   return {
@@ -51,15 +50,15 @@ jest.mock("@/lib/claims", () => {
 });
 
 /** Mocked claim request, wrapping the real mock-mode function. */
-const MOCK_CLAIM = claimItem as unknown as jest.Mock<() => Promise<ClaimActionResult>>;
+const mockClaim = claimItem as unknown as jest.Mock<() => Promise<ClaimActionResult>>;
 
 /** Mocked unclaim request, wrapping the real mock-mode function. */
-const MOCK_UNCLAIM = unclaimItem as unknown as jest.Mock<
+const mockUnclaim = unclaimItem as unknown as jest.Mock<
   () => Promise<ClaimActionResult>
 >;
 
 /** Mocked route params hook. */
-const MOCK_PARAMS = useLocalSearchParams as unknown as jest.Mock<
+const mockParams = useLocalSearchParams as unknown as jest.Mock<
   () => Record<string, string>
 >;
 
@@ -89,7 +88,7 @@ function deferred<T>() {
 describe("ReceiptScreen: claiming items (US 2.3)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    MOCK_PARAMS.mockReturnValue({ id: "r1" });
+    mockParams.mockReturnValue({ id: "r1" });
   });
 
   afterEach(() => {
@@ -117,7 +116,7 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
 
   it("tapping claims, highlights and updates the total right away", async () => {
     const request = deferred<ClaimActionResult>();
-    MOCK_CLAIM.mockReturnValueOnce(request.promise);
+    mockClaim.mockReturnValueOnce(request.promise);
     const { getByLabelText, getByText, findByText } = await renderReceipt();
 
     await fireEvent.press(getByLabelText("Claim Organic Avocados 6ct"));
@@ -141,27 +140,27 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
     await fireEvent.press(getByLabelText("Claim Organic Avocados 6ct"));
     await fireEvent.press(await findByLabelText("Unclaim Organic Avocados 6ct"));
 
-    expect(MOCK_UNCLAIM).toHaveBeenCalledTimes(1);
+    expect(mockUnclaim).toHaveBeenCalledTimes(1);
     expect(await findByLabelText("Claim Organic Avocados 6ct")).toBeTruthy();
     expect(await findByText("Tap items you bought to claim them")).toBeTruthy();
   });
 
   it("a double tap sends one request", async () => {
     const request = deferred<ClaimActionResult>();
-    MOCK_CLAIM.mockReturnValueOnce(request.promise);
+    mockClaim.mockReturnValueOnce(request.promise);
     const { getByLabelText } = await renderReceipt();
 
     await fireEvent.press(getByLabelText("Claim Organic Avocados 6ct"));
     await fireEvent.press(getByLabelText("Unclaim Organic Avocados 6ct"));
     await act(async () => request.resolve({ status: "ok" }));
 
-    expect(MOCK_CLAIM).toHaveBeenCalledTimes(1);
-    expect(MOCK_UNCLAIM).not.toHaveBeenCalled();
+    expect(mockClaim).toHaveBeenCalledTimes(1);
+    expect(mockUnclaim).not.toHaveBeenCalled();
     expect(getByLabelText("Unclaim Organic Avocados 6ct")).toBeTruthy();
   });
 
   it("a failed claim rolls back and shows a toast", async () => {
-    MOCK_CLAIM.mockResolvedValueOnce({ status: "error", message: "Network down" });
+    mockClaim.mockResolvedValueOnce({ status: "error", message: "Network down" });
     const { getByLabelText, findByText, getByText } = await renderReceipt();
 
     await fireEvent.press(getByLabelText("Claim Organic Avocados 6ct"));
@@ -172,7 +171,7 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
   });
 
   it("a non-member is rolled back with the forbidden message", async () => {
-    MOCK_CLAIM.mockResolvedValueOnce({ status: "forbidden" });
+    mockClaim.mockResolvedValueOnce({ status: "forbidden" });
     const { getByLabelText, findByText } = await renderReceipt();
 
     await fireEvent.press(getByLabelText("Claim Organic Avocados 6ct"));

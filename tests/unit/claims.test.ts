@@ -377,6 +377,7 @@ function fakeClient(replies: {
   userId?: string | null;
   insertError?: DbError;
   deleteError?: DbError;
+  /* eslint-disable-next-line @typescript-eslint/naming-convention -- database column names */
   rows?: { item_id: string; user_id: string | null; guest_name: string | null }[];
 }) {
   const calls: string[] = [];
@@ -477,9 +478,11 @@ describe("US 2.3 Task 6: real paths with a fake client", () => {
   test("getClaims returns member and guest claims, keyed for splitting", async () => {
     const { client, calls } = fakeClient({
       rows: [
+        /* eslint-disable @typescript-eslint/naming-convention -- database column names */
         { item_id: ITEM_ID, user_id: "u1", guest_name: null },
         { item_id: ITEM_ID, user_id: null, guest_name: " Casey " },
         { item_id: ITEM_ID, user_id: null, guest_name: null },
+        /* eslint-enable @typescript-eslint/naming-convention */
       ],
     });
     assert.deepEqual(await getClaims(GROUP_ID, [ITEM_ID], { useMock: false, client }), {
@@ -572,12 +575,14 @@ describe("US 2.3: prices are validated before claiming", () => {
   test("whole non-negative cents pass, anything else is left out", () => {
     assert.deepEqual(
       toClaimableItems([
+        /* eslint-disable @typescript-eslint/naming-convention -- database column names */
         { id: "a", amount_cents: 500 },
         { id: "b", amount_cents: "250" },
         { id: "c", amount_cents: 1.5 },
         { id: "d", amount_cents: -1 },
         { id: "e", amount_cents: null },
         { id: "f", amount_cents: "" },
+        /* eslint-enable @typescript-eslint/naming-convention */
       ]),
       {
         items: [
