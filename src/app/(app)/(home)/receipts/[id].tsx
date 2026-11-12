@@ -20,21 +20,12 @@ import { ClaimantBadge, type ClaimantRole } from "@/components/claimant-badge";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { isGuestClaimKey, toClaimableItems, type ItemShares } from "@/lib/claims";
-// TODO(remove-mock): Remove MOCK_CURRENT_USER_ID once offline mock mode is deleted.
-import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
 import {
   createGuestClaimLink,
   createGuestClaimToken,
   formatClaimUrl,
 } from "@/lib/guest-claim";
-// TODO(remove-mock): Remove `@/lib/mock` imports once offline mock mode is deleted.
-import {
-  mockGroupDetails,
-  mockGuestTokens,
-  mockReceiptItems,
-  USE_MOCK,
-} from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { SUPABASE } from "@/lib/supabase";
 import { useClaims } from "@/lib/use-claims";
@@ -84,27 +75,8 @@ function formatCents(cents: number): string {
  * @returns The receipt, its group and names, or an error message
  */
 async function loadMemberReceipt(id: string, token: string): Promise<LoadResult> {
-  // TODO(remove-mock): Delete `if (USE_MOCK || !SUPABASE)` mock block once offline mock mode is removed.
-  if (USE_MOCK || !SUPABASE) {
-    const group = Object.values(mockGroupDetails).find((g) =>
-      g.receipts.some((r) => r.id === id)
-    );
-    const match = group?.receipts.find((r) => r.id === id);
-    if (!group && !token) return { status: "error", message: "Receipt not found." };
-
-    return {
-      status: "ok",
-      receipt: {
-        token,
-        title: match?.title ?? "Receipt",
-        total_cents: match?.total_cents ?? 0,
-        items: mockReceiptItems[id] ?? [],
-      },
-      groupId: group?.group.id,
-      memberNames: Object.fromEntries(
-        (group?.members ?? []).map((m) => [m.user_id, m.display_name ?? "Member"])
-      ),
-    };
+  if (!SUPABASE) {
+    return { status: "error", message: "Supabase client not initialized" };
   }
 
   const { data: rRow, error: rError } = await SUPABASE
@@ -127,7 +99,6 @@ async function loadMemberReceipt(id: string, token: string): Promise<LoadResult>
   // has a name. A failure here only costs the names.
   const groupId = String(rRow.group_id);
   const group = await loadGroupDetail(groupId, {
-    useMock: false,
     client: SUPABASE,
   });
   const memberNames =
@@ -163,9 +134,7 @@ async function loadMemberReceipt(id: string, token: string): Promise<LoadResult>
 export default function ReceiptScreen(): JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
-  // Mock data only knows the placeholder user (see create-group.ts).
-  // TODO(remove-mock): Replace with `const userId = session?.user.id;` once mock mode is removed.
-  const userId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
+  const userId = session?.user.id;
   const insets = useSafeAreaInsets();
   // Floating bottom tab bubble height (~78px) + its safe-area margin + gap.
   const floatingTabOffset = Math.max(insets.bottom, 12) + 88;
@@ -191,11 +160,7 @@ export default function ReceiptScreen(): JSX.Element {
     // 1. Try to obtain or create a guest claim token for sharing
     let token: string | null = null;
     try {
-      // TODO(remove-mock): Remove mockGuestTokens lookup once offline mock mode is deleted.
-      token = mockGuestTokens.find((t) => t.receipt_id === id)?.token ?? null;
-      if (!token) {
-        token = await createGuestClaimToken(id);
-      }
+      token = await createGuestClaimToken(id);
     } catch {
       // Guest token generation is optional for viewing the receipt in-app
     }

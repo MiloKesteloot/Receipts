@@ -12,9 +12,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Alert } from "react-native";
 
 import GroupScreen from "@/app/(app)/(home)/groups/[id]";
-import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
 import { deleteGroup, leaveGroup, renameGroup } from "@/lib/groups";
+
+/** Test current user ID. */
+const TEST_CURRENT_USER_ID = "current-user";
 
 jest.mock("expo-router", () => ({
   router: {
@@ -43,7 +45,9 @@ jest.mock("@/components/toast", () => {
     Toast: ({ message }: { message: string }) => <Text>{message}</Text>,
   };
 });
-jest.mock("@/lib/auth-provider", () => ({ useAuth: () => ({ session: null }) }));
+jest.mock("@/lib/auth-provider", () => ({
+  useAuth: () => ({ session: { user: { id: "current-user" } } }),
+}));
 
 /**
  * A mocked async function that takes any arguments.
@@ -92,13 +96,13 @@ const MOCK_ROUTER = router as unknown as {
  * @returns Group detail for the mocked loader
  */
 function detailWithRole(role: "owner" | "member" | null): unknown {
-  const owner = role === "owner" ? MOCK_CURRENT_USER_ID : "u1";
+  const owner = role === "owner" ? TEST_CURRENT_USER_ID : "u1";
   const members = [
     { user_id: owner, display_name: "Owner", role: "owner", joined_at: "2026-10-01T12:00:00Z" },
   ];
   if (role === "member") {
     members.push({
-      user_id: MOCK_CURRENT_USER_ID,
+      user_id: TEST_CURRENT_USER_ID,
       display_name: "You",
       role: "member",
       joined_at: "2026-10-02T12:00:00Z",
@@ -189,7 +193,7 @@ describe("GroupScreen: Edit / Leave / Delete group", () => {
 
     await waitFor(() => expect(MOCK_ROUTER.dismissTo).toHaveBeenCalled());
     expect(alertSpy).not.toHaveBeenCalled();
-    expect(MOCK_LEAVE).toHaveBeenCalledWith("g1", MOCK_CURRENT_USER_ID);
+    expect(MOCK_LEAVE).toHaveBeenCalledWith("g1");
     expect(MOCK_ROUTER.dismissTo).toHaveBeenCalledWith({
       pathname: "/",
       params: expect.objectContaining({
@@ -219,11 +223,7 @@ describe("GroupScreen: Edit / Leave / Delete group", () => {
     await fireEvent.press(getByLabelText("Save changes"));
 
     await waitFor(() =>
-      expect(MOCK_RENAME).toHaveBeenCalledWith(
-        "g1",
-        "Winter Ski Trip",
-        MOCK_CURRENT_USER_ID
-      )
+      expect(MOCK_RENAME).toHaveBeenCalledWith("g1", "Winter Ski Trip")
     );
     expect(await findByText("Winter Ski Trip")).toBeTruthy();
     expect(await findByText("Group renamed to Winter Ski Trip")).toBeTruthy();
@@ -256,7 +256,7 @@ describe("GroupScreen: Edit / Leave / Delete group", () => {
 
     await waitFor(() => expect(MOCK_ROUTER.dismissTo).toHaveBeenCalled());
     expect(alertSpy).not.toHaveBeenCalled();
-    expect(MOCK_DELETE).toHaveBeenCalledWith("g1", MOCK_CURRENT_USER_ID);
+    expect(MOCK_DELETE).toHaveBeenCalledWith("g1");
     expect(MOCK_LEAVE).not.toHaveBeenCalled();
     expect(MOCK_ROUTER.dismissTo).toHaveBeenCalledWith({
       pathname: "/",

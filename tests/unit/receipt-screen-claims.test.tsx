@@ -1,27 +1,43 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 /**
  * User Story 2.3, Tasks 3–6: tap-to-claim on the receipt screen, the Shared
  * tag with exact per-person amounts, and the running total bar.
- *
- * Runs against the mock data for receipt r1 ("Costco run" in Apartment 402),
- * where the signed-in mock user is a member. Seed claims on r1:
- *   Paper Towels $24.99 Alex · Olive Oil $18.49 Alex + Sam ·
- *   Avocados $9.99 nobody · Rotisserie Chicken $4.99 Sam ·
- *   Sparkling Water $15.99 nobody · Spinach $9.78 Alex
  *
  * Run with:
  *   npm run test:ui -- tests/unit/receipt-screen-claims.test.tsx
  */
 
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { useLocalSearchParams } from "expo-router";
 
 import * as receiptRoute from "@/app/(app)/(home)/receipts/[id]";
-import { claimItem, type ClaimActionResult, unclaimItem } from "@/lib/claims";
-import { INITIAL_MOCK_ITEM_CLAIMS, mockItemClaims } from "@/lib/mock";
+import { claimItem, type ClaimActionResult, getClaims, type ItemClaim, unclaimItem } from "@/lib/claims";
 
 /** The receipt screen under test (the route's default export). */
 const ReceiptScreen = receiptRoute.default;
+
+/** Seed claims used across tests. */
+const SEED_CLAIMS: ItemClaim[] = [
+  { itemId: "item-r1-1", userId: "u1" },
+  { itemId: "item-r1-2", userId: "u1" },
+  { itemId: "item-r1-2", userId: "u2" },
+  { itemId: "item-r1-4", userId: "u2" },
+  { itemId: "item-r1-6", userId: "u1" },
+];
+
+/** Active claims tracked in tests. */
+let mockActiveClaims: ItemClaim[] = [];
+
+/** Mock items for receipt r1. */
+const MOCK_ITEMS = [
+  { id: "item-r1-1", receipt_id: "r1", name: "Paper Towels", amount_cents: 2499 },
+  { id: "item-r1-2", receipt_id: "r1", name: "Olive Oil 2L", amount_cents: 1849 },
+  { id: "item-r1-3", receipt_id: "r1", name: "Organic Avocados 6ct", amount_cents: 999 },
+  { id: "item-r1-4", receipt_id: "r1", name: "Rotisserie Chicken", amount_cents: 499 },
+  { id: "item-r1-5", receipt_id: "r1", name: "Sparkling Water 24pk", amount_cents: 1599 },
+  { id: "item-r1-6", receipt_id: "r1", name: "Organic Baby Spinach", amount_cents: 978 },
+];
 
 jest.mock("expo-router", () => ({
   router: {
@@ -32,30 +48,108 @@ jest.mock("expo-router", () => ({
   },
   useLocalSearchParams: jest.fn(),
 }));
-// eslint-disable-next-line @typescript-eslint/naming-convention -- mirrors the real SUPABASE export
-jest.mock("@/lib/supabase", () => ({ SUPABASE: null, supabase: null }));
-jest.mock("@/lib/auth-provider", () => ({ useAuth: () => ({ session: null }) }));
-// Zero insets for the total bar and the real Toast, which shows its message
-// as text, so the tests can read it.
+
+jest.mock("@/lib/supabase", () => {
+  const fakeClient = {
+    auth: {
+      getUser: jest.fn(async () => ({ data: { user: { id: "current-user" } } })),
+    },
+    from: jest.fn((table: string) => {
+      if (table === "receipts") {
+        return {
+          select: jest.fn(() => ({
+            eq: jest.fn(() => ({
+              single: jest.fn(async () => ({
+                data: {
+                  id: "r1",
+                  title: "Costco run",
+                  total_cents: 8423,
+                  created_at: "2026-10-05T00:00:00Z",
+                  group_id: "mock-1",
+                  status: "submitted",
+                },
+                error: null,
+              })),
+            })),
+          })),
+        };
+      }
+      if (table === "receipt_items") {
+        return {
+          select: jest.fn(() => ({
+            eq: jest.fn(() => ({
+              order: jest.fn(async () => ({
+                data: MOCK_ITEMS,
+                error: null,
+              })),
+            })),
+          })),
+        };
+      }
+      return {};
+    }),
+  };
+  return { SUPABASE: fakeClient, supabase: fakeClient };
+});
+
+jest.mock("@/lib/auth-provider", () => ({
+  useAuth: () => ({ session: { user: { id: "current-user" } } }),
+}));
+
+jest.mock("@/lib/group-data", () => ({
+  loadGroupDetail: jest.fn(async () => ({
+    status: "ok",
+    detail: {
+      group: { id: "mock-1", name: "Apartment 402", invite_code: "APT402" },
+      members: [
+        { user_id: "u1", display_name: "Alex", role: "owner" },
+        { user_id: "u2", display_name: "Sam", role: "member" },
+        { user_id: "current-user", display_name: "You", role: "member" },
+      ],
+      receipts: [],
+    },
+  })),
+}));
+
+jest.mock("@/lib/guest-claim", () => {
+  const actual = jest.requireActual<typeof import("@/lib/guest-claim")>("@/lib/guest-claim");
+  return {
+    ...actual,
+    createGuestClaimToken: jest.fn(async () => "mock-claim-r1-demo"),
+    formatClaimUrl: jest.fn((token: string) => `https://receipts.app/claim/${token}`),
+  };
+});
+
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+
 jest.mock("@/lib/claims", () => {
   const actual = jest.requireActual<typeof import("@/lib/claims")>("@/lib/claims");
   return {
     ...actual,
-    claimItem: jest.fn(actual.claimItem),
-    unclaimItem: jest.fn(actual.unclaimItem),
+    claimItem: jest.fn(async (_gid: string, itemId: string) => {
+      mockActiveClaims.push({ itemId, userId: "current-user" });
+      return { status: "ok" as const };
+    }),
+    unclaimItem: jest.fn(async (_gid: string, itemId: string) => {
+      mockActiveClaims = mockActiveClaims.filter(
+        (c) => !(c.itemId === itemId && c.userId === "current-user")
+      );
+      return { status: "ok" as const };
+    }),
+    getClaims: jest.fn(async () => ({
+      status: "ok" as const,
+      claims: [...mockActiveClaims],
+    })),
   };
 });
 
-/** Mocked claim request, wrapping the real mock-mode function. */
-const mockClaim = claimItem as unknown as jest.Mock<() => Promise<ClaimActionResult>>;
+/** Mocked claim request. */
+const mockClaim = claimItem as unknown as jest.Mock<typeof claimItem>;
 
-/** Mocked unclaim request, wrapping the real mock-mode function. */
-const mockUnclaim = unclaimItem as unknown as jest.Mock<
-  () => Promise<ClaimActionResult>
->;
+/** Mocked unclaim request. */
+const mockUnclaim = unclaimItem as unknown as jest.Mock<typeof unclaimItem>;
 
 /** Mocked route params hook. */
 const mockParams = useLocalSearchParams as unknown as jest.Mock<
@@ -88,12 +182,22 @@ function deferred<T>() {
 describe("ReceiptScreen: claiming items (US 2.3)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockActiveClaims = [...SEED_CLAIMS];
     mockParams.mockReturnValue({ id: "r1" });
-  });
-
-  afterEach(() => {
-    mockItemClaims.length = 0;
-    mockItemClaims.push(...INITIAL_MOCK_ITEM_CLAIMS.map((c) => ({ ...c })));
+    mockClaim.mockImplementation(async (_gid: string, itemId: string) => {
+      mockActiveClaims.push({ itemId, userId: "current-user" });
+      return { status: "ok" };
+    });
+    mockUnclaim.mockImplementation(async (_gid: string, itemId: string) => {
+      mockActiveClaims = mockActiveClaims.filter(
+        (c) => !(c.itemId === itemId && c.userId === "current-user")
+      );
+      return { status: "ok" };
+    });
+    (getClaims as unknown as jest.Mock).mockImplementation(async () => ({
+      status: "ok",
+      claims: [...mockActiveClaims],
+    }));
   });
 
   it("shows the real items with who claimed them, and a prompt in the total bar", async () => {
@@ -198,8 +302,7 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
   });
 
   it("a guest's claim counts in the split and in my exact share", async () => {
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- database column names
-    mockItemClaims.push({ id: "g1", item_id: "item-r1-3", receipt_id: "r1", guest_name: "Casey" });
+    mockActiveClaims.push({ itemId: "item-r1-3", userId: "guest:casey", guestName: "Casey" });
     const { getByLabelText, getByText, findByText, findByLabelText } =
       await renderReceipt();
     expect(getByText("Casey (Guest)")).toBeTruthy();
