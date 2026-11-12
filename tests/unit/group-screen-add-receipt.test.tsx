@@ -6,7 +6,6 @@ import { useLocalSearchParams } from "expo-router";
 
 import GroupScreen from "@/app/(app)/(home)/groups/[id]";
 import { loadGroupDetail } from "@/lib/group-data";
-import { mockGroupDetails } from "@/lib/mock";
 
 jest.mock("expo-router", () => ({
   router: {
@@ -21,9 +20,47 @@ jest.mock("expo-router", () => ({
     jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
 }));
 jest.mock("@/lib/group-data", () => ({ loadGroupDetail: jest.fn() }));
-jest.mock("@/lib/supabase", () => ({ supabase: {} }));
+jest.mock("@/lib/supabase", () => ({
+  supabase: {
+    channel: jest.fn(() => ({
+      on: jest.fn().mockReturnThis(),
+      subscribe: jest.fn().mockReturnThis(),
+    })),
+    removeChannel: jest.fn(),
+  },
+}));
 jest.mock("@/components/toast", () => ({ Toast: () => null }));
-jest.mock("@/lib/auth-provider", () => ({ useAuth: () => ({ session: null }) }));
+jest.mock("@/lib/auth-provider", () => ({ useAuth: () => ({ session: { user: { id: "u1" } } }) }));
+jest.mock("@/lib/receipts", () => {
+  let nextId = 1;
+  return {
+    saveReceipt: jest.fn(
+      async (
+        _groupId: string,
+        draft: { store?: string; items?: { price: string }[] },
+        status: string,
+        options?: { existingId?: string }
+      ) => {
+        const total_cents = (draft.items || []).reduce(
+          (sum: number, it: { price: string }) => sum + Math.round((parseFloat(it.price) || 0) * 100),
+          0
+        );
+        return {
+          status: "ok" as const,
+          receipt: {
+            id: options?.existingId ?? `mock-r-${nextId++}`,
+            title: draft.store ?? "Receipt",
+            total_cents,
+            status,
+            created_at: new Date().toISOString(),
+            draft: status === "draft" ? draft : undefined,
+          },
+        };
+      }
+    ),
+    deleteReceipt: jest.fn(async () => ({ status: "ok" as const })),
+  };
+});
 
 /**
  * Mocked group loader, typed against the real function.
@@ -42,12 +79,59 @@ const MOCK_PARAMS = useLocalSearchParams as unknown as jest.Mock<
 /**
  * Apartment 402: has receipts.
  */
-const GROUP_WITH_RECEIPTS = mockGroupDetails["mock-1"];
+const GROUP_WITH_RECEIPTS = {
+  group: {
+    id: "g1",
+    name: "Apartment 402",
+    invite_code: "APT402XY",
+    created_by: "u1",
+    created_at: "2026-10-01T00:00:00Z",
+  },
+  members: [
+    {
+      user_id: "u1",
+      display_name: "Alex",
+      role: "owner" as const,
+      joined_at: "2026-10-01T00:00:00Z",
+    },
+  ],
+  receipts: [
+    {
+      id: "r1",
+      title: "Costco run",
+      total_cents: 8423,
+      created_at: "2026-10-05T00:00:00Z",
+    },
+    {
+      id: "r2",
+      title: "Internet bill",
+      total_cents: 6000,
+      created_at: "2026-10-06T00:00:00Z",
+    },
+  ],
+};
 
 /**
  * Road Trip 2026: no receipts (empty state).
  */
-const GROUP_WITHOUT_RECEIPTS = mockGroupDetails["mock-2"];
+const GROUP_WITHOUT_RECEIPTS = {
+  group: {
+    id: "g2",
+    name: "Road Trip 2026",
+    invite_code: "ROADTRIP",
+    created_by: "u2",
+    created_at: "2026-10-02T00:00:00Z",
+  },
+  members: [
+    {
+      user_id: "u2",
+      display_name: "Sam",
+      role: "owner" as const,
+      joined_at: "2026-10-02T00:00:00Z",
+    },
+  ],
+  receipts: [],
+};
 
 describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
   beforeEach(() => {

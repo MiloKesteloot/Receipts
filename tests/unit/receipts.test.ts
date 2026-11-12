@@ -1,18 +1,16 @@
+/// <reference types="node" />
+/* eslint-disable @typescript-eslint/naming-convention */
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 
-import { mockGroupDetails } from "@/lib/mock";
 import type { ReceiptDraft } from "@/lib/receipt-form";
 import { deleteReceipt, saveReceipt } from "@/lib/receipts";
+import type { SUPABASE } from "@/lib/supabase";
 
-/**
- * Group used for saving. It starts with no receipts.
- */
-const GROUP_ID = "mock-3";
+/** Group ID used in tests. */
+const GROUP_ID = "group-1";
 
-/**
- * A draft that passes every check.
- */
+/** Valid draft fixture. */
 const VALID_DRAFT: ReceiptDraft = {
   store: "Corner Market",
   items: [{ id: "a", name: "Milk", price: "5.00" }],
@@ -20,179 +18,254 @@ const VALID_DRAFT: ReceiptDraft = {
   tip: "",
 };
 
-describe("saveReceipt (US 2.1 Task 3)", () => {
-  afterEach(() => {
-    mockGroupDetails[GROUP_ID].receipts.length = 0;
-  });
+/** Options for creating fake receipts client. */
+type FakeReceiptsClientOptions = {
+  userId?: string | null;
+  insertReceiptResult?: { data: unknown; error: unknown };
+  updateReceiptResult?: { data: unknown; error: unknown };
+  deleteReceiptResult?: { error: unknown };
+  insertItemsResult?: { error: unknown };
+};
 
-  it("submits a receipt into the group's list", async () => {
-    const result = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", {
-      useMock: true,
-    });
+/** Shape for test insert/update payloads. */
+type FakePayload = {
+  title?: string;
+  total_cents?: number;
+  status?: string;
+  draft_data?: unknown;
+  length?: number;
+  [key: string]: unknown;
+};
+
+/**
+ * Creates a fake Supabase client for testing saveReceipt and deleteReceipt.
+ * @param options Responses for insert, update, and delete calls
+ * @returns Fake client and call records
+ */
+function createFakeReceiptsClient(options?: FakeReceiptsClientOptions) {
+  const insertCalls: { table: string; payload: FakePayload }[] = [];
+  const updateCalls: { table: string; payload: FakePayload; eqId: string }[] = [];
+  const deleteCalls: { table: string; filters: Record<string, string> }[] = [];
+
+  const client = {
+    auth: {
+      getUser() {
+        return Promise.resolve({
+          data: {
+            user: options?.userId === null ? null : { id: options?.userId ?? "u1" },
+          },
+        });
+      },
+    },
+    from(table: string) {
+      return {
+        insert(payload: FakePayload) {
+          insertCalls.push({ table, payload });
+          return {
+            select() {
+              return {
+                single() {
+                  if (options?.insertReceiptResult) {
+                    return Promise.resolve(options.insertReceiptResult);
+                  }
+                  const singlePayload = Array.isArray(payload) ? payload[0] : payload;
+                  return Promise.resolve({
+                    data: {
+                      id: "new-r1",
+                      title: singlePayload?.title,
+                      total_cents: singlePayload?.total_cents,
+                      status: singlePayload?.status,
+                      created_at: "2026-10-01T00:00:00Z",
+                      draft_data: singlePayload?.draft_data,
+                    },
+                    error: null,
+                  });
+                },
+              };
+            },
+            then(resolve: (value: unknown) => void) {
+              return Promise.resolve(
+                options?.insertItemsResult ?? { error: null }
+              ).then(resolve);
+            },
+          };
+        },
+        update(payload: FakePayload) {
+          return {
+            eq(_c1: string, v1: string) {
+              return {
+                eq() {
+                  return {
+                    select() {
+                      return {
+                        single() {
+                          updateCalls.push({ table, payload, eqId: v1 });
+                          if (options?.updateReceiptResult) {
+                            return Promise.resolve(options.updateReceiptResult);
+                          }
+                          return Promise.resolve({
+                            data: {
+                              id: v1,
+                              title: payload.title,
+                              total_cents: payload.total_cents,
+                              status: payload.status,
+                              created_at: "2026-10-01T00:00:00Z",
+                              draft_data: payload.draft_data,
+                            },
+                            error: null,
+                          });
+                        },
+                      };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+        delete() {
+          const filters: Record<string, string> = {};
+          const chain = {
+            eq(col: string, val: string) {
+              filters[col] = val;
+              return chain;
+            },
+            then(resolve: (value: unknown) => void) {
+              deleteCalls.push({ table, filters });
+              return Promise.resolve(
+                options?.deleteReceiptResult ?? { error: null }
+              ).then(resolve);
+            },
+          };
+          return chain;
+        },
+      };
+    },
+  } as unknown as typeof SUPABASE;
+
+  return { client, insertCalls, updateCalls, deleteCalls };
+}
+
+describe("saveReceipt (US 2.1 Task 3) with Supabase mock", () => {
+  it("submits a receipt and inserts receipt and item records", async () => {
+    const { client, insertCalls } = createFakeReceiptsClient();
+    const result = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { client });
 
     assert.equal(result.status, "ok");
     if (result.status !== "ok") return;
     assert.equal(result.receipt.status, "submitted");
     assert.equal(result.receipt.title, "Corner Market");
     assert.equal(result.receipt.total_cents, 550);
-    assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 1);
+
+    assert.equal(insertCalls.length, 2);
+    assert.equal(insertCalls[0].table, "receipts");
+    assert.equal(insertCalls[0].payload.title, "Corner Market");
+    assert.equal(insertCalls[1].table, "receipt_items");
+    assert.equal(insertCalls[1].payload.length, 1);
   });
 
-  it("saves a draft and puts the newest receipt first", async () => {
-    await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { useMock: true });
+  it("saves a draft and records draft_data", async () => {
+    const { client, insertCalls } = createFakeReceiptsClient();
     const result = await saveReceipt(
       GROUP_ID,
       { ...VALID_DRAFT, store: "Draft Store" },
       "draft",
-      { useMock: true }
+      { client }
     );
 
     assert.equal(result.status, "ok");
-    const receipts = mockGroupDetails[GROUP_ID].receipts;
-    assert.equal(receipts.length, 2);
-    assert.equal(receipts[0].title, "Draft Store");
-    assert.equal(receipts[0].status, "draft");
+    if (result.status !== "ok") return;
+    assert.equal(result.receipt.status, "draft");
+    assert.equal(result.receipt.title, "Draft Store");
+    assert.equal(insertCalls[0].payload.status, "draft");
+    assert.ok(insertCalls[0].payload.draft_data);
   });
 
-  it("gives each receipt a unique id", async () => {
-    await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { useMock: true });
-    await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { useMock: true });
-
-    const ids = mockGroupDetails[GROUP_ID].receipts.map((r) => r.id);
-    assert.equal(new Set(ids).size, 2);
-  });
-
-  it("returns the validation message and saves nothing", async () => {
+  it("returns the validation message and saves nothing on invalid input", async () => {
+    const { client, insertCalls } = createFakeReceiptsClient();
     const result = await saveReceipt(
       GROUP_ID,
       { ...VALID_DRAFT, store: "" },
       "submitted",
-      { useMock: true }
+      { client }
     );
 
     assert.deepEqual(result, { status: "error", message: "Enter a store name." });
-    assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 0);
+    assert.equal(insertCalls.length, 0);
   });
 
-  it("returns an error for an unknown group", async () => {
-    const result = await saveReceipt("nope", VALID_DRAFT, "submitted", {
-      useMock: true,
-    });
+  it("returns error when not signed in", async () => {
+    const { client } = createFakeReceiptsClient({ userId: null });
+    const result = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { client });
 
-    assert.deepEqual(result, { status: "error", message: "Group not found." });
+    assert.equal(result.status, "error");
+    if (result.status === "error") {
+      assert.match(result.message, /sign in/i);
+    }
   });
 
-  it("returns an error and saves nothing when mock mode is off", async () => {
+  it("returns error when Supabase client is unconfigured", async () => {
     const result = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", {
-      useMock: false,
+      client: null as unknown as typeof SUPABASE,
     });
 
     assert.equal(result.status, "error");
-    assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 0);
+    if (result.status === "error") {
+      assert.match(result.message, /not configured/i);
+    }
   });
 
-    it("keeps the entered fields on a saved draft", async () => {
-    const result = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
-      useMock: true,
-    });
-
-    assert.equal(result.status, "ok");
-    if (result.status !== "ok") return;
-    assert.deepEqual(result.receipt.draft, VALID_DRAFT);
-  });
-
-  it("updates an edited draft in place and keeps its position", async () => {
-    await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { useMock: true });
-    const saved = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
-      useMock: true,
-    });
-    await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { useMock: true });
-    if (saved.status !== "ok") throw new Error("setup failed");
-
+  it("updates an existing draft when existingId is provided", async () => {
+    const { client, updateCalls } = createFakeReceiptsClient();
     const result = await saveReceipt(
       GROUP_ID,
-      { ...VALID_DRAFT, store: "Renamed" },
+      { ...VALID_DRAFT, store: "Updated Store" },
       "submitted",
-      { useMock: true, existingId: saved.receipt.id }
+      { client, existingId: "existing-draft-1" }
     );
 
     assert.equal(result.status, "ok");
-    const receipts = mockGroupDetails[GROUP_ID].receipts;
-    assert.equal(receipts.length, 3);
-    assert.equal(receipts[1].id, saved.receipt.id);
-    assert.equal(receipts[1].title, "Renamed");
-    assert.equal(receipts[1].status, "submitted");
-    assert.equal(receipts[1].created_at, saved.receipt.created_at);
-    assert.equal(receipts[1].draft, undefined);
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0].eqId, "existing-draft-1");
+    assert.equal(updateCalls[0].payload.title, "Updated Store");
   });
 
-  it("replaces the receipts array instead of changing it in place", async () => {
-    const before = mockGroupDetails[GROUP_ID].receipts;
-    await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", { useMock: true });
+  it("surfaces database error from insert", async () => {
+    const { client } = createFakeReceiptsClient({
+      insertReceiptResult: { data: null, error: { message: "DB timeout" } },
+    });
+    const result = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", { client });
 
-    assert.notEqual(mockGroupDetails[GROUP_ID].receipts, before);
-  });
-
-  it("refuses to edit a submitted receipt or an unknown id", async () => {
-    const submitted = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", {
-      useMock: true,
-    });
-    if (submitted.status !== "ok") throw new Error("setup failed");
-
-    const notDraft = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
-      useMock: true,
-      existingId: submitted.receipt.id,
-    });
-    const unknown = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
-      useMock: true,
-      existingId: "nope",
-    });
-
-    assert.deepEqual(notDraft, {
-      status: "error",
-      message: "Only drafts can be edited.",
-    });
-    assert.deepEqual(unknown, {
-      status: "error",
-      message: "Receipt not found.",
-    });
+    assert.deepEqual(result, { status: "error", message: "DB timeout" });
   });
 
   it("deletes a saved draft", async () => {
-    const saved = await saveReceipt(GROUP_ID, VALID_DRAFT, "draft", {
-      useMock: true,
-    });
-    if (saved.status !== "ok") throw new Error("setup failed");
-
-    const result = await deleteReceipt(GROUP_ID, saved.receipt.id, {
-      useMock: true,
-    });
+    const { client, deleteCalls } = createFakeReceiptsClient();
+    const result = await deleteReceipt(GROUP_ID, "draft-1", { client });
 
     assert.deepEqual(result, { status: "ok" });
-    assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 0);
+    assert.equal(deleteCalls.length, 1);
+    assert.equal(deleteCalls[0].filters.id, "draft-1");
+    assert.equal(deleteCalls[0].filters.group_id, GROUP_ID);
+    assert.equal(deleteCalls[0].filters.status, "draft");
   });
 
-  it("refuses to delete submitted receipts, unknown ids and unknown groups", async () => {
-    const submitted = await saveReceipt(GROUP_ID, VALID_DRAFT, "submitted", {
-      useMock: true,
+  it("surfaces database error on delete", async () => {
+    const { client } = createFakeReceiptsClient({
+      deleteReceiptResult: { error: { message: "Cannot delete" } },
     });
-    if (submitted.status !== "ok") throw new Error("setup failed");
+    const result = await deleteReceipt(GROUP_ID, "draft-1", { client });
 
-    const notDraft = await deleteReceipt(GROUP_ID, submitted.receipt.id, {
-      useMock: true,
-    });
-    const unknownReceipt = await deleteReceipt(GROUP_ID, "nope", {
-      useMock: true,
-    });
-    const unknownGroup = await deleteReceipt("nope", "x", { useMock: true });
-    const mockOff = await deleteReceipt(GROUP_ID, submitted.receipt.id, {
-      useMock: false,
-    });
+    assert.deepEqual(result, { status: "error", message: "Cannot delete" });
+  });
 
-    assert.equal(notDraft.status, "error");
-    assert.equal(unknownReceipt.status, "error");
-    assert.equal(unknownGroup.status, "error");
-    assert.equal(mockOff.status, "error");
-    assert.equal(mockGroupDetails[GROUP_ID].receipts.length, 1);
+  it("deleteReceipt returns error when Supabase client is unconfigured", async () => {
+    const result = await deleteReceipt(GROUP_ID, "draft-1", {
+      client: null as unknown as typeof SUPABASE,
+    });
+    assert.equal(result.status, "error");
+    if (result.status === "error") {
+      assert.match(result.message, /not configured/i);
+    }
   });
 });

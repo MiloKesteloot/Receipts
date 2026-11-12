@@ -11,11 +11,8 @@
  * the receipt or the session. Nothing loads and `toggle` does nothing until
  * both are known.
  *
- * ============================== PLACEHOLDERS ==============================
- * 1. `USE_MOCK` picks mock or real claims.
- * 2. `userId` is also passed on as `mockUserId` for mock mode. Real requests
- *    ignore it and use the session's user on the server.
- * 3. Claims load when the screen opens, and there's no live updating. Other
+ * ============================== NOTES ==============================
+ * 1. Claims load when the screen opens, and there's no live updating. Other
  *    people's claims appear the next time they load. Revisit if the team wants
  *    Realtime.
  * ==========================================================================
@@ -35,8 +32,6 @@ import {
   type MyTotal,
   unclaimItem,
 } from "@/lib/claims";
-// TODO(remove-mock): Remove USE_MOCK import once offline mock mode is deleted.
-import { USE_MOCK } from "@/lib/mock";
 
 export type UseClaimsResult = {
   claims: ItemClaim[];
@@ -191,11 +186,9 @@ export function useClaims(
       tappedRef.current = new Set(inFlightRef.current);
 
       const itemIds = JSON.parse(itemIdsKey) as string[];
-      // TODO(remove-mock): Remove `useMock` and `mockUserId` options once mock mode is deleted.
-      const options = { useMock: USE_MOCK, mockUserId: userId };
       let result: Awaited<ReturnType<typeof getClaims>>;
       try {
-        result = await getClaims(groupId, itemIds, options);
+        result = await getClaims(groupId, itemIds);
       } catch {
         result = { status: "error", message: CLAIM_FAILED_MESSAGE };
       }
@@ -239,11 +232,9 @@ export function useClaims(
       );
 
       const send = wasClaimed ? unclaimItem : claimItem;
-      // TODO(remove-mock): Remove `useMock` and `mockUserId` options once mock mode is deleted.
-      const options = { useMock: USE_MOCK, mockUserId: userId };
       let result: ClaimActionResult;
       try {
-        result = await send(groupId, itemId, options);
+        result = await send(groupId, itemId);
       } catch {
         result = { status: "error", message: CLAIM_FAILED_MESSAGE };
       }
@@ -260,10 +251,7 @@ export function useClaims(
       );
       setError(failureMessage(result));
 
-      // TODO(remove-mock): Always `await load(true);` once mock mode is removed.
-      // The request may have reached the server even though it failed here,
-      // so load the server's view. Mock data has no such gap.
-      if (!USE_MOCK) await load(true);
+      await load(true);
     },
     [groupId, userId, setItemInFlight, updateClaims, load]
   );

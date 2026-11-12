@@ -5,8 +5,6 @@ import { JSX } from "react/jsx-runtime";
 
 import { isSignedIn } from "@/lib/auth";
 import { AuthProvider, useAuth } from "@/lib/auth-provider";
-// TODO(remove-mock): Remove USE_MOCK import and replace auth bypass below with `isSignedIn(session)`.
-import { USE_MOCK } from "@/lib/mock";
 import { PALETTE as palette } from "@/lib/palette";
 
 /** Light navigation theme aligned with the app's cream-and-orange palette. */
@@ -45,10 +43,7 @@ export default function RootLayout(): JSX.Element {
  */
 function RootNavigator(): JSX.Element {
   const { session, isLoading } = useAuth();
-  // TODO(remove-mock): Replace with `const signedIn = isSignedIn(session);` once offline mock mode is removed.
-  // When USE_MOCK is true, bypass authentication for demos and offline testing.
-  // When USE_MOCK is false, enforce real sign-in via Supabase session.
-  const signedIn = USE_MOCK ? true : isSignedIn(session);
+  const signedIn = isSignedIn(session);
 
   useEffect(() => {
     if (!isLoading) hideSplash();

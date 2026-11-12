@@ -30,10 +30,6 @@ jest.mock("expo-router", () => ({
   useFocusEffect: (effect: () => void) =>
     jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
 }));
-jest.mock("@/lib/mock", () => ({
-  ...jest.requireActual<typeof import("@/lib/mock")>("@/lib/mock"),
-  USE_MOCK: false,
-}));
 jest.mock("@/lib/group-data", () => ({
   ...jest.requireActual<typeof import("@/lib/group-data")>("@/lib/group-data"),
   loadGroupDetail: jest.fn(),
