@@ -6,7 +6,7 @@
  * calls, and the mock-mode path.
  */
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 
 import { NOT_CONFIGURED, type GroupSummary } from "@/lib/group-data";
 import {
@@ -22,7 +22,6 @@ import {
   type MemberLike,
   type RpcClient,
 } from "@/lib/group-members";
-import { mockGroupDetails, type MockMember } from "@/lib/mock";
 
 type DbError = { code?: string; message: string } | null;
 type RpcReply = { data: unknown; error: DbError };
@@ -131,11 +130,10 @@ describe("removableMembers", () => {
   });
 });
 
-describe("removeGroupMembers (server mode)", () => {
+describe("removeGroupMembers", () => {
   it("calls the RPC once per user, in order, and reports all removed", async () => {
     const { client, calls } = rpcClient(() => OK);
     const r = await removeGroupMembers("g1", ["a", "b"], "o", {
-      useMock: false,
       client,
       members: MEMBERS,
     });
@@ -153,7 +151,6 @@ describe("removeGroupMembers (server mode)", () => {
         : OK
     );
     const r = await removeGroupMembers("g1", ["a", "b"], "o", {
-      useMock: false,
       client,
       members: MEMBERS,
     });
@@ -168,7 +165,6 @@ describe("removeGroupMembers (server mode)", () => {
       id === "a" ? { data: null, error: { code: "42501", message: "Not signed in" } } : OK
     );
     const r = await removeGroupMembers("g1", ["a", "b"], "o", {
-      useMock: false,
       client,
       members: MEMBERS,
     });
@@ -185,7 +181,6 @@ describe("removeGroupMembers (server mode)", () => {
       },
     };
     const r = await removeGroupMembers("g1", ["a"], "o", {
-      useMock: false,
       client,
       members: MEMBERS,
     });
@@ -199,7 +194,6 @@ describe("removeGroupMembers (server mode)", () => {
     const { client, calls } = rpcClient(() => OK);
     const members: MemberLike[] = [...MEMBERS, { user_id: "o2", role: "owner" }];
     const r = await removeGroupMembers("g1", ["o", "o2", "a", "a"], "o", {
-      useMock: false,
       client,
       members,
     });
@@ -216,7 +210,6 @@ describe("removeGroupMembers (server mode)", () => {
 
   it("missing client fails everyone with the setup message", async () => {
     const r = await removeGroupMembers("g1", ["a"], "o", {
-      useMock: false,
       client: null,
     });
     assert.deepEqual(r, {
@@ -226,58 +219,11 @@ describe("removeGroupMembers (server mode)", () => {
   });
 });
 
-describe("removeGroupMembers (mock mode)", () => {
-  /** The shared mock group the tests edit. */
-  const GROUP = mockGroupDetails["mock-1"];
-  let saved: MockMember[] = [];
-  let membersRef: MockMember[] = GROUP.members;
-
-  beforeEach(() => {
-    saved = GROUP.members.map((m) => ({ ...m }));
-    membersRef = GROUP.members;
-  });
-  afterEach(() => {
-    GROUP.members.splice(0, GROUP.members.length, ...saved);
-  });
-
-  it("the owner removes members in place in mockGroupDetails", async () => {
-    const r = await removeGroupMembers("mock-1", ["u2", "u3"], "u1", {
-      useMock: true,
-      client: null,
-    });
-    assert.deepEqual(r, { removed: ["u2", "u3"], failed: [] });
-    // The mock signed-in user is also seeded in mock-1 (US 2.3) and stays.
-    assert.deepEqual(GROUP.members.map((m) => m.user_id), ["u1", "current-user"]);
-    assert.equal(GROUP.members, membersRef, "array edited in place, not replaced");
-  });
-
-  it("a non-owner is refused and nothing changes", async () => {
-    const r = await removeGroupMembers("mock-1", ["u3"], "u2", {
-      useMock: true,
-      client: null,
-    });
-    assert.deepEqual(r, {
-      removed: [],
-      failed: [{ userId: "u3", message: NOT_OWNER_MESSAGE }],
-    });
-    assert.deepEqual(GROUP.members, saved);
-  });
-
-  it("the owner can't remove themselves", async () => {
-    const r = await removeGroupMembers("mock-1", ["u1"], "u1", {
-      useMock: true,
-      client: null,
-    });
-    assert.deepEqual(r.removed, []);
-    assert.deepEqual(GROUP.members, saved);
-  });
-});
-
 describe("loadOwnedGroups", () => {
   it("server mode queries groups created by the user, sorted by name", async () => {
     const rows = [{ id: "g1", name: "Alpha" }];
     const { client, calls } = ownedClient({ data: rows, error: null });
-    const r = await loadOwnedGroups("o", { useMock: false, client });
+    const r = await loadOwnedGroups("o", { client });
     assert.deepEqual(calls, [
       "from:groups",
       "select:id, name",
@@ -289,7 +235,7 @@ describe("loadOwnedGroups", () => {
 
   it("server error surfaces its message", async () => {
     const { client } = ownedClient({ data: null, error: { message: "boom" } });
-    assert.deepEqual(await loadOwnedGroups("o", { useMock: false, client }), {
+    assert.deepEqual(await loadOwnedGroups("o", { client }), {
       status: "error",
       message: "boom",
     });
@@ -297,18 +243,19 @@ describe("loadOwnedGroups", () => {
 
   it("no signed-in user is an error, with no query sent", async () => {
     const { client, calls } = ownedClient({ data: [], error: null });
-    assert.deepEqual(await loadOwnedGroups(undefined, { useMock: false, client }), {
+    assert.deepEqual(await loadOwnedGroups(undefined, { client }), {
       status: "error",
       message: SIGNED_OUT_MESSAGE,
     });
     assert.deepEqual(calls, []);
   });
 
-  it("mock mode lists only groups the user owns, sorted by name", async () => {
-    const r = await loadOwnedGroups("u2", { useMock: true, client: null });
+  it("empty owned groups returns ok with empty list", async () => {
+    const { client } = ownedClient({ data: [], error: null });
+    const r = await loadOwnedGroups("u2", { client });
     assert.deepEqual(r, {
       status: "ok",
-      groups: [{ id: "mock-2", name: "Road Trip 2026" }],
+      groups: [],
     });
   });
 });

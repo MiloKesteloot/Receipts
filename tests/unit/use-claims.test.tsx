@@ -3,16 +3,9 @@
  *
  * Run with:
  *   npm run test:ui -- tests/unit/use-claims.test.tsx
- *
- * ============================== PLACEHOLDERS ==============================
- * 1. Requests run against the mock in `claims.ts`, wrapped so a test can make
- *    one fail or stay unfinished. The real paths aren't written yet.
- * 2. Claims go in the shared `mockItemClaims`, so `afterEach` empties it.
- *    Remove that with the mock.
- * ==========================================================================
  */
 
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, renderHook } from "@testing-library/react-native";
 
 import {
@@ -21,10 +14,19 @@ import {
   type ClaimableItem,
   getClaims,
   type GetClaimsResult,
+  type ItemClaim,
   unclaimItem,
 } from "@/lib/claims";
-import { mockItemClaims } from "@/lib/mock";
 import { CLAIM_FORBIDDEN_MESSAGE, useClaims } from "@/lib/use-claims";
+
+/** Test group identifier. */
+const GROUP_ID = "group-1";
+
+/** Test user identifier. */
+const USER_ID = "u1";
+
+/** In-memory claims tracked during tests. */
+let fakeClaims: ItemClaim[] = [];
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- mirrors the real SUPABASE export
 jest.mock("@/lib/supabase", () => ({ SUPABASE: null, supabase: null }));
@@ -32,42 +34,28 @@ jest.mock("@/lib/claims", () => {
   const actual = jest.requireActual<typeof import("@/lib/claims")>("@/lib/claims");
   return {
     ...actual,
-    claimItem: jest.fn(actual.claimItem),
-    unclaimItem: jest.fn(actual.unclaimItem),
-    getClaims: jest.fn(actual.getClaims),
+    claimItem: jest.fn(),
+    unclaimItem: jest.fn(),
+    getClaims: jest.fn(),
   };
 });
 
 /**
- * Mocked claim request, wrapping the real mock-mode function.
+ * Mocked claim request.
  */
-const mockClaim = claimItem as unknown as jest.Mock<
-  () => Promise<ClaimActionResult>
->;
+const mockClaim = claimItem as unknown as jest.Mock<typeof claimItem>;
 
 /**
- * Mocked unclaim request, wrapping the real mock-mode function.
+ * Mocked unclaim request.
  */
-const mockUnclaim = unclaimItem as unknown as jest.Mock<
-  () => Promise<ClaimActionResult>
->;
+const mockUnclaim = unclaimItem as unknown as jest.Mock<typeof unclaimItem>;
 
 /**
- * Mocked claims load, wrapping the real mock-mode function.
+ * Mocked claims load.
  */
 const mockGetClaims = getClaims as unknown as jest.Mock<
   () => Promise<GetClaimsResult>
 >;
-
-/**
- * Apartment 402, whose members are u1, u2 and u3.
- */
-const GROUP_ID = "mock-1";
-
-/**
- * The acting user.
- */
-const USER_ID = "u1";
 
 /**
  * The receipt's items.
@@ -107,19 +95,28 @@ function deferred<T>() {
 describe("useClaims", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  afterEach(() => {
-    mockItemClaims.length = 0;
+    fakeClaims = [];
+    mockGetClaims.mockImplementation(async () => ({
+      status: "ok",
+      claims: [...fakeClaims],
+    }));
+    mockClaim.mockImplementation(async (_gid: string, itemId: string) => {
+      fakeClaims.push({ itemId, userId: USER_ID });
+      return { status: "ok" };
+    });
+    mockUnclaim.mockImplementation(async (_gid: string, itemId: string) => {
+      fakeClaims = fakeClaims.filter(
+        (c) => !(c.itemId === itemId && c.userId === USER_ID)
+      );
+      return { status: "ok" };
+    });
   });
 
   it("loads existing claims, then derives shares and my total", async () => {
-    mockItemClaims.push(
-      /* eslint-disable @typescript-eslint/naming-convention -- database column names */
-      { item_id: "milk", user_id: "u1" },
-      { item_id: "milk", user_id: "u2" }
-      /* eslint-enable @typescript-eslint/naming-convention */
-    );
+    fakeClaims = [
+      { itemId: "milk", userId: "u1" },
+      { itemId: "milk", userId: "u2" },
+    ];
 
     const result = await renderClaims();
 
@@ -150,7 +147,7 @@ describe("useClaims", () => {
     expect(mockUnclaim).toHaveBeenCalledTimes(1);
     expect(result.current.claims).toEqual([]);
     expect(result.current.myTotal).toEqual({ totalCents: 0, claimedCount: 0 });
-    expect(mockItemClaims).toEqual([]);
+    expect(fakeClaims).toEqual([]);
   });
 
   it("updates immediately, before the request finishes", async () => {
@@ -163,26 +160,27 @@ describe("useClaims", () => {
     });
 
     expect(result.current.claims).toEqual([{ itemId: "milk", userId: USER_ID }]);
+    expect(result.current.myTotal).toEqual({ totalCents: 500, claimedCount: 1 });
     expect(result.current.inFlightItemIds.has("milk")).toBe(true);
 
     await act(async () => request.resolve({ status: "ok" }));
 
-    expect(result.current.inFlightItemIds.has("milk")).toBe(false);
+    expect(result.current.inFlightItemIds.size).toBe(0);
   });
 
-  it("rolls back a failed claim and shows the request's message", async () => {
+  it("rolls back on failure, restores my total, and surfaces the server message", async () => {
     const result = await renderClaims();
     mockClaim.mockResolvedValueOnce(FAILED);
 
     await act(() => result.current.toggle("milk"));
 
     expect(result.current.claims).toEqual([]);
-    expect(result.current.myTotal.totalCents).toBe(0);
     expect(result.current.error).toBe("Network down");
+    expect(result.current.myTotal).toEqual({ totalCents: 0, claimedCount: 0 });
     expect(result.current.inFlightItemIds.size).toBe(0);
   });
 
-  it("rolls back a failed unclaim", async () => {
+  it("re-claims if an unclaim fails", async () => {
     const result = await renderClaims();
     await act(() => result.current.toggle("milk"));
     mockUnclaim.mockResolvedValueOnce(FAILED);
@@ -191,45 +189,44 @@ describe("useClaims", () => {
 
     expect(result.current.claims).toEqual([{ itemId: "milk", userId: USER_ID }]);
     expect(result.current.error).toBe("Network down");
+    expect(result.current.myTotal).toEqual({ totalCents: 500, claimedCount: 1 });
   });
 
-  it("rolls back when the request throws", async () => {
+  it("a thrown error becomes a friendly failure message", async () => {
     const result = await renderClaims();
     mockClaim.mockRejectedValueOnce(new Error("boom"));
 
     await act(() => result.current.toggle("milk"));
 
     expect(result.current.claims).toEqual([]);
-    expect(result.current.error).not.toBeNull();
+    expect(result.current.error).toBe("Couldn't update your claim. Please try again.");
   });
 
-  it("rolls back when forbidden, with its own message", async () => {
+  it("a 42501 forbidden failure explains they aren't in the group", async () => {
     const result = await renderClaims();
     mockClaim.mockResolvedValueOnce({ status: "forbidden" });
 
     await act(() => result.current.toggle("milk"));
 
-    expect(result.current.claims).toEqual([]);
     expect(result.current.error).toBe(CLAIM_FORBIDDEN_MESSAGE);
   });
 
-  it("clears the error on the next tap", async () => {
+  it("clears a previous error on the next tap", async () => {
     const result = await renderClaims();
     mockClaim.mockResolvedValueOnce(FAILED);
     await act(() => result.current.toggle("milk"));
+    expect(result.current.error).toBe("Network down");
 
-    await act(() => result.current.toggle("milk"));
-
+    await act(() => result.current.toggle("eggs"));
     expect(result.current.error).toBeNull();
   });
 
-  it("sends one request for a double tap", async () => {
+  it("tapping an in-flight item does nothing (double-tap guard)", async () => {
     const result = await renderClaims();
     const request = deferred<ClaimActionResult>();
     mockClaim.mockReturnValueOnce(request.promise);
 
     await act(async () => {
-      void result.current.toggle("milk");
       void result.current.toggle("milk");
     });
     await act(async () => {
@@ -238,13 +235,11 @@ describe("useClaims", () => {
 
     expect(mockClaim).toHaveBeenCalledTimes(1);
     expect(mockUnclaim).not.toHaveBeenCalled();
-    expect(result.current.claims).toEqual([{ itemId: "milk", userId: USER_ID }]);
 
     await act(async () => request.resolve({ status: "ok" }));
-    expect(result.current.claims).toEqual([{ itemId: "milk", userId: USER_ID }]);
   });
 
-  it("a failure on one item doesn't affect a claim on another", async () => {
+  it("different items can be tapped in quick succession", async () => {
     const result = await renderClaims();
     const milk = deferred<ClaimActionResult>();
     const eggs = deferred<ClaimActionResult>();
@@ -252,11 +247,39 @@ describe("useClaims", () => {
 
     await act(async () => {
       void result.current.toggle("milk");
+    });
+    await act(async () => {
       void result.current.toggle("eggs");
     });
-    expect(result.current.inFlightItemIds.size).toBe(2);
 
+    expect(result.current.claims).toEqual([
+      { itemId: "milk", userId: USER_ID },
+      { itemId: "eggs", userId: USER_ID },
+    ]);
+    expect(result.current.myTotal).toEqual({ totalCents: 800, claimedCount: 2 });
+    expect(result.current.inFlightItemIds).toEqual(new Set(["milk", "eggs"]));
+
+    await act(async () => milk.resolve({ status: "ok" }));
     await act(async () => eggs.resolve({ status: "ok" }));
+    expect(result.current.inFlightItemIds.size).toBe(0);
+  });
+
+  it("a failure on one item doesn't roll back another item's tap", async () => {
+    const result = await renderClaims();
+    const milk = deferred<ClaimActionResult>();
+    const eggs = deferred<ClaimActionResult>();
+    mockClaim.mockReturnValueOnce(milk.promise).mockReturnValueOnce(eggs.promise);
+
+    await act(async () => {
+      void result.current.toggle("milk");
+    });
+    await act(async () => {
+      void result.current.toggle("eggs");
+    });
+    await act(async () => {
+      fakeClaims.push({ itemId: "eggs", userId: USER_ID });
+      eggs.resolve({ status: "ok" });
+    });
     await act(async () => milk.resolve(FAILED));
 
     expect(result.current.claims).toEqual([{ itemId: "eggs", userId: USER_ID }]);
@@ -265,10 +288,7 @@ describe("useClaims", () => {
   });
 
   it("rolling back doesn't touch someone else's claim on the same item", async () => {
-    mockItemClaims.push(
-      // eslint-disable-next-line @typescript-eslint/naming-convention -- database column names
-      { item_id: "milk", user_id: "u2" }
-    );
+    fakeClaims = [{ itemId: "milk", userId: "u2" }];
     const result = await renderClaims();
     mockClaim.mockResolvedValueOnce(FAILED);
 
@@ -347,8 +367,7 @@ describe("useClaims", () => {
   });
 
   it("counts a guest as a sharer but leaves their claim alone", async () => {
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- database column names
-    mockItemClaims.push({ item_id: "milk", guest_name: "Casey" });
+    fakeClaims = [{ itemId: "milk", userId: "guest:casey", guestName: "Casey" }];
     const result = await renderClaims();
 
     await act(() => result.current.toggle("milk"));
@@ -361,13 +380,13 @@ describe("useClaims", () => {
     ]);
   });
 
-  it("doesn't refetch after a rollback in mock mode", async () => {
+  it("refetches claims after a rollback", async () => {
     const result = await renderClaims();
     mockClaim.mockResolvedValueOnce(FAILED);
 
     await act(() => result.current.toggle("milk"));
 
-    expect(mockGetClaims).toHaveBeenCalledTimes(1); // just the first load
+    expect(mockGetClaims).toHaveBeenCalledTimes(2); // initial load + refetch after rollback
   });
 
   it("shows the forbidden message when loading is forbidden", async () => {

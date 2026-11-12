@@ -5,11 +5,8 @@
  * Only the group owner can remove members. The UI hides the controls from
  * everyone else, but the real check is on the server: real mode always goes
  * through the `remove_group_member` RPC, which re-checks the caller's role.
- * Mock mode applies the same owner check in memory.
  */
 import { NOT_CONFIGURED, type GroupSummary } from "@/lib/group-data";
-// TODO(remove-mock): Remove `@/lib/mock` import once offline mock mode is deleted.
-import { mockGroupDetails } from "@/lib/mock";
 
 type DbError = { code?: string; message: string } | null;
 
@@ -52,11 +49,9 @@ export type RpcClient = {
   ): PromiseLike<{ data: unknown; error: DbError }>;
 };
 
-/** Mock flag and Supabase client, like LoadOptions in group-data.ts. */
+/** Supabase client options, like LoadOptions in group-data.ts. */
 export type GroupMembersOptions = {
-  // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
-  useMock: boolean;
-  client: GroupMembersClient | null | undefined;
+  client?: GroupMembersClient | null;
 };
 
 /**
@@ -64,9 +59,7 @@ export type GroupMembersOptions = {
  * skip owner ids before calling the server.
  */
 export type RemoveMembersOptions = {
-  // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
-  useMock: boolean;
-  client: RpcClient | null | undefined;
+  client?: RpcClient | null;
   members?: readonly MemberLike[];
 };
 
@@ -140,26 +133,18 @@ export function removableMembers<T extends MemberLike>(
  * Loads the groups the user owns, sorted by name, for the "Remove members"
  * picker.
  * @param userId Signed-in user id, or undefined when signed out
- * @param opts Mock flag and Supabase client
+ * @param opts Supabase client options
  * @returns The owned groups, or an error message
  */
 export async function loadOwnedGroups(
   userId: string | undefined,
-  opts: GroupMembersOptions
+  opts?: GroupMembersOptions
 ): Promise<OwnedGroupsResult> {
   if (userId === undefined || userId === "") {
     return { status: "error", message: SIGNED_OUT_MESSAGE };
   }
 
-  // TODO(remove-mock): Delete `if (opts.useMock)` block once offline mock mode is removed.
-  if (opts.useMock) {
-    const groups = Object.values(mockGroupDetails)
-      .filter((d) => isGroupOwner(d, userId))
-      .map((d) => ({ id: d.group.id, name: d.group.name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    return { status: "ok", groups };
-  }
-  if (!opts.client) return { status: "error", message: NOT_CONFIGURED };
+  if (!opts?.client) return { status: "error", message: NOT_CONFIGURED };
 
   try {
     const { data, error } = await opts.client
@@ -205,42 +190,6 @@ function screenTargets(
   return { allowed, refused };
 }
 
-// TODO(remove-mock): Delete removeMockMembers once offline mock mode is removed.
-/**
- * Removes the members from the group in memory. Only the owner may do it.
- * The members array is edited in place so other importers see the change.
- * @param groupId Group id
- * @param userIds Ids already screened by screenTargets
- * @param currentUserId Signed-in user id
- * @returns Who was removed and who wasn't
- */
-function removeMockMembers(
-  groupId: string,
-  userIds: readonly string[],
-  currentUserId: string | undefined
-): RemoveMembersResult {
-  const detail = mockGroupDetails[groupId];
-  if (!detail || !isGroupOwner(detail, currentUserId)) {
-    return {
-      removed: [],
-      failed: userIds.map((userId) => ({ userId, message: NOT_OWNER_MESSAGE })),
-    };
-  }
-
-  const removed: string[] = [];
-  const failed: RemoveFailure[] = [];
-  for (const userId of userIds) {
-    const index = detail.members.findIndex((m) => m.user_id === userId);
-    if (index === -1) {
-      failed.push({ userId, message: "Not a member of this group" });
-    } else {
-      detail.members.splice(index, 1);
-      removed.push(userId);
-    }
-  }
-  return { removed, failed };
-}
-
 /**
  * Removes members from a group, one `remove_group_member` RPC call per user,
  * in order. The server re-checks that the caller is the owner. The caller and
@@ -248,27 +197,19 @@ function removeMockMembers(
  * @param groupId Group id
  * @param userIds Members to remove
  * @param currentUserId Signed-in user id
- * @param opts Mock flag, Supabase client, and optionally the group's members
+ * @param opts Supabase client, and optionally the group's members
  * @returns Ids that were removed, and the ones that failed with the reason
  */
 export async function removeGroupMembers(
   groupId: string,
   userIds: readonly string[],
   currentUserId: string | undefined,
-  opts: RemoveMembersOptions
+  opts?: RemoveMembersOptions
 ): Promise<RemoveMembersResult> {
-  // TODO(remove-mock): Use `opts.members` directly and remove `if (opts.useMock)` block once mock mode is removed.
-  const members = opts.useMock
-    ? mockGroupDetails[groupId]?.members
-    : opts.members;
+  const members = opts?.members;
   const { allowed, refused } = screenTargets(userIds, currentUserId, members);
 
-  if (opts.useMock) {
-    const result = removeMockMembers(groupId, allowed, currentUserId);
-    return { removed: result.removed, failed: [...refused, ...result.failed] };
-  }
-
-  const client = opts.client;
+  const client = opts?.client;
   if (!client) {
     return {
       removed: [],

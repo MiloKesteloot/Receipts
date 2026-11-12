@@ -280,7 +280,6 @@ describe("User Story 1.1: Authentication", () => {
         password: "secret123",
         options: {
           emailRedirectTo: REDIRECT,
-          // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata key
           data: { full_name: "Kelland", name: "Kelland" },
         },
       });

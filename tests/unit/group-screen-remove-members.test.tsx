@@ -9,8 +9,10 @@ import { fireEvent, render } from "@testing-library/react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
 import GroupScreen from "@/app/(app)/(home)/groups/[id]";
-import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
+
+/** Test current user ID. */
+const TEST_CURRENT_USER_ID = "current-user";
 
 jest.mock("expo-router", () => ({
   router: {
@@ -27,7 +29,9 @@ jest.mock("expo-router", () => ({
 jest.mock("@/lib/group-data", () => ({ loadGroupDetail: jest.fn() }));
 jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/components/toast", () => ({ Toast: () => null }));
-jest.mock("@/lib/auth-provider", () => ({ useAuth: () => ({ session: null }) }));
+jest.mock("@/lib/auth-provider", () => ({
+  useAuth: () => ({ session: { user: { id: "current-user" } } }),
+}));
 
 /** Mocked group loader. */
 const MOCK_LOAD = loadGroupDetail as unknown as jest.Mock<
@@ -45,7 +49,7 @@ const MOCK_PARAMS = useLocalSearchParams as unknown as jest.Mock<
  * @returns Group detail for the mocked loader
  */
 function detailWithRole(role: "owner" | "member"): unknown {
-  const ownerId = role === "owner" ? MOCK_CURRENT_USER_ID : "u1";
+  const ownerId = role === "owner" ? TEST_CURRENT_USER_ID : "u1";
   return {
     group: {
       id: "g1",
@@ -57,7 +61,7 @@ function detailWithRole(role: "owner" | "member"): unknown {
     members: [
       { user_id: ownerId, display_name: "Olive", role: "owner", joined_at: "2026-10-01T00:00:00Z" },
       {
-        user_id: role === "owner" ? "u2" : MOCK_CURRENT_USER_ID,
+        user_id: role === "owner" ? "u2" : TEST_CURRENT_USER_ID,
         display_name: "Sam",
         role: "member",
         joined_at: "2026-10-02T00:00:00Z",

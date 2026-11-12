@@ -22,8 +22,7 @@ import { ClaimantBadge } from "@/components/claimant-badge";
 import { CreateGroupForm } from "@/components/create-group-form";
 import { PlaceholderScreen } from "@/components/placeholder-screen";
 import { createGroup } from "@/lib/create-group";
-import { loadGroupDetail } from "@/lib/group-data";
-import { mockGroupDetails } from "@/lib/mock";
+import { loadGroupDetail, type GroupDetail } from "@/lib/group-data";
 
 /** Sign-in auth action mock inspected by tests. */
 const MOCK_SIGN_IN = jest.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
@@ -154,19 +153,39 @@ describe("SignInScreen: password reveal and display name", () => {
   });
 });
 
+/** Test group detail fixture. */
+const testGroupDetail: GroupDetail = {
+  group: {
+    id: "g1",
+    name: "Apartment 402",
+    invite_code: "APT402XY",
+    created_by: "u1",
+    created_at: "2026-10-01T00:00:00Z",
+  },
+  members: [
+    {
+      user_id: "u1",
+      display_name: "Alex",
+      role: "owner",
+      joined_at: "2026-10-01T00:00:00Z",
+    },
+  ],
+  receipts: [],
+};
+
 describe("GroupScreen: invite code visibility", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    MOCK_PARAMS.mockReturnValue({ id: "mock-1" });
-    MOCK_LOAD.mockResolvedValue({ status: "ok", detail: mockGroupDetails["mock-1"] });
+    MOCK_PARAMS.mockReturnValue({ id: "g1" });
+    MOCK_LOAD.mockResolvedValue({ status: "ok", detail: testGroupDetail });
   });
 
   it("shows the group invite code and lets users share it", async () => {
     const shareSpy = jest
       .spyOn(Share, "share")
       .mockResolvedValue({ action: "sharedAction", activityType: undefined });
-    const inviteCode = mockGroupDetails["mock-1"].group.invite_code;
-    if (!inviteCode) throw new Error("Expected mock-1 invite_code");
+    const inviteCode = testGroupDetail.group.invite_code;
+    if (!inviteCode) throw new Error("Expected g1 invite_code");
     const { findByText, findByLabelText } = await render(<GroupScreen />);
 
     expect(await findByText(inviteCode)).toBeTruthy();
