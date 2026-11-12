@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,8 +17,10 @@ import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
 import { useAuth } from "@/lib/auth-provider";
+import { confirmAction } from "@/lib/confirm-action";
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
+import { isGroupOwner } from "@/lib/group-members";
 import { deleteGroup, leaveGroup } from "@/lib/groups";
 import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
@@ -65,41 +66,6 @@ type GroupDetail = {
 };
 
 /**
- * Asks the user to confirm a destructive action. Alert.alert has no buttons
- * on web (react-native-web ignores them), so web uses window.confirm.
- * @param title Dialog title
- * @param message Dialog body
- * @param confirmLabel Label of the destructive button
- * @returns True when the user confirmed
- */
-function confirmAction(
-  title: string,
-  message: string,
-  confirmLabel: string
-): Promise<boolean> {
-  if (Platform.OS === "web") {
-    const confirmFn = (globalThis as { confirm?: (text: string) => boolean })
-      .confirm;
-    return Promise.resolve(confirmFn ? confirmFn(`${title}\n\n${message}`) : false);
-  }
-  return new Promise((resolve) => {
-    Alert.alert(
-      title,
-      message,
-      [
-        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-        {
-          text: confirmLabel,
-          style: "destructive",
-          onPress: () => resolve(true),
-        },
-      ],
-      { cancelable: true, onDismiss: () => resolve(false) }
-    );
-  });
-}
-
-/**
  * Detailed view of a group showing members and receipts.
  * @returns JSX element
  */
@@ -143,12 +109,16 @@ export default function GroupScreen(): JSX.Element {
   const { session } = useAuth();
   // Mock data only knows the placeholder user (see create-group.ts).
   const currentUserId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
+  const [refreshing, setRefreshing] = useState(false);
+  // True once a load succeeded, so later refreshes keep the page on screen.
+  const hasDetailRef = useRef(false);
   // The ref blocks a second tap before the state update re-renders.
   const groupActionBusyRef = useRef(false);
   const [groupActionBusy, setGroupActionBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (pull = false) => {
+    if (pull) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     setForbidden(false);
 
@@ -157,20 +127,58 @@ export default function GroupScreen(): JSX.Element {
       client: supabase,
     });
 
-    if (result.status === "ok") setDetail(result.detail);
-    else if (result.status === "forbidden") {
+    if (result.status === "ok") {
+      hasDetailRef.current = true;
+      // Copy so in-place mock edits (e.g. a member removed) re-render.
+      setDetail({ ...result.detail, members: [...result.detail.members] });
+    } else if (result.status === "forbidden") {
+      // e.g. the owner removed this user (US 3.2).
+      hasDetailRef.current = false;
       setForbidden(true);
       setDetail(null);
+    } else if (hasDetailRef.current) {
+      setToastState({ message: result.message, type: "error" });
     } else setError(result.message);
 
     setLoading(false);
+    setRefreshing(false);
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reload on every focus so members removed elsewhere disappear (US 3.2).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
-  if (loading) {
+  // Optional live updates (US 3.2). Needs group_members in the
+  // supabase_realtime publication; focus reload and pull-to-refresh work
+  // without it.
+  useEffect(() => {
+    const client = supabase;
+    if (USE_MOCK || !client) return;
+    const channel = client
+      .channel(`group-members-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "group_members",
+          filter: `group_id=eq.${id}`,
+        },
+        () => {
+          load();
+        }
+      )
+      .subscribe();
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [id, load]);
+
+  // Full-screen loader on the first load only; refreshes keep the page.
+  if (loading && detail === null) {
     return (
       <View style={STYLES.center}>
         <ActivityIndicator color={palette.accent} />
@@ -209,7 +217,7 @@ export default function GroupScreen(): JSX.Element {
     return (
       <View style={STYLES.center}>
         <Text style={STYLES.error}>{error ?? "Group not found"}</Text>
-        <Pressable onPress={load} style={STYLES.button}>
+        <Pressable onPress={() => load()} style={STYLES.button}>
           <Text style={STYLES.buttonText}>Try again</Text>
         </Pressable>
       </View>
@@ -217,11 +225,8 @@ export default function GroupScreen(): JSX.Element {
   }
 
   const { group, members, receipts } = detail;
-
+  const isOwner = isGroupOwner(detail, currentUserId);
   const currentMember = members.find((m) => m.user_id === currentUserId);
-  const isOwner =
-    currentUserId !== undefined &&
-    (currentMember?.role === "owner" || group.created_by === currentUserId);
   const canLeaveOrDelete = isOwner || currentMember !== undefined;
 
   /**
@@ -398,7 +403,18 @@ export default function GroupScreen(): JSX.Element {
 
   return (
     <View style={STYLES.container}>
-      <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
+      <ScrollView
+        style={STYLES.screen}
+        contentContainerStyle={STYLES.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load(true)}
+            tintColor={palette.accent}
+            colors={[palette.accent]}
+          />
+        }
+      >
         <View style={STYLES.header}>
           <Text style={STYLES.eyebrow}>Group</Text>
           <Text style={STYLES.title}>{group.name}</Text>
@@ -407,7 +423,31 @@ export default function GroupScreen(): JSX.Element {
           </Text>
         </View>
 
-        <Text style={STYLES.sectionLabel}>Members ({members.length})</Text>
+        {isOwner ? (
+          <View style={STYLES.sectionHeaderRow}>
+            <Text style={STYLES.sectionLabelFlush}>
+              Members ({members.length})
+            </Text>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/remove-members",
+                  params: { from: group.id },
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Remove members"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Remove members</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={STYLES.sectionLabel}>Members ({members.length})</Text>
+        )}
         <View style={STYLES.card}>
           {members.map((m, i) => {
             const name = m.display_name ?? "Unknown";

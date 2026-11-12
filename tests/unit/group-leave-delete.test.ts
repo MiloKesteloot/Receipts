@@ -101,7 +101,7 @@ describe("User Story 2.4: Leave or delete a group", () => {
         assert.equal(result.message, "Left Apartment 402");
       }
       const members = mockGroupDetails["mock-1"].members.map((m) => m.user_id);
-      assert.deepEqual(members, ["u1", "u3"]);
+      assert.deepEqual(members, ["u1", "u3", "current-user"]);
       assert.ok(!groupIdsFor("u2").includes("mock-1"));
       // The alias of the same seed group is updated too.
       assert.ok(!groupIdsFor("u2").includes("group-apt402"));
@@ -147,7 +147,7 @@ describe("User Story 2.4: Leave or delete a group", () => {
         assert.match(result.message, /transfer ownership/i);
       }
       const members = mockGroupDetails["mock-1"].members.map((m) => m.user_id);
-      assert.deepEqual(members, ["u1", "u2", "u3"]);
+      assert.deepEqual(members, ["u1", "u2", "u3", "current-user"]);
     });
 
     test("is refused even as the only member", async () => {
@@ -170,7 +170,7 @@ describe("User Story 2.4: Leave or delete a group", () => {
       }
       assert.equal(mockGroupDetails["mock-1"], undefined);
       assert.equal(mockGroupDetails["group-apt402"], undefined);
-      for (const user of ["u1", "u2", "u3"]) {
+      for (const user of ["u1", "u2", "u3", "current-user"]) {
         assert.ok(!groupIdsFor(user).includes("mock-1"), `${user} still sees it`);
       }
       assert.ok(!mockGroups.some((g) => g.id === "mock-1"));
@@ -227,7 +227,7 @@ describe("User Story 2.4: Leave or delete a group", () => {
         assert.match(result.message, /only the group owner/i);
       }
       assert.ok(mockGroupDetails["mock-1"]);
-      assert.equal(mockGroupDetails["mock-1"].members.length, 3);
+      assert.equal(mockGroupDetails["mock-1"].members.length, 4);
       assert.equal(mockItemClaims.length, claimsBefore);
       assert.ok(mockReceiptItems.r1);
     });

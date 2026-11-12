@@ -23,6 +23,9 @@ jest.mock("expo-router", () => ({
     dismissTo: jest.fn(),
   },
   useLocalSearchParams: jest.fn(),
+  // Runs the effect like useEffect, as if the screen were always focused.
+  useFocusEffect: (effect: () => void) =>
+    jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
 }));
 jest.mock("@/lib/group-data", () => ({ loadGroupDetail: jest.fn() }));
 jest.mock("@/lib/groups", () => ({

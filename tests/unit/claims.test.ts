@@ -7,8 +7,9 @@
  *   node --experimental-strip-types --import ./tests/register-aliases.ts --test tests/unit/claims.test.ts
  *
  * ============================== PLACEHOLDERS ==============================
- * 1. These tests run against the mock only. They prove the app-side rules, not
- *    that the database enforces them. Add database checks with Task 1.
+ * 1. These tests use the mock and a fake Supabase client. They prove the
+ *    app-side rules, not that the database enforces them; the RLS policies in
+ *    the item_claims_member_only migration are checked by hand (see its PR).
  * 2. Claims go in the shared `mockItemClaims`, so `afterEach` empties it and
  *    tests pass in any order. Remove that with the mock.
  * ==========================================================================
@@ -20,10 +21,15 @@ import { afterEach, describe, test } from "node:test";
 import {
   claimItem,
   type CentsShare,
+  type ClaimsClient,
   getClaims,
   getItemShares,
   getMyTotal,
+  guestClaimKey,
+  isGuestClaimKey,
   splitCents,
+  toClaimableItems,
+  toWholeCents,
   unclaimItem,
 } from "@/lib/claims";
 import { mockItemClaims } from "@/lib/mock";
@@ -341,9 +347,9 @@ describe("US 2.3: claiming items (mock)", () => {
   });
 });
 
-describe("US 2.3: real paths aren't written yet (PLACEHOLDER)", () => {
+describe("US 2.3: real paths without a Supabase client", () => {
   test("they return an error and don't touch the mock data", async () => {
-    const real = { useMock: false };
+    const real = { useMock: false, client: null };
     const error = {
       status: "error",
       message: "Claims on the server are not set up yet.",
@@ -353,5 +359,239 @@ describe("US 2.3: real paths aren't written yet (PLACEHOLDER)", () => {
     assert.deepEqual(await unclaimItem(GROUP_ID, ITEM_ID, real), error);
     assert.deepEqual(await getClaims(GROUP_ID, [ITEM_ID], real), error);
     assert.equal(mockItemClaims.length, 0);
+  });
+});
+
+type DbError = { code?: string; message: string } | null;
+
+/**
+ * Builds a fake Supabase client for the real paths.
+ * @param replies What each call returns
+ * @param replies.userId Signed-in user, or null when signed out
+ * @param replies.insertError Error the insert returns
+ * @param replies.deleteError Error the delete returns
+ * @param replies.rows Rows the select returns
+ * @returns The fake client and a log of the calls it received
+ */
+function fakeClient(replies: {
+  userId?: string | null;
+  insertError?: DbError;
+  deleteError?: DbError;
+  /* eslint-disable-next-line @typescript-eslint/naming-convention -- database column names */
+  rows?: { item_id: string; user_id: string | null; guest_name: string | null }[];
+}) {
+  const calls: string[] = [];
+  const client: ClaimsClient = {
+    auth: {
+      getUser: () =>
+        Promise.resolve({
+          data: {
+            user: replies.userId === null ? null : { id: replies.userId ?? "me" },
+          },
+        }),
+    },
+    from(table) {
+      return {
+        insert(row) {
+          calls.push(`insert:${table}:${JSON.stringify(row)}`);
+          return Promise.resolve({ error: replies.insertError ?? null });
+        },
+        delete() {
+          return {
+            eq(c1, v1) {
+              return {
+                eq(c2, v2) {
+                  calls.push(`delete:${table}:${c1}=${v1}&${c2}=${v2}`);
+                  return Promise.resolve({ error: replies.deleteError ?? null });
+                },
+              };
+            },
+          };
+        },
+        select(cols) {
+          return {
+            in(col, values) {
+              calls.push(`select:${table}:${cols}:${col}=${values.join(",")}`);
+              return Promise.resolve({ data: replies.rows ?? [], error: null });
+            },
+          };
+        },
+      };
+    },
+  };
+  return { client, calls };
+}
+
+describe("US 2.3 Task 6: real paths with a fake client", () => {
+  test("claims as the signed-in user", async () => {
+    const { client, calls } = fakeClient({ userId: "me" });
+    assert.deepEqual(await claimItem(GROUP_ID, ITEM_ID, { useMock: false, client }), {
+      status: "ok",
+    });
+    assert.deepEqual(calls, [
+      `insert:item_claims:{"item_id":"${ITEM_ID}","user_id":"me"}`,
+    ]);
+  });
+
+  test("claiming twice (23505 unique violation) is ok, not an error", async () => {
+    const { client } = fakeClient({
+      insertError: { code: "23505", message: "duplicate key value" },
+    });
+    assert.deepEqual(await claimItem(GROUP_ID, ITEM_ID, { useMock: false, client }), {
+      status: "ok",
+    });
+  });
+
+  test("a non-member's claim blocked by RLS (42501) is forbidden", async () => {
+    const { client } = fakeClient({
+      insertError: { code: "42501", message: "new row violates row-level security policy" },
+    });
+    assert.deepEqual(await claimItem(GROUP_ID, ITEM_ID, { useMock: false, client }), {
+      status: "forbidden",
+    });
+  });
+
+  test("signed out is forbidden and sends nothing", async () => {
+    const { client, calls } = fakeClient({ userId: null });
+    assert.deepEqual(await claimItem(GROUP_ID, ITEM_ID, { useMock: false, client }), {
+      status: "forbidden",
+    });
+    assert.deepEqual(calls, []);
+  });
+
+  test("other errors keep their message", async () => {
+    const { client } = fakeClient({ insertError: { message: "timeout" } });
+    assert.deepEqual(await claimItem(GROUP_ID, ITEM_ID, { useMock: false, client }), {
+      status: "error",
+      message: "timeout",
+    });
+  });
+
+  test("unclaim deletes only my own row", async () => {
+    const { client, calls } = fakeClient({ userId: "me" });
+    assert.deepEqual(await unclaimItem(GROUP_ID, ITEM_ID, { useMock: false, client }), {
+      status: "ok",
+    });
+    assert.deepEqual(calls, [`delete:item_claims:item_id=${ITEM_ID}&user_id=me`]);
+  });
+
+  test("getClaims returns member and guest claims, keyed for splitting", async () => {
+    const { client, calls } = fakeClient({
+      rows: [
+        /* eslint-disable @typescript-eslint/naming-convention -- database column names */
+        { item_id: ITEM_ID, user_id: "u1", guest_name: null },
+        { item_id: ITEM_ID, user_id: null, guest_name: " Casey " },
+        { item_id: ITEM_ID, user_id: null, guest_name: null },
+        /* eslint-enable @typescript-eslint/naming-convention */
+      ],
+    });
+    assert.deepEqual(await getClaims(GROUP_ID, [ITEM_ID], { useMock: false, client }), {
+      status: "ok",
+      claims: [
+        { itemId: ITEM_ID, userId: "u1" },
+        { itemId: ITEM_ID, userId: "guest:casey", guestName: "Casey" },
+      ],
+    });
+    assert.deepEqual(calls, [
+      `select:item_claims:item_id, user_id, guest_name:item_id=${ITEM_ID}`,
+    ]);
+  });
+
+  test("getClaims with no items sends no query", async () => {
+    const { client, calls } = fakeClient({});
+    assert.deepEqual(await getClaims(GROUP_ID, [], { useMock: false, client }), {
+      status: "ok",
+      claims: [],
+    });
+    assert.deepEqual(calls, []);
+  });
+});
+
+describe("US 2.3 Task 6: guests and the mock user", () => {
+  test("the mock signed-in user can claim in Apartment 402", async () => {
+    const asMe = { useMock: true };
+    assert.deepEqual(await claimItem(GROUP_ID, ITEM_ID, asMe), { status: "ok" });
+    assert.deepEqual(await getClaims(GROUP_ID, [ITEM_ID], asMe), {
+      status: "ok",
+      claims: [{ itemId: ITEM_ID, userId: "current-user" }],
+    });
+  });
+
+  test("getClaims includes guest claims, and unclaiming never removes them", async () => {
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- database column names
+    mockItemClaims.push({ item_id: ITEM_ID, guest_name: "Casey" });
+    await claimItem(GROUP_ID, ITEM_ID, AS_U1);
+    await unclaimItem(GROUP_ID, ITEM_ID, AS_U1);
+
+    assert.deepEqual(await getClaims(GROUP_ID, [ITEM_ID], AS_U1), {
+      status: "ok",
+      claims: [{ itemId: ITEM_ID, userId: guestClaimKey("Casey"), guestName: "Casey" }],
+    });
+  });
+
+  test("guest keys match names the way the database does", () => {
+    assert.equal(guestClaimKey(" Casey "), guestClaimKey("casey"));
+    assert.equal(isGuestClaimKey(guestClaimKey("Casey")), true);
+    assert.equal(isGuestClaimKey("u1"), false);
+  });
+
+  test("a guest sharer still splits to the exact cent", () => {
+    const guest = guestClaimKey("Casey");
+    assert.equal(sumOf(splitCents(1000, ["u1", "u2", guest])), 1000);
+    assert.equal(sumOf(splitCents(1, ["u1", guest])), 1);
+  });
+
+  test("my total equals the sum of my shares on a mixed receipt", () => {
+    const guest = guestClaimKey("Casey");
+    const items = [
+      { id: "solo", priceCents: 799 },
+      { id: "shared", priceCents: 1000 },
+      { id: "guest-shared", priceCents: 1 },
+      { id: "guest-only", priceCents: 450 },
+    ];
+    const claims = [
+      { itemId: "solo", userId: "u1" },
+      { itemId: "shared", userId: "u1" },
+      { itemId: "shared", userId: "u2" },
+      { itemId: "shared", userId: guest, guestName: "Casey" },
+      { itemId: "guest-shared", userId: "u1" },
+      { itemId: "guest-shared", userId: guest, guestName: "Casey" },
+      { itemId: "guest-only", userId: guest, guestName: "Casey" },
+    ];
+
+    for (const person of ["u1", "u2", guest]) {
+      const myShares = items.flatMap((item) =>
+        getItemShares(item, claims).shares.filter((s) => s.userId === person)
+      );
+      assert.equal(getMyTotal(items, claims, person).totalCents, sumOf(myShares));
+    }
+    // Every claimed cent is owed by someone.
+    const all = ["u1", "u2", guest].map((p) => getMyTotal(items, claims, p).totalCents);
+    assert.equal(all.reduce((a, b) => a + b, 0), 799 + 1000 + 1 + 450);
+  });
+});
+
+describe("US 2.3: prices are validated before claiming", () => {
+  test("whole non-negative cents pass, anything else is left out", () => {
+    assert.deepEqual(
+      toClaimableItems([
+        /* eslint-disable @typescript-eslint/naming-convention -- database column names */
+        { id: "a", amount_cents: 500 },
+        { id: "b", amount_cents: "250" },
+        { id: "c", amount_cents: 1.5 },
+        { id: "d", amount_cents: -1 },
+        { id: "e", amount_cents: null },
+        { id: "f", amount_cents: "" },
+        /* eslint-enable @typescript-eslint/naming-convention */
+      ]),
+      {
+        items: [
+          { id: "a", priceCents: 500 },
+          { id: "b", priceCents: 250 },
+        ],
+        invalidIds: ["c", "d", "e", "f"],
+      }
+    );
+    assert.equal(toWholeCents(0), 0);
   });
 });
