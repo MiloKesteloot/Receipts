@@ -189,7 +189,6 @@ export default function Index(): JSX.Element {
         refreshing={refreshing}
         ListHeaderComponent={
           <View style={STYLES.header}>
-            <Text style={STYLES.eyebrow}>Your groups</Text>
             <Text style={STYLES.title}>Where are we splitting?</Text>
             <View style={STYLES.subtitleRow}>
               <Text style={STYLES.subtitle}>
@@ -275,13 +274,6 @@ const STYLES = StyleSheet.create({
   },
   list: { padding: 24, paddingBottom: BOTTOM_TAB_CLEARANCE, gap: 12 },
   header: { marginBottom: 12, gap: 6 },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: palette.accent,
-  },
   title: { fontSize: 30, fontWeight: "800", color: palette.text },
   subtitleRow: {
     flexDirection: "row",

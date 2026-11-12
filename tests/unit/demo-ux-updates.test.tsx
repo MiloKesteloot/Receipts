@@ -122,6 +122,13 @@ describe("SignInScreen: password reveal and display name", () => {
 
     expect(MOCK_SIGN_UP).toHaveBeenCalledWith("k@example.com", "secret123", "Kelland");
   });
+
+  it("shows Continue with Apple and Continue with Google buttons together", async () => {
+    const { getByText } = await render(<SignInScreen />);
+
+    expect(getByText("Continue with Apple")).toBeTruthy();
+    expect(getByText("Continue with Google")).toBeTruthy();
+  });
 });
 
 describe("GroupScreen: invite code visibility", () => {
@@ -239,15 +246,15 @@ describe("BottomTabBar and PlaceholderScreen", () => {
     expect(navigateToTab).toHaveBeenCalledWith("stats-key");
   });
 
-  it("renders themed placeholder copy", async () => {
-    const { getByText } = await render(
+  it("renders themed placeholder copy without a Coming soon eyebrow", async () => {
+    const { getByText, queryByText } = await render(
       <PlaceholderScreen
         title="Stats"
         description="Spending breakdown and trends will appear here."
       />
     );
 
-    expect(getByText("Coming soon")).toBeTruthy();
+    expect(queryByText("Coming soon")).toBeNull();
     expect(getByText("Stats placeholder")).toBeTruthy();
     expect(
       getByText("Spending breakdown and trends will appear here.")

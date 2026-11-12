@@ -52,6 +52,8 @@ export type GroupActionError =
   | "NOT_FOUND"
   | "FORBIDDEN"
   | "OWNER_CANNOT_LEAVE"
+  | "EMPTY_NAME"
+  | "NAME_TOO_LONG"
   | "NOT_SIGNED_IN"
   | "NETWORK_ERROR";
 
@@ -72,4 +74,9 @@ export interface GroupService {
   joinGroupByCode(inviteCode: string, userId?: string): Promise<JoinGroupResult>;
   leaveGroup(groupId: string, userId?: string): Promise<GroupActionResult>;
   deleteGroup(groupId: string, userId?: string): Promise<GroupActionResult>;
+  renameGroup(
+    groupId: string,
+    name: string,
+    userId?: string
+  ): Promise<GroupActionResult>;
 }

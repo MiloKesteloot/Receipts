@@ -1,11 +1,5 @@
-import {
-  AppleAuthenticationButton,
-  AppleAuthenticationButtonStyle,
-  AppleAuthenticationButtonType,
-  isAvailableAsync as isAppleSignInAvailable,
-} from "expo-apple-authentication";
 import { maybeCompleteAuthSession } from "expo-web-browser";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,8 +14,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { JSX } from "react/jsx-runtime";
 
+import {
+  AppleIcon,
+  EyeIcon,
+  EyeOffIcon,
+  GoogleIcon,
+} from "@/components/icons";
 import type { AuthResult, EmailMode } from "@/lib/auth";
-import { EyeIcon, EyeOffIcon } from "@/components/icons";
 import { useAuth } from "@/lib/auth-provider";
 import { palette } from "@/lib/palette";
 
@@ -48,12 +47,6 @@ export default function SignInScreen(): JSX.Element {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [nativeApple, setNativeApple] = useState(false);
-
-  useEffect(() => {
-    if (Platform.OS !== "ios") return;
-    isAppleSignInAvailable().then(setNativeApple);
-  }, []);
 
   /**
    * Runs a sign-in action and shows its outcome.
@@ -212,17 +205,7 @@ export default function SignInScreen(): JSX.Element {
           <View style={STYLES.dividerLine} />
         </View>
 
-        {nativeApple ? (
-          <AppleAuthenticationButton
-            buttonType={AppleAuthenticationButtonType.CONTINUE}
-            buttonStyle={AppleAuthenticationButtonStyle.BLACK}
-            cornerRadius={12}
-            style={STYLES.appleNative}
-            onPress={() => {
-              if (!disabled) run("apple", signInWithApple);
-            }}
-          />
-        ) : (
+        <View style={STYLES.socialRow}>
           <Pressable
             onPress={() => run("apple", signInWithApple)}
             disabled={disabled}
@@ -236,28 +219,46 @@ export default function SignInScreen(): JSX.Element {
             {busy === "apple" ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={[STYLES.socialText, STYLES.appleText]}>
-                Continue with Apple
-              </Text>
+              <>
+                <AppleIcon size={18} color="#FFFFFF" />
+                <Text
+                  style={[STYLES.socialText, STYLES.appleText]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  Continue with Apple
+                </Text>
+              </>
             )}
           </Pressable>
-        )}
 
-        <Pressable
-          onPress={() => run("google", signInWithGoogle)}
-          disabled={disabled}
-          style={({ pressed }) => [
-            STYLES.socialButton,
-            pressed && STYLES.pressed,
-            disabled && STYLES.disabled,
-          ]}
-        >
-          {busy === "google" ? (
-            <ActivityIndicator color={palette.text} />
-          ) : (
-            <Text style={STYLES.socialText}>Continue with Google</Text>
-          )}
-        </Pressable>
+          <Pressable
+            onPress={() => run("google", signInWithGoogle)}
+            disabled={disabled}
+            style={({ pressed }) => [
+              STYLES.socialButton,
+              pressed && STYLES.pressed,
+              disabled && STYLES.disabled,
+            ]}
+          >
+            {busy === "google" ? (
+              <ActivityIndicator color={palette.text} />
+            ) : (
+              <>
+                <GoogleIcon size={18} />
+                <Text
+                  style={STYLES.socialText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  Continue with Google
+                </Text>
+              </>
+            )}
+          </Pressable>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -342,7 +343,15 @@ const STYLES = StyleSheet.create({
   dividerRow: { flexDirection: "row", alignItems: "center", marginVertical: 4 },
   dividerLine: { flex: 1, height: 1, backgroundColor: palette.border },
   dividerText: { paddingHorizontal: 12, fontSize: 13, color: palette.muted },
+  socialRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
   socialButton: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 10,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: palette.border,
@@ -351,10 +360,9 @@ const STYLES = StyleSheet.create({
     justifyContent: "center",
     minHeight: 50,
   },
-  socialText: { fontSize: 16, fontWeight: "600", color: palette.text },
+  socialText: { fontSize: 13.5, fontWeight: "600", color: palette.text, flexShrink: 1 },
   appleButton: { backgroundColor: "black", borderColor: "black" },
   appleText: { color: "white" },
-  appleNative: { width: "100%", height: 50 },
   pressed: { opacity: 0.75 },
   disabled: { opacity: 0.6 },
 });

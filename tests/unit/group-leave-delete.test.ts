@@ -299,4 +299,43 @@ describe("User Story 2.4: Leave or delete a group", () => {
       if (!leave.success) assert.equal(leave.error, "NOT_FOUND");
     });
   });
+
+  describe("renaming a group", () => {
+    test("allows the owner to rename across mock stores", async () => {
+      const result = await service.renameGroup("mock-1", "  Apt 402 Lounge  ", "u1");
+
+      assert.equal(result.success, true);
+      if (result.success) {
+        assert.equal(result.group_name, "Apt 402 Lounge");
+        assert.equal(result.message, "Group renamed to Apt 402 Lounge");
+      }
+
+      const loaded = await loadGroupDetail("mock-1", MOCK_OPTS);
+      assert.equal(loaded.status, "ok");
+      if (loaded.status === "ok") {
+        assert.equal(loaded.detail.group.name, "Apt 402 Lounge");
+      }
+
+      const list = await loadGroupList(MOCK_OPTS);
+      assert.equal(list.status, "ok");
+      if (list.status === "ok") {
+        const entry = list.groups.find((g) => g.id === "mock-1");
+        assert.equal(entry?.name, "Apt 402 Lounge");
+      }
+    });
+
+    test("rejects non-owners with FORBIDDEN and empty names with EMPTY_NAME", async () => {
+      const forbidden = await service.renameGroup("mock-1", "Hacked", "u2");
+      assert.equal(forbidden.success, false);
+      if (!forbidden.success) assert.equal(forbidden.error, "FORBIDDEN");
+
+      const empty = await service.renameGroup("mock-1", "   ", "u1");
+      assert.equal(empty.success, false);
+      if (!empty.success) assert.equal(empty.error, "EMPTY_NAME");
+
+      const missing = await service.renameGroup("does-not-exist", "Valid", "u1");
+      assert.equal(missing.success, false);
+      if (!missing.success) assert.equal(missing.error, "NOT_FOUND");
+    });
+  });
 });

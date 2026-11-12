@@ -366,7 +366,7 @@ function GoBackButton(): JSX.Element {
 const STYLES = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.bg },
   screen: { backgroundColor: palette.bg },
-  content: { padding: 24, gap: 10 },
+  content: { padding: 24, paddingBottom: 128, gap: 10 },
   center: {
     flex: 1,
     alignItems: "center",

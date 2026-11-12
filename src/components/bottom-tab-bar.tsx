@@ -6,6 +6,7 @@
 import type { ComponentProps, JSX } from "react";
 import type { Tabs } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Circle, Svg } from "react-native-svg";
 
 import {
   CreditCardIcon,
@@ -18,7 +19,10 @@ import {
 import { PALETTE as palette } from "@/lib/palette";
 
 /** Bottom clearance (dp) scrollable tab screens should reserve above the bubble. */
-export const BOTTOM_TAB_CLEARANCE = 112;
+export const BOTTOM_TAB_CLEARANCE = 144;
+
+/** Pixel size of the active tab circle behind each navigation icon. */
+const ACTIVE_CIRCLE_SIZE = 38;
 
 /** Props supplied by Expo Router `<Tabs tabBar={...}>`. */
 type CustomTabBarProps = Parameters<
@@ -94,12 +98,22 @@ export function BottomTabBar(props: CustomTabBarProps): JSX.Element {
                 pressed && STYLES.tabPressed,
               ]}
             >
-              <View
-                style={[
-                  STYLES.iconCircle,
-                  isFocused && STYLES.iconCircleActive,
-                ]}
-              >
+              <View style={STYLES.iconCircle}>
+                {isFocused ? (
+                  <Svg
+                    width={ACTIVE_CIRCLE_SIZE}
+                    height={ACTIVE_CIRCLE_SIZE}
+                    viewBox={`0 0 ${ACTIVE_CIRCLE_SIZE} ${ACTIVE_CIRCLE_SIZE}`}
+                    style={STYLES.activeCircleBg}
+                  >
+                    <Circle
+                      cx={ACTIVE_CIRCLE_SIZE / 2}
+                      cy={ACTIVE_CIRCLE_SIZE / 2}
+                      r={ACTIVE_CIRCLE_SIZE / 2}
+                      fill={palette.accent}
+                    />
+                  </Svg>
+                ) : null}
                 <item.icon size={20} color={iconColor} strokeWidth={2} />
               </View>
               <Text
@@ -155,14 +169,17 @@ const STYLES = StyleSheet.create({
     opacity: 0.75,
   },
   iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: ACTIVE_CIRCLE_SIZE,
+    height: ACTIVE_CIRCLE_SIZE,
+    borderRadius: ACTIVE_CIRCLE_SIZE / 2,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
-  iconCircleActive: {
-    backgroundColor: palette.accent,
+  activeCircleBg: {
+    position: "absolute",
+    top: 0,
+    left: 0,
   },
   label: {
     fontSize: 11,

@@ -31,7 +31,6 @@ export function PlaceholderScreen({ title, description }: Props): JSX.Element {
       ]}
     >
       <View style={STYLES.header}>
-        <Text style={STYLES.eyebrow}>Coming soon</Text>
         <Text style={STYLES.title}>{title}</Text>
       </View>
 
@@ -58,13 +57,6 @@ const STYLES = StyleSheet.create({
   },
   header: {
     gap: 4,
-  },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: palette.accent,
   },
   title: {
     fontSize: 32,

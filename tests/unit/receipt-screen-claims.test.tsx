@@ -223,4 +223,10 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
     expect(getByText("Copy Link")).toBeTruthy();
     expect(getByText(/mock-claim-r1-demo/)).toBeTruthy();
   });
+
+  it("renders circular checkboxes beside claimable items", async () => {
+    const { getByTestId } = await renderReceipt();
+
+    expect(getByTestId("item-checkbox-item-r1-3")).toBeTruthy();
+  });
 });

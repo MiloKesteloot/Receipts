@@ -91,7 +91,7 @@ function providerLabel(provider: string): string {
  */
 const STYLES = StyleSheet.create({
   screen: { backgroundColor: palette.bg },
-  content: { padding: 24, paddingTop: 32, paddingBottom: 112, gap: 16 },
+  content: { padding: 24, paddingTop: 32, paddingBottom: 128, gap: 16 },
   title: { fontSize: 34, fontWeight: "700", color: palette.text },
   card: {
     gap: 4,

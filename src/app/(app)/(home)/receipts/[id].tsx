@@ -4,7 +4,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -13,8 +12,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Circle, Path, Svg } from "react-native-svg";
 import { JSX } from "react/jsx-runtime";
 
+import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { isGuestClaimKey, toClaimableItems, type ItemShares } from "@/lib/claims";
@@ -161,9 +162,8 @@ export default function ReceiptScreen(): JSX.Element {
   // Mock data only knows the placeholder user (see create-group.ts).
   const userId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
   const insets = useSafeAreaInsets();
-  // On iOS each native tab has its own safe area, which includes the tab bar.
-  // Android already pads the tab's content above the tab bar.
-  const bottomInset = Platform.OS === "ios" ? insets.bottom : 0;
+  // Floating bottom tab bubble height (~78px) + its safe-area margin + gap.
+  const floatingTabOffset = Math.max(insets.bottom, 12) + 88;
 
   const [receipt, setReceipt] = useState<ScreenReceipt | null>(null);
   const [groupId, setGroupId] = useState<string | undefined>(undefined);
@@ -385,7 +385,16 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
   return (
     <View style={STYLES.container}>
-      <ScrollView contentContainerStyle={STYLES.content}>
+      <ScrollView
+        style={STYLES.scroll}
+        contentContainerStyle={[
+          STYLES.content,
+          {
+            paddingBottom:
+              claimable.length > 0 ? 24 : BOTTOM_TAB_CLEARANCE + insets.bottom,
+          },
+        ]}
+      >
         {/* Receipt Header */}
         <View style={STYLES.headerCard}>
           <Text style={STYLES.eyebrow}>Receipt Details</Text>
@@ -470,19 +479,18 @@ async function copyToClipboard(text: string): Promise<boolean> {
           ) : null}
         </View>
 
-        <View style={STYLES.itemsCard}>
+        <View style={STYLES.itemsList}>
           {receipt.items.length === 0 ? (
-            <Text style={STYLES.emptyText}>No items added to this receipt yet.</Text>
+            <View style={STYLES.emptyCard}>
+              <Text style={STYLES.emptyText}>No items added to this receipt yet.</Text>
+            </View>
           ) : (
-            receipt.items.map((item, idx) => {
+            receipt.items.map((item) => {
               const shares = sharesByItem[item.id];
               // Items with a bad price aren't claimable (see toClaimableItems).
               if (!shares) {
                 return (
-                  <View
-                    key={item.id}
-                    style={[STYLES.itemRow, idx > 0 && STYLES.itemDivider]}
-                  >
+                  <View key={item.id} style={STYLES.itemCard}>
                     <View style={STYLES.itemMain}>
                       <Text style={STYLES.itemName}>{item.name}</Text>
                       <Text style={STYLES.unclaimedText}>
@@ -507,15 +515,44 @@ async function copyToClipboard(text: string): Promise<boolean> {
                   accessibilityState={{ selected: isMine, busy: inFlight }}
                   accessibilityLabel={`${isMine ? "Unclaim" : "Claim"} ${item.name}`}
                   style={({ pressed }) => [
-                    STYLES.itemRow,
-                    idx > 0 && STYLES.itemDivider,
-                    isMine && STYLES.itemRowMine,
+                    STYLES.itemCard,
+                    isMine && STYLES.itemCardClaimed,
                     (pressed || inFlight) && STYLES.pressed,
                   ]}
                 >
+                  <View
+                    testID={`item-checkbox-${item.id}`}
+                    style={STYLES.itemCheckbox}
+                  >
+                    <Svg width={26} height={26} viewBox="0 0 26 26">
+                      <Circle
+                        cx={13}
+                        cy={13}
+                        r={12}
+                        fill={isMine ? palette.accent : "transparent"}
+                        stroke={isMine ? palette.accent : palette.border}
+                        strokeWidth={2}
+                      />
+                      {isMine ? (
+                        <Path
+                          d="M7.5 13.5l3.5 3.5L18.5 9.5"
+                          fill="none"
+                          stroke="#FFFFFF"
+                          strokeWidth={2.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ) : null}
+                    </Svg>
+                  </View>
+
                   <View style={STYLES.itemMain}>
                     <View style={STYLES.itemTitleRow}>
-                      <Text style={STYLES.itemName}>{item.name}</Text>
+                      <Text
+                        style={[STYLES.itemName, isMine && STYLES.itemNameClaimed]}
+                      >
+                        {item.name}
+                      </Text>
                       {isMine ? (
                         <View style={STYLES.mineBadge}>
                           <Text style={STYLES.mineBadgeText}>✓ Mine</Text>
@@ -551,19 +588,18 @@ async function copyToClipboard(text: string): Promise<boolean> {
         </View>
       </ScrollView>
 
-      {/* Running total (US 2.3 Task 5) */}
+      {/* Running total floating above the bottom navigation bubble (US 2.3 Task 5) */}
       {claimable.length > 0 ? (
-        <View
-          style={[STYLES.totalBar, { paddingBottom: 14 + bottomInset }]}
-          accessibilityLiveRegion="polite"
-        >
-          <Text style={STYLES.totalBarText}>
-            {myTotal.claimedCount === 0
-              ? "Tap items you bought to claim them"
-              : `Your total ${formatCents(myTotal.totalCents)} · ${myTotal.claimedCount} ${
-                  myTotal.claimedCount === 1 ? "item" : "items"
-                }`}
-          </Text>
+        <View style={[STYLES.totalBarWrapper, { paddingBottom: floatingTabOffset }]}>
+          <View style={STYLES.totalBar} accessibilityLiveRegion="polite">
+            <Text style={STYLES.totalBarText}>
+              {myTotal.claimedCount === 0
+                ? "Tap items you bought to claim them"
+                : `Your total ${formatCents(myTotal.totalCents)} · ${myTotal.claimedCount} ${
+                    myTotal.claimedCount === 1 ? "item" : "items"
+                  }`}
+            </Text>
+          </View>
         </View>
       ) : null}
 
@@ -586,6 +622,9 @@ const STYLES = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.bg,
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     padding: 20,
@@ -715,23 +754,33 @@ const STYLES = StyleSheet.create({
     color: palette.muted,
     marginTop: 4,
   },
-  itemsCard: {
+  itemsList: {
+    gap: 10,
+  },
+  emptyCard: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
     borderRadius: 16,
     paddingHorizontal: 16,
   },
-  itemRow: {
+  itemCard: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: palette.card,
+    borderWidth: 1.5,
+    borderColor: palette.border,
+    borderRadius: 14,
+    padding: 16,
     gap: 12,
   },
-  itemDivider: {
-    borderTopWidth: 1,
-    borderTopColor: palette.border,
+  itemCardClaimed: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accentSoft,
+  },
+  itemCheckbox: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   itemMain: {
     flex: 1,
@@ -747,6 +796,10 @@ const STYLES = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: palette.text,
+  },
+  itemNameClaimed: {
+    color: palette.text,
+    fontWeight: "700",
   },
   sharedBadge: {
     backgroundColor: palette.accentSoft,
@@ -767,14 +820,6 @@ const STYLES = StyleSheet.create({
   claimantText: {
     fontSize: 13,
     color: palette.text,
-  },
-  itemRowMine: {
-    backgroundColor: palette.accentSoft,
-    borderWidth: 1.5,
-    borderColor: palette.accent,
-    borderRadius: 12,
-    marginHorizontal: -10,
-    paddingHorizontal: 10,
   },
   mineBadge: {
     backgroundColor: palette.accent,
@@ -806,12 +851,23 @@ const STYLES = StyleSheet.create({
     color: palette.muted,
     marginTop: 4,
   },
+  totalBarWrapper: {
+    backgroundColor: palette.bg,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+  },
   totalBar: {
     backgroundColor: palette.card,
-    borderTopWidth: 1,
-    borderTopColor: palette.border,
+    borderWidth: 1.5,
+    borderColor: palette.border,
+    borderRadius: 20,
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingVertical: 14,
+    shadowColor: palette.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   totalBarText: {
     fontSize: 16,
