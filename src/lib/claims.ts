@@ -22,9 +22,6 @@
  * ==========================================================================
  */
 
-// TODO(remove-mock): Remove MOCK_CURRENT_USER_ID and `@/lib/mock` imports once offline mock mode is deleted.
-import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
-import { mockGroupDetails, mockItemClaims } from "@/lib/mock";
 import { SUPABASE } from "@/lib/supabase";
 
 /**
@@ -194,10 +191,6 @@ export type MyTotal = {
 };
 
 export type ClaimOptions = {
-  // TODO(remove-mock): Remove `useMock` and `mockUserId` options once offline mock mode is deleted.
-  useMock: boolean;
-  /** PLACEHOLDER #2: who is acting in mock mode. */
-  mockUserId?: string;
   /** Supabase client for real mode. Defaults to the app's client. */
   client?: ClaimsClient | null;
 };
@@ -228,8 +221,8 @@ const DUPLICATE_CODE = "23505";
  * @param options Claim options
  * @returns The client, or null when Supabase isn't configured
  */
-function clientFor(options: ClaimOptions): ClaimsClient | null {
-  if (options.client !== undefined) return options.client;
+function clientFor(options?: ClaimOptions): ClaimsClient | null {
+  if (options?.client !== undefined) return options.client;
   // The full client's types are too deep to check against this narrow type
   // (TS2589), so it's cast through unknown.
   return SUPABASE as unknown as ClaimsClient | null;
@@ -244,192 +237,120 @@ function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : "Network error occurred.";
 }
 
-// TODO(remove-mock): Delete mockMemberId once offline mock mode is removed.
-/**
- * PLACEHOLDER #1 and #3: checks membership in the mock data. An unknown group
- * behaves like "not a member", the same as `loadGroupDetail`.
- * @param groupId The group the item belongs to
- * @param options Claim options
- * @returns The acting user's id, or null if they aren't a member
- */
-function mockMemberId(groupId: string, options: ClaimOptions): string | null {
-  const userId = options.mockUserId ?? MOCK_CURRENT_USER_ID;
-  const isMember = mockGroupDetails[groupId]?.members.some(
-    (member) => member.user_id === userId
-  );
-  return isMember ? userId : null;
-}
-
 /**
  * Claims an item for the current user. Claiming it again changes nothing.
- * @param groupId The group the item belongs to (PLACEHOLDER #3)
+ * @param groupId The group the item belongs to
  * @param itemId The item to claim
  * @param options Claim options
- * @param options.useMock True to use the local mock data
- * @param options.mockUserId Who is acting in mock mode (PLACEHOLDER #2)
- * @param options.client Supabase client for real mode
  * @returns Ok, "forbidden" for non-members, or an error message
  */
 export async function claimItem(
   groupId: string,
   itemId: string,
-  options: ClaimOptions
+  options?: ClaimOptions
 ): Promise<ClaimActionResult> {
-  // TODO(remove-mock): Unwrap `if (!options.useMock)` and delete the mock branch below once mock mode is deleted.
-  if (!options.useMock) {
-    const client = clientFor(options);
-    if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
+  const client = clientFor(options);
+  if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
 
-    try {
-      const {
-        data: { user },
-      } = await client.auth.getUser();
-      if (!user) return { status: "forbidden" };
+  try {
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    if (!user) return { status: "forbidden" };
 
-      const { error } = await client.from("item_claims").insert({
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        item_id: itemId,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        user_id: user.id,
-      });
-
-      if (error) {
-        if (error.code === FORBIDDEN_CODE) return { status: "forbidden" };
-        // Already claimed (e.g. a second device): the claim is there, so ok.
-        if (error.code === DUPLICATE_CODE) return { status: "ok" };
-        return { status: "error", message: error.message };
-      }
-      return { status: "ok" };
-    } catch (err: unknown) {
-      return { status: "error", message: messageOf(err) };
-    }
-  }
-
-  const userId = mockMemberId(groupId, options);
-  if (userId === null) return { status: "forbidden" };
-
-  const alreadyClaimed = mockItemClaims.some(
-    (claim) => claim.item_id === itemId && claim.user_id === userId
-  );
-  if (!alreadyClaimed) {
-    const name = mockGroupDetails[groupId]?.members.find(
-      (member) => member.user_id === userId
-    )?.display_name;
-    /* eslint-disable @typescript-eslint/naming-convention -- database column names */
-    mockItemClaims.push({
+    const { error } = await client.from("item_claims").insert({
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       item_id: itemId,
-      user_id: userId,
-      // The guest web page shows this name next to the claim.
-      ...(name ? { display_name: name } : {}),
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      user_id: user.id,
     });
-    /* eslint-enable @typescript-eslint/naming-convention */
+
+    if (error) {
+      if (error.code === FORBIDDEN_CODE) return { status: "forbidden" };
+      // Already claimed (e.g. a second device): the claim is there, so ok.
+      if (error.code === DUPLICATE_CODE) return { status: "ok" };
+      return { status: "error", message: error.message };
+    }
+    return { status: "ok" };
+  } catch (err: unknown) {
+    return { status: "error", message: messageOf(err) };
   }
-  return { status: "ok" };
 }
 
 /**
  * Removes the current user's claim on an item. Unclaiming an item they haven't
  * claimed changes nothing and isn't an error.
- * @param groupId The group the item belongs to (PLACEHOLDER #3)
+ * @param groupId The group the item belongs to
  * @param itemId The item to unclaim
  * @param options Claim options
- * @param options.useMock True to use the local mock data
- * @param options.mockUserId Who is acting in mock mode (PLACEHOLDER #2)
- * @param options.client Supabase client for real mode
  * @returns Ok, "forbidden" for non-members, or an error message
  */
 export async function unclaimItem(
   groupId: string,
   itemId: string,
-  options: ClaimOptions
+  options?: ClaimOptions
 ): Promise<ClaimActionResult> {
-  // TODO(remove-mock): Unwrap `if (!options.useMock)` and delete the mock branch below once mock mode is deleted.
-  if (!options.useMock) {
-    const client = clientFor(options);
-    if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
+  const client = clientFor(options);
+  if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
 
-    try {
-      const {
-        data: { user },
-      } = await client.auth.getUser();
-      if (!user) return { status: "forbidden" };
+  try {
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    if (!user) return { status: "forbidden" };
 
-      // Only ever the signed-in member's own row, never a guest's.
-      const { error } = await client
-        .from("item_claims")
-        .delete()
-        .eq("item_id", itemId)
-        .eq("user_id", user.id);
+    // Only ever the signed-in member's own row, never a guest's.
+    const { error } = await client
+      .from("item_claims")
+      .delete()
+      .eq("item_id", itemId)
+      .eq("user_id", user.id);
 
-      if (error) {
-        if (error.code === FORBIDDEN_CODE) return { status: "forbidden" };
-        return { status: "error", message: error.message };
-      }
-      return { status: "ok" };
-    } catch (err: unknown) {
-      return { status: "error", message: messageOf(err) };
+    if (error) {
+      if (error.code === FORBIDDEN_CODE) return { status: "forbidden" };
+      return { status: "error", message: error.message };
     }
+    return { status: "ok" };
+  } catch (err: unknown) {
+    return { status: "error", message: messageOf(err) };
   }
-
-  const userId = mockMemberId(groupId, options);
-  if (userId === null) return { status: "forbidden" };
-
-  const index = mockItemClaims.findIndex(
-    (claim) => claim.item_id === itemId && claim.user_id === userId
-  );
-  if (index !== -1) mockItemClaims.splice(index, 1);
-  return { status: "ok" };
 }
 
 /**
  * Loads everyone's claims on the given items: members' and guests'. Guest
  * claims carry `guestName` and a `guestClaimKey` as their `userId`.
- * @param groupId The group the items belong to (PLACEHOLDER #3)
+ * @param groupId The group the items belong to
  * @param itemIds The items to load claims for
  * @param options Claim options
- * @param options.useMock True to use the local mock data
- * @param options.mockUserId Who is acting in mock mode (PLACEHOLDER #2)
- * @param options.client Supabase client for real mode
  * @returns The claims, "forbidden" for non-members, or an error message
  */
 export async function getClaims(
   groupId: string,
   itemIds: string[],
-  options: ClaimOptions
+  options?: ClaimOptions
 ): Promise<GetClaimsResult> {
-  // TODO(remove-mock): Unwrap `if (!options.useMock)` and delete the mock branch below once mock mode is deleted.
-  if (!options.useMock) {
-    const client = clientFor(options);
-    if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
-    if (itemIds.length === 0) return { status: "ok", claims: [] };
+  const client = clientFor(options);
+  if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
+  if (itemIds.length === 0) return { status: "ok", claims: [] };
 
-    try {
-      const { data, error } = await client
-        .from("item_claims")
-        .select("item_id, user_id, guest_name")
-        .in("item_id", itemIds);
+  try {
+    const { data, error } = await client
+      .from("item_claims")
+      .select("item_id, user_id, guest_name")
+      .in("item_id", itemIds);
 
-      if (error) {
-        if (error.code === FORBIDDEN_CODE) return { status: "forbidden" };
-        return { status: "error", message: error.message };
-      }
-
-      const claims = (data ?? [])
-        .map(toItemClaim)
-        .filter((claim): claim is ItemClaim => claim !== null);
-      return { status: "ok", claims };
-    } catch (err: unknown) {
-      return { status: "error", message: messageOf(err) };
+    if (error) {
+      if (error.code === FORBIDDEN_CODE) return { status: "forbidden" };
+      return { status: "error", message: error.message };
     }
+
+    const claims = (data ?? [])
+      .map(toItemClaim)
+      .filter((claim): claim is ItemClaim => claim !== null);
+    return { status: "ok", claims };
+  } catch (err: unknown) {
+    return { status: "error", message: messageOf(err) };
   }
-
-  if (mockMemberId(groupId, options) === null) return { status: "forbidden" };
-
-  const claims = mockItemClaims
-    .filter((claim) => itemIds.includes(claim.item_id))
-    .map(toItemClaim)
-    .filter((claim): claim is ItemClaim => claim !== null);
-  return { status: "ok", claims };
 }
 
 /**

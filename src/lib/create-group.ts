@@ -28,41 +28,13 @@
  * ==========================================================================
  */
 
-// TODO(remove-mock): Remove registerMockGroup and `@/lib/mock` imports once offline mock mode is deleted.
-import { registerMockGroup } from "@/lib/groups";
-import { mockGroupDetails, mockGroups, USE_MOCK } from "@/lib/mock";
 import { SUPABASE } from "@/lib/supabase";
-
-// TODO(remove-mock): Delete MOCK_CURRENT_USER_ID once mock mode is removed.
-/**
- * PLACEHOLDER (see #5 above): the user who creates mock groups, until
- * sign-in exists.
- */
-export const MOCK_CURRENT_USER_ID = "current-user";
 
 /**
  * Longest allowed group name. Must match the 50-character check in the
  * database's `groups` table and `create_group` function.
  */
 export const MAX_GROUP_NAME_LENGTH = 50;
-
-/**
- * Characters allowed in invite codes: uppercase, without look-alikes
- * (no 0/O, 1/I/L). Same alphabet as `create_group` in the database.
- */
-const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-/**
- * Length of every invite code (team decision: 8 characters).
- */
-const INVITE_CODE_LENGTH = 8;
-
-// TODO(remove-mock): Delete mockGroupCount once offline mock mode is removed.
-/**
- * PLACEHOLDER (part of #2 above): counts mock groups created since the app
- * started, so two groups made in the same millisecond get different IDs.
- */
-let mockGroupCount = 0;
 
 /**
  * A group as the app sees it (camelCase; the database uses snake_case).
@@ -146,114 +118,19 @@ export function validateGroupName(name: string): CreateGroupResult | null {
  * Creates a group with the user as owner and returns its invite code.
  * This is the only function screens should call.
  * @param name The group name the user typed
- * @param options Optional configuration
- * @param options.useMock True to use mock data
  * @returns The new group, or the reason it failed
  */
 export async function createGroup(
-  name: string,
-  // TODO(remove-mock): Remove `options?.useMock` branch and call `createGroupInDatabase` directly.
-  options?: { useMock?: boolean }
+  name: string
 ): Promise<CreateGroupResult> {
   const invalid = validateGroupName(name);
   if (invalid) return invalid;
 
-  const shouldUseMock = options?.useMock ?? (USE_MOCK || !SUPABASE);
-  return shouldUseMock
-    ? createGroupMock(name.trim())
-    : createGroupInDatabase(name.trim());
-}
-
-// TODO(remove-mock): Delete createGroupMock, saveMockGroup, and generateMockInviteCode once offline mock mode is removed.
-/**
- * PLACEHOLDER (see #2 above): pretends to create a group, without a
- * database. Waits briefly so the loading spinner is visible, like a real
- * network call would be.
- * @param name An already-validated, trimmed group name
- * @returns A fake group with a random invite code
- */
-async function createGroupMock(name: string): Promise<CreateGroupResult> {
-  await new Promise((resolve) => setTimeout(resolve, 600));
-
-  mockGroupCount += 1;
-  const group: CreatedGroup = {
-    id: `mock-created-${Date.now()}-${mockGroupCount}`,
-    name,
-    inviteCode: generateMockInviteCode(),
-    createdAt: new Date().toISOString(),
-  };
-  saveMockGroup(group);
-
-  return { success: true, group, message: `Created ${name}` };
+  return createGroupInDatabase(name.trim());
 }
 
 /**
- * PLACEHOLDER (part of #2 above): adds a new group to every mock store,
- * the way the database would make it visible everywhere:
- *   - `mockGroups`, so it shows in the Home list
- *   - Kellar's mock join service, so it can be joined by its code
- *   - `mockGroupDetails`, so its group page opens, with the creator as
- *     owner (which also makes re-joining it return ALREADY_MEMBER)
- * @param group The group that was just created
- */
-function saveMockGroup(group: CreatedGroup): void {
-  /* eslint-disable @typescript-eslint/naming-convention -- database column names */
-  registerMockGroup({
-    id: group.id,
-    name: group.name,
-    invite_code: group.inviteCode,
-    created_by: MOCK_CURRENT_USER_ID,
-    created_at: group.createdAt,
-    role: "owner",
-  });
-
-  mockGroupDetails[group.id] = {
-    group: {
-      id: group.id,
-      name: group.name,
-      invite_code: group.inviteCode,
-      created_by: MOCK_CURRENT_USER_ID,
-      created_at: group.createdAt,
-    },
-    members: [
-      {
-        user_id: MOCK_CURRENT_USER_ID,
-        display_name: "You",
-        role: "owner",
-        joined_at: group.createdAt,
-      },
-    ],
-    receipts: [],
-  };
-  /* eslint-enable @typescript-eslint/naming-convention */
-
-  mockGroups.push({ id: group.id, name: group.name });
-}
-
-/**
- * PLACEHOLDER (part of #2 above): makes a random code from the same
- * alphabet as the database, trying again if a mock group already uses it.
- * The real database checks for duplicates itself.
- * @returns An 8-character invite code
- */
-function generateMockInviteCode(): string {
-  const usedCodes = new Set(
-    Object.values(mockGroupDetails).map((detail) => detail.group.invite_code),
-  );
-  let code = "";
-  do {
-    code = "";
-    for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
-      const index = Math.floor(Math.random() * INVITE_CODE_ALPHABET.length);
-      code += INVITE_CODE_ALPHABET[index];
-    }
-  } while (usedCodes.has(code));
-  return code;
-}
-
-/**
- * PLACEHOLDER (see #3 above, untested): creates the group in Supabase by
- * calling the `create_group` database function.
+ * Creates the group in Supabase by calling the `create_group` database function.
  * @param name An already-validated, trimmed group name
  * @returns The new group, or the reason it failed
  */

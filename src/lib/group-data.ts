@@ -1,7 +1,4 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-// TODO(remove-mock): Remove `@/lib/mock` import once mock mode is deleted.
-import { mockGroupDetails, mockGroups } from "@/lib/mock";
-
 export type GroupSummary = { id: string; name: string };
 
 export type Member = {
@@ -48,9 +45,7 @@ export type GroupsClient = {
 };
 
 export type LoadOptions = {
-  // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
-  useMock: boolean;
-  client: GroupsClient | null | undefined;
+  client?: GroupsClient | null;
 };
 
 export type GroupListResult =
@@ -84,11 +79,9 @@ const messageOf = (e: unknown): string =>
  * @returns The groups, or an error message
  */
 export async function loadGroupList(
-  opts: LoadOptions
+  opts?: LoadOptions
 ): Promise<GroupListResult> {
-  // TODO(remove-mock): Remove `if (opts.useMock)` branch once mock mode is deleted.
-  if (opts.useMock) return { status: "ok", groups: [...mockGroups] };
-  if (!opts.client) return { status: "error", message: NOT_CONFIGURED };
+  if (!opts?.client) return { status: "error", message: NOT_CONFIGURED };
 
   try {
     const { data, error } = await opts.client
@@ -110,16 +103,9 @@ export async function loadGroupList(
  */
 export async function loadGroupDetail(
   id: string,
-  opts: LoadOptions
+  opts?: LoadOptions
 ): Promise<GroupDetailResult> {
-  // TODO(remove-mock): Remove `if (opts.useMock)` block once mock mode is deleted.
-  if (opts.useMock) {
-    const d = mockGroupDetails[id];
-    return d
-      ? { status: "ok", detail: d as GroupDetail }
-      : { status: "forbidden" }; // unknown id behaves like "not a member"
-  }
-  if (!opts.client) return { status: "error", message: NOT_CONFIGURED };
+  if (!opts?.client) return { status: "error", message: NOT_CONFIGURED };
 
   try {
     const { data, error } = await opts.client.rpc("get_group", {

@@ -37,7 +37,6 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
     visible,
     groupId,
     groupName,
-    userId = "current-user",
     deleting = false,
     onClose,
     onRenamed,
@@ -89,7 +88,7 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
     setError(null);
 
     try {
-      const result = await renameGroup(groupId, trimmed, userId);
+      const result = await renameGroup(groupId, trimmed);
       if (!result.success) {
         setError(result.message);
         return;
