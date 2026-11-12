@@ -39,3 +39,12 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Sprint Tasks & PR Workflow (CSE 115A)
+
+For each course sprint task (spec: `cse115a-sprint-task-specifications.md`):
+
+- **Task file location & format:** Create `docs/tasks/sprint-<N>/<task id>.md` with matching `sprint: <N>` and front matter (`id`, `story`, `sprint`, `assignee`, `estimate_hours`). Keep the exact headings and order from the course spec: `# <Title>`, `## Description`, `## Specs`, `## Requirements`, `## Acceptance criteria` (do not add extra headings).
+- **Spec-first commit & base tag:** On a fresh branch `task/<task id>` from up-to-date `main`, commit **only** `docs/tasks/sprint-<N>/<task id>.md` first, tag `<task id>-base` on that commit, and push both (`git push origin task/<task id> <task id>-base`). Never amend, rebase, or force-push that commit after tagging.
+- **Tests:** Add at least one test per acceptance criterion under `tests/`, with every test name prefixed by `<task id>` (e.g. `US-3.1-T-1: ...`). Run `npx expo lint`, `npx tsc --noEmit`, `npm test` (runs both `test:unit` and `test:ui`).
+- **One task per PR & done tag:** Within `docs/tasks/`, a task PR must touch **only** its own `docs/tasks/sprint-<N>/<task id>.md`. Title the PR `<task id>: <title>`. After merging to `main`, tag `<task id>-done` on the merge commit and push it (`git push origin <task id>-done`). Separate repo-wide cleanup/setup belongs in its own non-submitted PR merged to `main` first (then `git merge origin/main`, never rebase).

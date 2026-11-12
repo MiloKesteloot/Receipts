@@ -59,8 +59,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "test:unit": "node --experimental-strip-types --import ./tests/register-aliases.ts --test tests/unit/*.test.ts",
     "test:ui": "jest",
-    "test": "node --experimental-strip-types --import ./tests/register-aliases.ts --test tests/unit/*.test.ts"
+    "test": "npm run test:unit && npm run test:ui"
   },
   "jest": {
     "preset": "jest-expo",
