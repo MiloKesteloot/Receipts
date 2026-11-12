@@ -6,9 +6,9 @@ import {
   mockGuestTokens,
   mockItemClaims,
   mockReceiptItems,
+  USE_MOCK,
   type MockItemClaim,
   type MockReceiptItem,
-  USE_MOCK,
 } from "@/lib/mock";
 import { SUPABASE } from "@/lib/supabase";
 
@@ -54,35 +54,35 @@ export type GuestReceiptDetail = {
  */
 export type GetGuestReceiptResult =
   | {
-      success: true;
-      receipt: GuestReceiptDetail;
-    }
+    success: true;
+    receipt: GuestReceiptDetail;
+  }
   | {
-      success: false;
-      error: "INVALID_TOKEN" | "EXPIRED_TOKEN" | "NETWORK_ERROR";
-      message: string;
-    };
+    success: false;
+    error: "INVALID_TOKEN" | "EXPIRED_TOKEN" | "NETWORK_ERROR";
+    message: string;
+  };
 
 /**
  * Result returned after attempting to claim or unclaim an item.
  */
 export type ClaimActionResult =
   | {
-      success: true;
-      item_id: string;
-      guest_name: string;
-      claimed: boolean;
-    }
+    success: true;
+    item_id: string;
+    guest_name: string;
+    claimed: boolean;
+  }
   | {
-      success: false;
-      error:
-        | "EMPTY_NAME"
-        | "INVALID_TOKEN"
-        | "EXPIRED_TOKEN"
-        | "ITEM_NOT_FOUND"
-        | "NETWORK_ERROR";
-      message: string;
-    };
+    success: false;
+    error:
+    | "EMPTY_NAME"
+    | "INVALID_TOKEN"
+    | "EXPIRED_TOKEN"
+    | "ITEM_NOT_FOUND"
+    | "NETWORK_ERROR";
+    message: string;
+  };
 
 /**
  * Base URL used when generating shareable web claiming links.
