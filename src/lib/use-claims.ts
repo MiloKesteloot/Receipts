@@ -35,6 +35,7 @@ import {
   type MyTotal,
   unclaimItem,
 } from "@/lib/claims";
+// TODO(remove-mock): Remove USE_MOCK import once offline mock mode is deleted.
 import { USE_MOCK } from "@/lib/mock";
 
 export type UseClaimsResult = {
@@ -190,6 +191,7 @@ export function useClaims(
       tappedRef.current = new Set(inFlightRef.current);
 
       const itemIds = JSON.parse(itemIdsKey) as string[];
+      // TODO(remove-mock): Remove `useMock` and `mockUserId` options once mock mode is deleted.
       const options = { useMock: USE_MOCK, mockUserId: userId };
       let result: Awaited<ReturnType<typeof getClaims>>;
       try {
@@ -237,6 +239,7 @@ export function useClaims(
       );
 
       const send = wasClaimed ? unclaimItem : claimItem;
+      // TODO(remove-mock): Remove `useMock` and `mockUserId` options once mock mode is deleted.
       const options = { useMock: USE_MOCK, mockUserId: userId };
       let result: ClaimActionResult;
       try {
@@ -257,6 +260,7 @@ export function useClaims(
       );
       setError(failureMessage(result));
 
+      // TODO(remove-mock): Always `await load(true);` once mock mode is removed.
       // The request may have reached the server even though it failed here,
       // so load the server's view. Mock data has no such gap.
       if (!USE_MOCK) await load(true);

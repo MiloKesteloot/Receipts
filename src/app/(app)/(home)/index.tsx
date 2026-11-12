@@ -18,6 +18,7 @@ import { NewGroupButton } from "@/components/NewGroupButton";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { type CreatedGroup } from "@/lib/create-group";
+// TODO(remove-mock): Remove `@/lib/mock` import once mock mode is deleted.
 import { mockGroups, USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { SUPABASE as supabase } from "@/lib/supabase";
@@ -50,6 +51,7 @@ export default function Index(): JSX.Element {
     else setRefreshing(true);
     setError(null);
 
+    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
     if (USE_MOCK) {
       setGroups([...mockGroups]);
       setLoading(false);
@@ -105,6 +107,7 @@ export default function Index(): JSX.Element {
 
   useFocusEffect(
     useCallback(() => {
+      // TODO(remove-mock): Delete `if (USE_MOCK)` branch once offline mock mode is removed.
       if (USE_MOCK) {
         setGroups([...mockGroups]);
       } else {
@@ -125,6 +128,7 @@ export default function Index(): JSX.Element {
 
   const handleGroupCreated = (group: CreatedGroup) => {
     setModalVisible(false);
+    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
     if (USE_MOCK) {
       setGroups([...mockGroups]);
     } else {
@@ -147,6 +151,7 @@ export default function Index(): JSX.Element {
     message: string
   ) => {
     setModalVisible(false);
+    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
     if (USE_MOCK) {
       setGroups([...mockGroups]);
     } else {

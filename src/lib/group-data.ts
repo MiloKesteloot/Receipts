@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
+// TODO(remove-mock): Remove `@/lib/mock` import once mock mode is deleted.
 import { mockGroupDetails, mockGroups } from "@/lib/mock";
 
 export type GroupSummary = { id: string; name: string };
@@ -47,6 +48,7 @@ export type GroupsClient = {
 };
 
 export type LoadOptions = {
+  // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
   useMock: boolean;
   client: GroupsClient | null | undefined;
 };
@@ -84,6 +86,7 @@ const messageOf = (e: unknown): string =>
 export async function loadGroupList(
   opts: LoadOptions
 ): Promise<GroupListResult> {
+  // TODO(remove-mock): Remove `if (opts.useMock)` branch once mock mode is deleted.
   if (opts.useMock) return { status: "ok", groups: [...mockGroups] };
   if (!opts.client) return { status: "error", message: NOT_CONFIGURED };
 
@@ -109,6 +112,7 @@ export async function loadGroupDetail(
   id: string,
   opts: LoadOptions
 ): Promise<GroupDetailResult> {
+  // TODO(remove-mock): Remove `if (opts.useMock)` block once mock mode is deleted.
   if (opts.useMock) {
     const d = mockGroupDetails[id];
     return d

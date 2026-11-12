@@ -34,6 +34,7 @@ import {
   MAX_GROUP_NAME_LENGTH,
   validateGroupName,
 } from "@/lib/create-group";
+// TODO(remove-mock): Remove USE_MOCK import and demo banner once mock mode is deleted.
 import { USE_MOCK } from "@/lib/mock";
 
 type Props = {
@@ -117,6 +118,7 @@ export function CreateGroupForm({
     <View style={STYLES.section}>
       <Text style={STYLES.sectionLabel}>Create a new group</Text>
 
+      {/* TODO(remove-mock): Remove demo mode banner once mock mode is deleted. */}
       {USE_MOCK && (
         // PLACEHOLDER #1: disappears when USE_MOCK is switched off.
         <Text style={STYLES.demoNote}>

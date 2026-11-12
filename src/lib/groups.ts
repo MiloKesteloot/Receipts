@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
+// TODO(remove-mock): Remove `./mock` import once offline mock mode is deleted.
 import {
   mockGroupDetails,
   mockGroups,
@@ -18,6 +19,7 @@ import type {
   JoinGroupResult,
 } from "./groups.types";
 
+// TODO(remove-mock): Delete mockAliasIds and removeWhere helpers once MockGroupService is deleted.
 /**
  * The seed data has two ids for the same "Apartment 402" group, and joining
  * one joins both. Leaving and deleting treat them the same way.
@@ -93,6 +95,7 @@ function validateGroupRename(
   return { valid: true, trimmed };
 }
 
+// TODO(remove-mock): Delete SEED_GROUPS and MockGroupService once offline mock mode is deleted.
 /**
  * Initial seed groups for development and testing.
  */
@@ -621,6 +624,7 @@ export class SupabaseGroupService implements GroupService {
   }
 }
 
+// TODO(remove-mock): Delete MOCK_GROUP_SERVICE and registerMockGroup once MockGroupService is deleted.
 /**
  * Shared in-memory group service instance.
  */
@@ -631,6 +635,7 @@ export const MOCK_GROUP_SERVICE = new MockGroupService();
  */
 export const SUPABASE_GROUP_SERVICE = new SupabaseGroupService();
 
+// TODO(remove-mock): Delete registerMockGroup once createGroupMock/MockGroupService are deleted.
 /**
  * Registers a newly created group (US 1.2) with the mock service so it can
  * be joined by its invite code.
@@ -648,6 +653,7 @@ export function registerMockGroup(group: Group): void {
  */
 export async function joinGroup(
   inviteCode: string,
+  // TODO(remove-mock): Remove `userId` mock param and all MOCK_GROUP_SERVICE fallbacks below; call SUPABASE_GROUP_SERVICE directly.
   userId: string = "current-user"
 ): Promise<JoinGroupResult> {
   if (USE_MOCK) {
@@ -675,6 +681,7 @@ export async function joinGroup(
  */
 export async function leaveGroup(
   groupId: string,
+  // TODO(remove-mock): Remove `userId` mock param and `USE_MOCK` fallback; return SUPABASE_GROUP_SERVICE.leaveGroup(groupId).
   userId: string = "current-user"
 ): Promise<GroupActionResult> {
   if (USE_MOCK || !SUPABASE) {
@@ -692,6 +699,7 @@ export async function leaveGroup(
  */
 export async function deleteGroup(
   groupId: string,
+  // TODO(remove-mock): Remove `userId` mock param and `USE_MOCK` fallback; return SUPABASE_GROUP_SERVICE.deleteGroup(groupId).
   userId: string = "current-user"
 ): Promise<GroupActionResult> {
   if (USE_MOCK || !SUPABASE) {
@@ -711,6 +719,7 @@ export async function deleteGroup(
 export async function renameGroup(
   groupId: string,
   name: string,
+  // TODO(remove-mock): Remove `userId` mock param and `USE_MOCK` fallback; return SUPABASE_GROUP_SERVICE.renameGroup(groupId, name).
   userId: string = "current-user"
 ): Promise<GroupActionResult> {
   if (USE_MOCK || !SUPABASE) {

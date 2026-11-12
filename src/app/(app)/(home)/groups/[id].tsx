@@ -18,10 +18,12 @@ import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
 import { useAuth } from "@/lib/auth-provider";
+// TODO(remove-mock): Remove MOCK_CURRENT_USER_ID once offline mock mode is deleted.
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
 import { isGroupOwner } from "@/lib/group-members";
 import { deleteGroup, leaveGroup } from "@/lib/groups";
+// TODO(remove-mock): Remove USE_MOCK import once offline mock mode is deleted.
 import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
@@ -112,6 +114,7 @@ export default function GroupScreen(): JSX.Element {
   const [scanNotes, setScanNotes] = useState<string[]>([]);
   const [scanSession, setScanSession] = useState(0);
   const { session } = useAuth();
+  // TODO(remove-mock): Replace with `const currentUserId = session?.user.id;` once mock mode is deleted.
   // Mock data only knows the placeholder user (see create-group.ts).
   const currentUserId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
   const [refreshing, setRefreshing] = useState(false);
@@ -130,6 +133,7 @@ export default function GroupScreen(): JSX.Element {
     setForbidden(false);
 
     const result = await loadGroupDetail(id, {
+      // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
       useMock: USE_MOCK,
       client: supabase,
     });
@@ -163,6 +167,7 @@ export default function GroupScreen(): JSX.Element {
   // without it.
   useEffect(() => {
     const client = supabase;
+    // TODO(remove-mock): Replace with `if (!client) return;` once mock mode is deleted.
     if (USE_MOCK || !client) return;
     const channel = client
       .channel(`group-members-${id}`)
@@ -266,6 +271,7 @@ export default function GroupScreen(): JSX.Element {
     setGroupActionBusy(true);
 
     try {
+      // TODO(remove-mock): Remove MOCK_CURRENT_USER_ID fallback once mock mode is deleted.
       const userId = currentUserId ?? MOCK_CURRENT_USER_ID;
       const result = await deleteGroup(group.id, userId);
 
@@ -292,6 +298,7 @@ export default function GroupScreen(): JSX.Element {
     setGroupActionBusy(true);
 
     try {
+      // TODO(remove-mock): Remove MOCK_CURRENT_USER_ID fallback once mock mode is deleted.
       const userId = currentUserId ?? MOCK_CURRENT_USER_ID;
       const result = await leaveGroup(group.id, userId);
 
@@ -380,6 +387,7 @@ export default function GroupScreen(): JSX.Element {
     status: ReceiptStatus
   ): Promise<string | null> => {
     const result = await saveReceipt(group.id, draft, status, {
+      // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
       useMock: USE_MOCK,
       existingId: scanDraft === null ? editingReceipt?.id : undefined,
     });
@@ -422,6 +430,7 @@ export default function GroupScreen(): JSX.Element {
     if (target === null) return;
 
     const result = await deleteReceipt(group.id, target.id, {
+      // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
       useMock: USE_MOCK,
     });
     if (result.status === "error") {
@@ -653,6 +662,7 @@ export default function GroupScreen(): JSX.Element {
         visible={editGroupVisible}
         groupId={group.id}
         groupName={group.name}
+        // TODO(remove-mock): Remove MOCK_CURRENT_USER_ID fallback once mock mode is deleted.
         userId={currentUserId ?? MOCK_CURRENT_USER_ID}
         deleting={groupActionBusy}
         onClose={() => setEditGroupVisible(false)}

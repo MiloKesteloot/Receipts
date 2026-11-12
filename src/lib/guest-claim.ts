@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
+// TODO(remove-mock): Remove `@/lib/mock` imports once offline mock mode is deleted.
 import {
   mockGroupDetails,
   mockGuestTokens,
@@ -143,6 +144,7 @@ export async function createGuestClaimLink(receiptId: string): Promise<string> {
  * @returns Unique token string
  */
 export async function createGuestClaimToken(receiptId: string): Promise<string> {
+  // TODO(remove-mock): Replace with a `!SUPABASE` error and remove the mock token branch once mock mode is deleted.
   if (USE_MOCK || !SUPABASE) {
     const randomSuffix = Math.random().toString(36).substring(2, 8);
     const token = `mock-claim-${receiptId}-${randomSuffix}`;
@@ -193,6 +195,7 @@ export async function createGuestClaimToken(receiptId: string): Promise<string> 
   return token;
 }
 
+// TODO(remove-mock): Delete buildItemWithClaims (or update to non-mock types if needed) once offline mock mode is deleted.
 /**
  * Builds item claim models with split calculations.
  * @param item The receipt item
@@ -244,6 +247,7 @@ export async function getReceiptByGuestToken(
     };
   }
 
+  // TODO(remove-mock): Replace with a `!SUPABASE` error and delete the mock branch once mock mode is deleted.
   if (USE_MOCK || !SUPABASE) {
     const tokenRecord = mockGuestTokens.find((t) => t.token === token);
     if (!tokenRecord) {
@@ -385,6 +389,7 @@ export async function claimItemAsGuest(
     };
   }
 
+  // TODO(remove-mock): Replace with a `!SUPABASE` error and delete the mock branch once mock mode is deleted.
   if (USE_MOCK || !SUPABASE) {
     const tokenRecord = mockGuestTokens.find((t) => t.token === token);
     if (!tokenRecord) {

@@ -8,6 +8,7 @@
  * Mock mode applies the same owner check in memory.
  */
 import { NOT_CONFIGURED, type GroupSummary } from "@/lib/group-data";
+// TODO(remove-mock): Remove `@/lib/mock` import once offline mock mode is deleted.
 import { mockGroupDetails } from "@/lib/mock";
 
 type DbError = { code?: string; message: string } | null;
@@ -53,6 +54,7 @@ export type RpcClient = {
 
 /** Mock flag and Supabase client, like LoadOptions in group-data.ts. */
 export type GroupMembersOptions = {
+  // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
   useMock: boolean;
   client: GroupMembersClient | null | undefined;
 };
@@ -62,6 +64,7 @@ export type GroupMembersOptions = {
  * skip owner ids before calling the server.
  */
 export type RemoveMembersOptions = {
+  // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
   useMock: boolean;
   client: RpcClient | null | undefined;
   members?: readonly MemberLike[];
@@ -148,6 +151,7 @@ export async function loadOwnedGroups(
     return { status: "error", message: SIGNED_OUT_MESSAGE };
   }
 
+  // TODO(remove-mock): Delete `if (opts.useMock)` block once offline mock mode is removed.
   if (opts.useMock) {
     const groups = Object.values(mockGroupDetails)
       .filter((d) => isGroupOwner(d, userId))
@@ -201,6 +205,7 @@ function screenTargets(
   return { allowed, refused };
 }
 
+// TODO(remove-mock): Delete removeMockMembers once offline mock mode is removed.
 /**
  * Removes the members from the group in memory. Only the owner may do it.
  * The members array is edited in place so other importers see the change.
@@ -252,6 +257,7 @@ export async function removeGroupMembers(
   currentUserId: string | undefined,
   opts: RemoveMembersOptions
 ): Promise<RemoveMembersResult> {
+  // TODO(remove-mock): Use `opts.members` directly and remove `if (opts.useMock)` block once mock mode is removed.
   const members = opts.useMock
     ? mockGroupDetails[groupId]?.members
     : opts.members;

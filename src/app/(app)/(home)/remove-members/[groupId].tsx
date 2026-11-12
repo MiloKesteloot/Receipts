@@ -13,6 +13,7 @@ import { JSX } from "react/jsx-runtime";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { confirmAction } from "@/lib/confirm-action";
+// TODO(remove-mock): Remove MOCK_CURRENT_USER_ID once mock mode is deleted.
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail, type GroupDetail } from "@/lib/group-data";
 import {
@@ -21,6 +22,7 @@ import {
   removeGroupMembers,
   type RemoveFailure,
 } from "@/lib/group-members";
+// TODO(remove-mock): Remove USE_MOCK import once mock mode is deleted.
 import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
@@ -69,6 +71,7 @@ function failureMessage(
 export default function RemoveMembersScreen(): JSX.Element {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { session } = useAuth();
+  // TODO(remove-mock): Replace with `const currentUserId = session?.user.id;` once mock mode is deleted.
   // Mock data only knows the placeholder user (see create-group.ts).
   const currentUserId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
 
@@ -91,6 +94,7 @@ export default function RemoveMembersScreen(): JSX.Element {
     setLoading(true);
     setError(null);
     const result = await loadGroupDetail(groupId, {
+      // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
       useMock: USE_MOCK,
       client: supabase,
     });
@@ -212,6 +216,7 @@ export default function RemoveMembersScreen(): JSX.Element {
       if (!confirmed) return;
 
       const result = await removeGroupMembers(group.id, targets, currentUserId, {
+        // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
         useMock: USE_MOCK,
         client: supabase,
         members,

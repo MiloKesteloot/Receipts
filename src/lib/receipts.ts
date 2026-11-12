@@ -1,5 +1,6 @@
  
 
+// TODO(remove-mock): Remove `@/lib/mock` import once mock mode is deleted.
 import { mockGroupDetails, type MockGroupDetail } from "@/lib/mock";
 import {
   buildReceipt,
@@ -21,6 +22,7 @@ export type DeleteReceiptResult =
   | { status: "ok" }
   | { status: "error"; message: string };
 
+// TODO(remove-mock): Delete RECEIPT_COUNTER once mock receipt creation is removed.
 /**
  * Source of ids for receipts created in mock mode.
  */
@@ -44,7 +46,11 @@ export async function saveReceipt(
   groupId: string,
   draft: ReceiptDraft,
   status: ReceiptStatus,
-  options: { useMock: boolean; existingId?: string }
+  options: {
+    // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
+    useMock: boolean;
+    existingId?: string;
+  }
 ): Promise<SaveReceiptResult> {
   const problem =
     status === "submitted" ? validateForSubmit(draft) : validateForDraft(draft);
@@ -189,6 +195,7 @@ export async function saveReceipt(
     }
   }
 
+  // TODO(remove-mock): Delete this mock fallback block once offline mock mode is removed.
   const detail: MockGroupDetail | undefined = mockGroupDetails[groupId];
   if (!detail) return { status: "error", message: "Group not found." };
 
@@ -234,7 +241,10 @@ export async function saveReceipt(
 export async function deleteReceipt(
   groupId: string,
   receiptId: string,
-  options: { useMock: boolean }
+  options: {
+    // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
+    useMock: boolean;
+  }
 ): Promise<DeleteReceiptResult> {
   if (!options.useMock) {
     if (!SUPABASE) {
@@ -266,6 +276,7 @@ export async function deleteReceipt(
     }
   }
 
+  // TODO(remove-mock): Delete this mock fallback block once offline mock mode is removed.
   const detail: MockGroupDetail | undefined = mockGroupDetails[groupId];
   if (!detail) return { status: "error", message: "Group not found." };
 

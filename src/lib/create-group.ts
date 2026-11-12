@@ -28,10 +28,12 @@
  * ==========================================================================
  */
 
+// TODO(remove-mock): Remove registerMockGroup and `@/lib/mock` imports once offline mock mode is deleted.
 import { registerMockGroup } from "@/lib/groups";
 import { mockGroupDetails, mockGroups, USE_MOCK } from "@/lib/mock";
 import { SUPABASE } from "@/lib/supabase";
 
+// TODO(remove-mock): Delete MOCK_CURRENT_USER_ID once mock mode is removed.
 /**
  * PLACEHOLDER (see #5 above): the user who creates mock groups, until
  * sign-in exists.
@@ -55,6 +57,7 @@ const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
  */
 const INVITE_CODE_LENGTH = 8;
 
+// TODO(remove-mock): Delete mockGroupCount once offline mock mode is removed.
 /**
  * PLACEHOLDER (part of #2 above): counts mock groups created since the app
  * started, so two groups made in the same millisecond get different IDs.
@@ -149,6 +152,7 @@ export function validateGroupName(name: string): CreateGroupResult | null {
  */
 export async function createGroup(
   name: string,
+  // TODO(remove-mock): Remove `options?.useMock` branch and call `createGroupInDatabase` directly.
   options?: { useMock?: boolean }
 ): Promise<CreateGroupResult> {
   const invalid = validateGroupName(name);
@@ -160,6 +164,7 @@ export async function createGroup(
     : createGroupInDatabase(name.trim());
 }
 
+// TODO(remove-mock): Delete createGroupMock, saveMockGroup, and generateMockInviteCode once offline mock mode is removed.
 /**
  * PLACEHOLDER (see #2 above): pretends to create a group, without a
  * database. Waits briefly so the loading spinner is visible, like a real
