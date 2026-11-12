@@ -4,17 +4,10 @@
  * group is created, `onCreated` receives the new group so the screen can close
  * the modal, show a toast, and navigate directly to the group page.
  *
- * ============================== PLACEHOLDERS ==============================
- * 1. The "Demo mode" note shows while the team's `USE_MOCK` flag is true,
- *    so fake groups are never mistaken for real ones in a demo. It goes
- *    away by itself when `USE_MOCK` is turned off.
- * 2. Styles are copied from Kellar's Add Group modal (section label, input,
- *    green button) so the create and join halves match. There's no design
- *    system yet; restyle both together later.
- * 3. DARK MODE: colors are fixed for a light background, because Kellar's
- *    modal card is always white. The whole modal (his card, this form and
- *    the invite code card) needs one dark-mode pass later. Not part of
- *    US 1.2.
+ * ============================== NOTES ====================================
+ * 1. Styles are aligned with the Add Group modal (section label, input,
+ *    green button) so the create and join halves match.
+ * 2. DARK MODE: colors are styled for modal card backgrounds.
  * ==========================================================================
  */
 

@@ -132,7 +132,7 @@ export default function GroupScreen(): JSX.Element {
 
     if (result.status === "ok") {
       hasDetailRef.current = true;
-      // Copy so in-place mock edits (e.g. a member removed) re-render.
+      // Copy so member updates trigger a re-render.
       setDetail({ ...result.detail, members: [...result.detail.members] });
     } else if (result.status === "forbidden") {
       // e.g. the owner removed this user (US 3.2).
@@ -159,7 +159,7 @@ export default function GroupScreen(): JSX.Element {
   // without it.
   useEffect(() => {
     const client = supabase;
-    if (!client) return;
+    if (!client || typeof client.channel !== "function") return;
     const channel = client
       .channel(`group-members-${id}`)
       .on(
@@ -176,7 +176,7 @@ export default function GroupScreen(): JSX.Element {
       )
       .subscribe();
     return () => {
-      client.removeChannel(channel);
+      client.removeChannel?.(channel);
     };
   }, [id, load]);
 

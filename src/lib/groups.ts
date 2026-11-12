@@ -66,13 +66,23 @@ function validateGroupRename(
  * Supabase-backed Group Service for production database RPC calls.
  */
 export class SupabaseGroupService implements GroupService {
+  private client: typeof SUPABASE;
+
+  /**
+   * Creates an instance of SupabaseGroupService.
+   * @param client Supabase client instance
+   */
+  constructor(client: typeof SUPABASE = SUPABASE) {
+    this.client = client;
+  }
+
   /**
    * Joins a group via Supabase RPC function.
    * @param inviteCode The invite code to join with
    * @returns Join result from server
    */
   async joinGroupByCode(inviteCode: string): Promise<JoinGroupResult> {
-    if (!SUPABASE) {
+    if (!this.client) {
       return {
         success: false,
         error: "NETWORK_ERROR",
@@ -90,7 +100,7 @@ export class SupabaseGroupService implements GroupService {
     }
 
     try {
-      const { data, error } = await SUPABASE.rpc("join_group", {
+      const { data, error } = await this.client.rpc("join_group", {
         p_invite_code: trimmed,
       });
 
@@ -146,7 +156,7 @@ export class SupabaseGroupService implements GroupService {
    * @returns Result with updated group name or failure reason
    */
   async renameGroup(groupId: string, name: string): Promise<GroupActionResult> {
-    if (!SUPABASE) {
+    if (!this.client) {
       return actionFailure("NETWORK_ERROR", "Supabase client is not configured.");
     }
     if (!groupId) return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
@@ -157,7 +167,8 @@ export class SupabaseGroupService implements GroupService {
     }
 
     try {
-      const { data, error } = await SUPABASE.from("groups")
+      const { data, error } = await this.client
+        .from("groups")
         .update({ name: validation.trimmed })
         .eq("id", groupId)
         .select("id, name")
@@ -206,13 +217,13 @@ export class SupabaseGroupService implements GroupService {
     fn: "leave_group" | "delete_group",
     groupId: string
   ): Promise<GroupActionResult> {
-    if (!SUPABASE) {
+    if (!this.client) {
       return actionFailure("NETWORK_ERROR", "Supabase client is not configured.");
     }
     if (!groupId) return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
 
     try {
-      const { data, error } = await SUPABASE.rpc(fn, { p_group_id: groupId });
+      const { data, error } = await this.client.rpc(fn, { p_group_id: groupId });
       if (error) {
         if (error.code === "42501") {
           return actionFailure("NOT_SIGNED_IN", "Please sign in and try again");
@@ -242,45 +253,53 @@ export const SUPABASE_GROUP_SERVICE = new SupabaseGroupService();
 /**
  * Primary joinGroup export: Joins a group by its invite code via Supabase.
  * @param inviteCode Invite code entered by user
+ * @param client Optional Supabase client override
  * @returns Join result with group data or error
  */
 export async function joinGroup(
-  inviteCode: string
+  inviteCode: string,
+  client?: typeof SUPABASE
 ): Promise<JoinGroupResult> {
-  return SUPABASE_GROUP_SERVICE.joinGroupByCode(inviteCode);
+  return (client ? new SupabaseGroupService(client) : SUPABASE_GROUP_SERVICE).joinGroupByCode(inviteCode);
 }
 
 /**
  * Leaves a group (US 2.4) via Supabase leave_group RPC.
  * @param groupId Group to leave
+ * @param client Optional Supabase client override
  * @returns The left group's name, or why it failed
  */
 export async function leaveGroup(
-  groupId: string
+  groupId: string,
+  client?: typeof SUPABASE
 ): Promise<GroupActionResult> {
-  return SUPABASE_GROUP_SERVICE.leaveGroup(groupId);
+  return (client ? new SupabaseGroupService(client) : SUPABASE_GROUP_SERVICE).leaveGroup(groupId);
 }
 
 /**
  * Deletes a group for every member (US 2.4). Only the owner can do this.
  * @param groupId Group to delete
+ * @param client Optional Supabase client override
  * @returns The deleted group's name, or why it failed
  */
 export async function deleteGroup(
-  groupId: string
+  groupId: string,
+  client?: typeof SUPABASE
 ): Promise<GroupActionResult> {
-  return SUPABASE_GROUP_SERVICE.deleteGroup(groupId);
+  return (client ? new SupabaseGroupService(client) : SUPABASE_GROUP_SERVICE).deleteGroup(groupId);
 }
 
 /**
  * Renames a group. Only the owner can do this.
  * @param groupId Group to rename
  * @param name New group name
+ * @param client Optional Supabase client override
  * @returns The updated group name, or why it failed
  */
 export async function renameGroup(
   groupId: string,
-  name: string
+  name: string,
+  client?: typeof SUPABASE
 ): Promise<GroupActionResult> {
-  return SUPABASE_GROUP_SERVICE.renameGroup(groupId, name);
+  return (client ? new SupabaseGroupService(client) : SUPABASE_GROUP_SERVICE).renameGroup(groupId, name);
 }

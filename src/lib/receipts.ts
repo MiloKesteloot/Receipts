@@ -19,6 +19,11 @@ export type DeleteReceiptResult =
   | { status: "ok" }
   | { status: "error"; message: string };
 
+export type SaveReceiptOptions = {
+  existingId?: string;
+  client?: typeof SUPABASE;
+};
+
 /**
  * Validates and saves a receipt for a group.
  * @param groupId The group the receipt belongs to
@@ -26,21 +31,21 @@ export type DeleteReceiptResult =
  * @param status Save as a draft or submit
  * @param options Save options
  * @param options.existingId Id of the saved draft being edited, if any
+ * @param options.client Optional Supabase client override
  * @returns The saved receipt, or an error message
  */
 export async function saveReceipt(
   groupId: string,
   draft: ReceiptDraft,
   status: ReceiptStatus,
-  options?: {
-    existingId?: string;
-  }
+  options?: SaveReceiptOptions
 ): Promise<SaveReceiptResult> {
   const problem =
     status === "submitted" ? validateForSubmit(draft) : validateForDraft(draft);
   if (problem !== null) return { status: "error", message: problem };
 
-  if (!SUPABASE) {
+  const client = options?.client ?? SUPABASE;
+  if (!client) {
       return {
         status: "error",
         message: "Supabase client is not configured.",
@@ -50,7 +55,7 @@ export async function saveReceipt(
     try {
       const {
         data: { user },
-      } = await SUPABASE.auth.getUser();
+      } = await client.auth.getUser();
       if (!user) {
         return {
           status: "error",
@@ -71,7 +76,7 @@ export async function saveReceipt(
           draft_data: status === "draft" ? draft : null,
         };
 
-        const { data: updatedReceipt, error: updateError } = await SUPABASE
+        const { data: updatedReceipt, error: updateError } = await client
           .from("receipts")
           .update(updatePayload)
           .eq("id", existingId)
@@ -98,7 +103,7 @@ export async function saveReceipt(
             }));
 
           if (validItems.length > 0) {
-            await SUPABASE.from("receipt_items").insert(validItems);
+            await client.from("receipt_items").insert(validItems);
           }
         }
 
@@ -118,7 +123,7 @@ export async function saveReceipt(
       }
 
       // Insert new receipt
-      const { data: newReceipt, error: insertError } = await SUPABASE
+      const { data: newReceipt, error: insertError } = await client
         .from("receipts")
         .insert({
           // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -154,7 +159,7 @@ export async function saveReceipt(
           }));
 
         if (validItems.length > 0) {
-          await SUPABASE.from("receipt_items").insert(validItems);
+          await client.from("receipt_items").insert(validItems);
         }
       }
 
@@ -183,20 +188,24 @@ export async function saveReceipt(
  * Deletes a saved draft from a group. Submitted receipts cannot be deleted.
  * @param groupId The group the draft belongs to
  * @param receiptId The draft to delete
+ * @param options Delete options
+ * @param options.client Optional Supabase client override
  * @returns Ok, or an error message
  */
 export async function deleteReceipt(
   groupId: string,
-  receiptId: string
+  receiptId: string,
+  options?: { client?: typeof SUPABASE }
 ): Promise<DeleteReceiptResult> {
-  if (!SUPABASE) {
+  const client = options?.client ?? SUPABASE;
+  if (!client) {
     return {
       status: "error",
       message: "Supabase client is not configured.",
     };
   }
   try {
-    const { error } = await SUPABASE
+    const { error } = await client
       .from("receipts")
       .delete()
       .eq("id", receiptId)

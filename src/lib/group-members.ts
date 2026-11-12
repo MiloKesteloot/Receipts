@@ -5,7 +5,6 @@
  * Only the group owner can remove members. The UI hides the controls from
  * everyone else, but the real check is on the server: real mode always goes
  * through the `remove_group_member` RPC, which re-checks the caller's role.
- * Mock mode applies the same owner check in memory.
  */
 import { NOT_CONFIGURED, type GroupSummary } from "@/lib/group-data";
 
@@ -134,7 +133,7 @@ export function removableMembers<T extends MemberLike>(
  * Loads the groups the user owns, sorted by name, for the "Remove members"
  * picker.
  * @param userId Signed-in user id, or undefined when signed out
- * @param opts Mock flag and Supabase client
+ * @param opts Supabase client options
  * @returns The owned groups, or an error message
  */
 export async function loadOwnedGroups(

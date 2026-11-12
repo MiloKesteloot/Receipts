@@ -94,7 +94,7 @@ export default function RemoveMembersScreen(): JSX.Element {
     if (result.status === "ok") {
       hasDetailRef.current = true;
       setForbidden(false);
-      // Copy so a mock-mode removal (which edits the array in place) shows up.
+      // Copy so member updates trigger a re-render.
       setDetail({ ...result.detail, members: [...result.detail.members] });
       // Drop picks for anyone who is no longer removable.
       const stillRemovable = new Set(

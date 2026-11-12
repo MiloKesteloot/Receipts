@@ -11,11 +11,8 @@
  * the receipt or the session. Nothing loads and `toggle` does nothing until
  * both are known.
  *
- * ============================== PLACEHOLDERS ==============================
- * 1. `USE_MOCK` picks mock or real claims.
- * 2. `userId` is also passed on as `mockUserId` for mock mode. Real requests
- *    ignore it and use the session's user on the server.
- * 3. Claims load when the screen opens, and there's no live updating. Other
+ * ============================== NOTES ==============================
+ * 1. Claims load when the screen opens, and there's no live updating. Other
  *    people's claims appear the next time they load. Revisit if the team wants
  *    Realtime.
  * ==========================================================================

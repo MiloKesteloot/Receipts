@@ -131,16 +131,20 @@ export async function createGuestClaimLink(receiptId: string): Promise<string> {
 /**
  * Generates and stores a unique guest claim token for a receipt.
  * @param receiptId Unique ID of the receipt to share
+ * @param client Optional Supabase client override
  * @returns Unique token string
  */
-export async function createGuestClaimToken(receiptId: string): Promise<string> {
-  if (!SUPABASE) {
+export async function createGuestClaimToken(
+  receiptId: string,
+  client = SUPABASE
+): Promise<string> {
+  if (!client) {
     throw new Error("Supabase client not initialized.");
   }
 
   // Check if an existing unexpired token already exists in Supabase
   try {
-    const { data: existing } = await SUPABASE
+    const { data: existing } = await client
       .from("receipt_guest_tokens")
       .select("token")
       .eq("receipt_id", receiptId)
@@ -158,12 +162,12 @@ export async function createGuestClaimToken(receiptId: string): Promise<string> 
 
   const {
     data: { user },
-  } = await SUPABASE.auth.getUser();
+  } = await client.auth.getUser();
 
   const randomSuffix = Math.random().toString(36).substring(2, 10);
   const token = `claim-${receiptId}-${randomSuffix}`;
 
-  const { error } = await SUPABASE.from("receipt_guest_tokens").insert({
+  const { error } = await client.from("receipt_guest_tokens").insert({
     receipt_id: receiptId,
     token,
     created_by: user?.id,
@@ -179,10 +183,12 @@ export async function createGuestClaimToken(receiptId: string): Promise<string> 
 /**
  * Loads a receipt's itemized data and claimant status using a guest share token.
  * @param tokenOrUrl The guest token or complete claim URL
+ * @param client Optional Supabase client override
  * @returns Receipt detail or error status
  */
 export async function getReceiptByGuestToken(
-  tokenOrUrl: string
+  tokenOrUrl: string,
+  client = SUPABASE
 ): Promise<GetGuestReceiptResult> {
   const token = extractToken(tokenOrUrl);
 
@@ -194,7 +200,7 @@ export async function getReceiptByGuestToken(
     };
   }
 
-  if (!SUPABASE) {
+  if (!client) {
     return {
       success: false,
       error: "NETWORK_ERROR",
@@ -203,7 +209,7 @@ export async function getReceiptByGuestToken(
   }
 
   try {
-    const { data, error } = await SUPABASE.rpc("get_receipt_by_guest_token", {
+    const { data, error } = await client.rpc("get_receipt_by_guest_token", {
       p_token: token,
     });
 
@@ -261,13 +267,15 @@ export async function getReceiptByGuestToken(
  * @param itemId ID of the item being claimed
  * @param guestName Display name of the guest
  * @param claimed True to claim the item, false to unclaim
+ * @param client Optional Supabase client override
  * @returns Result status of the claim action
  */
 export async function claimItemAsGuest(
   tokenOrUrl: string,
   itemId: string,
   guestName: string,
-  claimed: boolean = true
+  claimed: boolean = true,
+  client = SUPABASE
 ): Promise<ClaimActionResult> {
   const trimmedName = (guestName || "").trim();
   if (!trimmedName) {
@@ -287,7 +295,7 @@ export async function claimItemAsGuest(
     };
   }
 
-  if (!SUPABASE) {
+  if (!client) {
     return {
       success: false,
       error: "NETWORK_ERROR",
@@ -296,7 +304,7 @@ export async function claimItemAsGuest(
   }
 
   try {
-    const { data, error } = await SUPABASE.rpc("claim_item_as_guest", {
+    const { data, error } = await client.rpc("claim_item_as_guest", {
       p_token: token,
       p_item_id: itemId,
       p_guest_name: trimmedName,

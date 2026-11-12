@@ -10,16 +10,6 @@
  * Guest claims (US 2.5, made through the share link) are loaded too, so they
  * count when an item's price is split. A guest has no user id, so each one is
  * keyed by `guestClaimKey(name)`. Members can't claim or unclaim for a guest.
- *
- * ============================== PLACEHOLDERS ==============================
- * 1. `mockItemClaims` (in `mock.ts`) keeps claims in memory, so they vanish
- *    when the app reloads. Remove it when `USE_MOCK` is turned off.
- * 2. `mockUserId` stands in for the signed-in user in mock mode and defaults
- *    to `MOCK_CURRENT_USER_ID`. Real requests use the session's user.
- * 3. `groupId` is only used for the mock's membership check. It's trusted as
- *    given and isn't checked against the item. The server finds the item's
- *    group itself.
- * ==========================================================================
  */
 
 import { SUPABASE } from "@/lib/supabase";
@@ -45,7 +35,7 @@ type ClaimRow = {
   guest_name: string | null;
 };
 
-/** A stored claim from the database or the mock store. */
+/** A stored claim row from the database. */
 type StoredClaim = {
   item_id: string;
   user_id?: string | null;
@@ -106,7 +96,7 @@ export function isGuestClaimKey(key: string): boolean {
 }
 
 /**
- * Turns a database or mock claim row into an `ItemClaim`.
+ * Turns a database claim row into an `ItemClaim`.
  * @param row The stored claim
  * @param row.item_id The claimed item
  * @param row.user_id The member who claimed it, if any

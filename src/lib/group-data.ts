@@ -75,7 +75,7 @@ const messageOf = (e: unknown): string =>
 
 /**
  * Loads the groups the signed-in user belongs to.
- * @param opts Mock flag and Supabase client
+ * @param opts Supabase client options
  * @returns The groups, or an error message
  */
 export async function loadGroupList(
@@ -98,7 +98,7 @@ export async function loadGroupList(
 /**
  * Loads one group's members, join code and receipts. Non-members get "forbidden".
  * @param id Group id
- * @param opts Mock flag and Supabase client
+ * @param opts Supabase client options
  * @returns The group detail, "forbidden", or an error message
  */
 export async function loadGroupDetail(
