@@ -23,11 +23,6 @@ import { CLAIM_FORBIDDEN_MESSAGE, useClaims } from "@/lib/use-claims";
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- mirrors the real SUPABASE export
 jest.mock("@/lib/supabase", () => ({ SUPABASE: null, supabase: null }));
-jest.mock("@/lib/mock", () => ({
-  ...jest.requireActual<typeof import("@/lib/mock")>("@/lib/mock"),
-  // eslint-disable-next-line @typescript-eslint/naming-convention -- mirrors the real export
-  USE_MOCK: false,
-}));
 jest.mock("@/lib/claims", () => {
   const actual = jest.requireActual<typeof import("@/lib/claims")>("@/lib/claims");
   return {

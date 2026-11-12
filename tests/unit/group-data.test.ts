@@ -11,7 +11,6 @@ import {
   type GroupsClient,
   type GroupSummary,
 } from "@/lib/group-data";
-import { mockGroupDetails, mockGroups } from "@/lib/mock";
 
 type DbError = { code?: string; message: string } | null;
 
@@ -84,91 +83,100 @@ const THROWING_CLIENT: GroupsClient = {
   },
 };
 
-/**
- * Base options for server mode. Spread it and add a fake `client`.
- */
-const REAL = { useMock: false } as const;
-
-/**
- * Options for mock mode, where no client is needed.
- */
-const MOCK = { useMock: true, client: null } as const;
-
 describe("Task 1.1: groups page lists my groups", () => {
-  it("mock mode lists every mock group with an id and name", async () => {
-    const r = await loadGroupList(MOCK);
+  it("server mode queries the groups table, sorted by name", async () => {
+    const rows = [
+      { id: "g1", name: "Alpha" },
+      { id: "g2", name: "Beta" },
+    ];
+    const { client, calls } = listClient({ data: rows, error: null });
+    const r = await loadGroupList({ client });
+    assert.deepEqual(calls, ["from:groups", "select:id, name", "order:name"]);
+    assert.deepEqual(r, { status: "ok", groups: rows });
+  });
+
+  it("returns group ids and names for list keys and route params", async () => {
+    const rows = [
+      { id: "g1", name: "Alpha" },
+      { id: "g2", name: "Beta" },
+    ];
+    const { client } = listClient({ data: rows, error: null });
+    const r = await loadGroupList({ client });
     assert.equal(r.status, "ok");
     if (r.status !== "ok") return;
-    assert.equal(r.groups.length, mockGroups.length);
+    assert.equal(r.groups.length, 2);
+    assert.equal(new Set(r.groups.map((g) => g.id)).size, 2);
     for (const g of r.groups) {
       assert.ok(g.id.length > 0, "id is needed to open the group");
       assert.ok(g.name.length > 0);
     }
   });
-
-  it("group ids are unique (used as list keys and route params)", async () => {
-    const r = await loadGroupList(MOCK);
-    if (r.status !== "ok") return assert.fail("expected ok");
-    assert.equal(new Set(r.groups.map((g) => g.id)).size, r.groups.length);
-  });
-
-  it("returns a copy, so callers can't mutate the shared mock list", async () => {
-    const r = await loadGroupList(MOCK);
-    if (r.status !== "ok") return assert.fail("expected ok");
-    const before = mockGroups.length;
-    r.groups.push({ id: "x", name: "x" });
-    assert.equal(mockGroups.length, before);
-  });
-
-  it("server mode queries the groups table, sorted by name", async () => {
-    const rows = [{ id: "g1", name: "Alpha" }];
-    const { client, calls } = listClient({ data: rows, error: null });
-    const r = await loadGroupList({ ...REAL, client });
-    assert.deepEqual(calls, ["from:groups", "select:id, name", "order:name"]);
-    assert.deepEqual(r, { status: "ok", groups: rows });
-  });
 });
 
 describe("Task 1.2: group page shows members, join code, receipts", () => {
-  it("every mock group has members, a join code and a receipts array", async () => {
-    for (const g of mockGroups) {
-      const r = await loadGroupDetail(g.id, MOCK);
-      if (r.status !== "ok") return assert.fail(`${g.id} should load`);
-      assert.ok(r.detail.members.length > 0, `${g.id} has members`);
-      assert.ok(r.detail.group.invite_code, `${g.id} has a join code`);
-      assert.ok(Array.isArray(r.detail.receipts));
-    }
+  const detailPayload: GroupDetail = {
+    group: {
+      id: "g1",
+      name: "Apartment 402",
+      invite_code: "APT402XY",
+      created_by: "u1",
+      created_at: "2026-10-01T00:00:00Z",
+    },
+    members: [
+      {
+        user_id: "u1",
+        display_name: "Alex",
+        role: "owner",
+        joined_at: "2026-10-01T00:00:00Z",
+      },
+      {
+        user_id: "u2",
+        display_name: "Sam",
+        role: "member",
+        joined_at: "2026-10-02T00:00:00Z",
+      },
+    ],
+    receipts: [
+      {
+        id: "r1",
+        title: "Costco",
+        total_cents: 8423,
+        created_at: "2026-10-05T00:00:00Z",
+      },
+    ],
+  };
+
+  it("returns members, a join code and a receipts array", async () => {
+    const { client } = rpcClient({ data: detailPayload, error: null });
+    const r = await loadGroupDetail("g1", { client });
+    assert.equal(r.status, "ok");
+    if (r.status !== "ok") return;
+    assert.ok(r.detail.members.length > 0);
+    assert.equal(r.detail.group.invite_code, "APT402XY");
+    assert.ok(Array.isArray(r.detail.receipts));
   });
 
-  it("detail matches the list entry it was opened from", async () => {
-    for (const g of mockGroups) {
-      const r = await loadGroupDetail(g.id, MOCK);
-      if (r.status !== "ok") return assert.fail("expected ok");
-      assert.equal(r.detail.group.id, g.id);
-      assert.equal(r.detail.group.name, g.name);
-    }
-  });
-
-  it("each group has exactly one owner", async () => {
-    for (const g of mockGroups) {
-      const r = await loadGroupDetail(g.id, MOCK);
-      if (r.status !== "ok") return assert.fail("expected ok");
-      const owners = r.detail.members.filter((m) => m.role === "owner");
-      assert.equal(owners.length, 1, `${g.id} owners`);
-    }
-  });
-
-  it("receipt list is empty until sprint 2", async () => {
-    const r = await loadGroupDetail("mock-2", MOCK);
+  it("detail matches the requested group id and name", async () => {
+    const { client } = rpcClient({ data: detailPayload, error: null });
+    const r = await loadGroupDetail("g1", { client });
     if (r.status !== "ok") return assert.fail("expected ok");
-    assert.deepEqual(r.detail.receipts, []);
+    assert.equal(r.detail.group.id, "g1");
+    assert.equal(r.detail.group.name, "Apartment 402");
+  });
+
+  it("group detail specifies member roles including owner", async () => {
+    const { client } = rpcClient({ data: detailPayload, error: null });
+    const r = await loadGroupDetail("g1", { client });
+    if (r.status !== "ok") return assert.fail("expected ok");
+    const owners = r.detail.members.filter((m) => m.role === "owner");
+    assert.equal(owners.length, 1);
   });
 });
 
 describe("Task 1.3: loading, empty and error states", () => {
   it("list: empty server result is ok with no groups (empty state)", async () => {
     const { client } = listClient({ data: [], error: null });
-    assert.deepEqual(await loadGroupList({ ...REAL, client }), {
+    assert.deepEqual(await loadGroupList({ client }), {
       status: "ok",
       groups: [],
     });
@@ -176,7 +184,7 @@ describe("Task 1.3: loading, empty and error states", () => {
 
   it("list: null data is treated as empty, not a crash", async () => {
     const { client } = listClient({ data: null, error: null });
-    assert.deepEqual(await loadGroupList({ ...REAL, client }), {
+    assert.deepEqual(await loadGroupList({ client }), {
       status: "ok",
       groups: [],
     });
@@ -184,19 +192,19 @@ describe("Task 1.3: loading, empty and error states", () => {
 
   it("list: server error surfaces its message", async () => {
     const { client } = listClient({ data: null, error: { message: "boom" } });
-    assert.deepEqual(await loadGroupList({ ...REAL, client }), {
+    assert.deepEqual(await loadGroupList({ client }), {
       status: "error",
       message: "boom",
     });
   });
 
   it("list: a thrown network error becomes an error state", async () => {
-    const r = await loadGroupList({ ...REAL, client: THROWING_CLIENT });
+    const r = await loadGroupList({ client: THROWING_CLIENT });
     assert.deepEqual(r, { status: "error", message: "network down" });
   });
 
   it("list: missing client explains how to configure", async () => {
-    const r = await loadGroupList({ ...REAL, client: null });
+    const r = await loadGroupList({ client: null });
     assert.deepEqual(r, { status: "error", message: NOT_CONFIGURED });
   });
 
@@ -205,17 +213,17 @@ describe("Task 1.3: loading, empty and error states", () => {
       data: null,
       error: { code: "500", message: "server exploded" },
     });
-    const r = await loadGroupDetail("g1", { ...REAL, client });
+    const r = await loadGroupDetail("g1", { client });
     assert.deepEqual(r, { status: "error", message: "server exploded" });
   });
 
   it("detail: a thrown network error becomes an error state", async () => {
-    const r = await loadGroupDetail("g1", { ...REAL, client: THROWING_CLIENT });
+    const r = await loadGroupDetail("g1", { client: THROWING_CLIENT });
     assert.deepEqual(r, { status: "error", message: "network down" });
   });
 
   it("detail: missing client explains how to configure", async () => {
-    const r = await loadGroupDetail("g1", { ...REAL, client: undefined });
+    const r = await loadGroupDetail("g1", { client: undefined });
     assert.deepEqual(r, { status: "error", message: NOT_CONFIGURED });
   });
 });
@@ -249,13 +257,13 @@ describe("Task 1.4: get_group returns members and receipts for a member", () => 
 
   it("calls the get_group RPC with the group id", async () => {
     const { client, calls } = rpcClient({ data: payload, error: null });
-    await loadGroupDetail("g1", { ...REAL, client });
+    await loadGroupDetail("g1", { client });
     assert.deepEqual(calls, [{ fn: "get_group", args: { p_group_id: "g1" } }]);
   });
 
   it("returns the server's members, join code and receipts unchanged", async () => {
     const { client } = rpcClient({ data: payload, error: null });
-    const r = await loadGroupDetail("g1", { ...REAL, client });
+    const r = await loadGroupDetail("g1", { client });
     assert.deepEqual(r, { status: "ok", detail: payload });
   });
 });
@@ -266,7 +274,7 @@ describe("Task 1.5: a non-member is refused", () => {
       data: null,
       error: { code: "42501", message: "not a member" },
     });
-    const r = await loadGroupDetail("g1", { ...REAL, client });
+    const r = await loadGroupDetail("g1", { client });
     assert.deepEqual(r, { status: "forbidden" });
   });
 
@@ -275,18 +283,7 @@ describe("Task 1.5: a non-member is refused", () => {
       data: null,
       error: { code: "42501", message: "not a member" },
     });
-    const r = await loadGroupDetail("g1", { ...REAL, client });
+    const r = await loadGroupDetail("g1", { client });
     assert.ok(!("detail" in r));
-  });
-
-  it("mock mode: an unknown group id is forbidden", async () => {
-    assert.deepEqual(await loadGroupDetail("not-my-group", MOCK), {
-      status: "forbidden",
-    });
-  });
-
-  it("mock mode: known ids are still reachable", async () => {
-    const id = Object.keys(mockGroupDetails)[0];
-    assert.equal((await loadGroupDetail(id, MOCK)).status, "ok");
   });
 });

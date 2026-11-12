@@ -1,341 +1,284 @@
 /// <reference types="node" />
+/* eslint-disable @typescript-eslint/naming-convention */
 /**
- * User Story 2.4 (Leave or delete a group), Task 5: role permissions and
- * edge cases for leaveGroup / deleteGroup, run against the mock service.
+ * User Story 2.4 (Leave or delete a group): tests for leaveGroup, deleteGroup,
+ * and renameGroup using Supabase mocks.
  */
 import assert from "node:assert/strict";
-import test, { afterEach, beforeEach, describe } from "node:test";
+import test, { describe } from "node:test";
 
-import { loadGroupDetail, loadGroupList } from "../../src/lib/group-data";
 import {
   deleteGroup,
   leaveGroup,
-  MockGroupService,
-  SEED_GROUPS,
+  renameGroup,
 } from "../../src/lib/groups";
-import {
-  mockGroupDetails,
-  mockGroups,
-  mockGuestTokens,
-  mockItemClaims,
-  mockReceiptItems,
-} from "../../src/lib/mock";
+import type { GroupActionResult } from "../../src/lib/groups.types";
+import type { SUPABASE } from "../../src/lib/supabase";
 
-/**
- * Options for loading mock group data.
- */
-const MOCK_OPTS = { useMock: true, client: null };
-
-/**
- * Snapshot of every shared mock store, so each test starts from the seed.
- */
-type MockSnapshot = {
-  details: typeof mockGroupDetails;
-  groups: typeof mockGroups;
-  items: typeof mockReceiptItems;
-  claims: typeof mockItemClaims;
-  tokens: typeof mockGuestTokens;
+/** Options for fake group action client. */
+type FakeGroupActionOptions = {
+  rpcHandler?: (
+    fn: string,
+    args: Record<string, unknown>
+  ) => {
+    data: GroupActionResult | null;
+    error: { code?: string; message: string } | null;
+  };
+  updateHandler?: (
+    payload: Record<string, unknown>,
+    eqId: string
+  ) => {
+    data: { id: string; name: string } | null;
+    error: { code?: string; message: string } | null;
+  };
 };
 
 /**
- * Copies all shared mock stores.
- * @returns Deep copies of the stores
+ * Creates a fake Supabase client for group leave/delete/rename actions.
+ * @param options RPC and update handlers
+ * @returns Fake client and call logs
  */
-function snapshot(): MockSnapshot {
-  return structuredClone({
-    details: mockGroupDetails,
-    groups: mockGroups,
-    items: mockReceiptItems,
-    claims: mockItemClaims,
-    tokens: mockGuestTokens,
-  });
-}
+function createFakeGroupActionClient(options: FakeGroupActionOptions) {
+  const rpcCalls: { fn: string; args: Record<string, unknown> }[] = [];
+  const updateCalls: { payload: Record<string, unknown>; eqId: string }[] = [];
 
-/**
- * Puts the shared mock stores back in place, keeping object identity.
- * @param s Snapshot from {@link snapshot}
- */
-function restore(s: MockSnapshot): void {
-  for (const key of Object.keys(mockGroupDetails)) delete mockGroupDetails[key];
-  Object.assign(mockGroupDetails, s.details);
-  for (const key of Object.keys(mockReceiptItems)) delete mockReceiptItems[key];
-  Object.assign(mockReceiptItems, s.items);
-  mockGroups.splice(0, mockGroups.length, ...s.groups);
-  mockItemClaims.splice(0, mockItemClaims.length, ...s.claims);
-  mockGuestTokens.splice(0, mockGuestTokens.length, ...s.tokens);
-}
+  const client = {
+    rpc(fn: string, args: Record<string, unknown>) {
+      rpcCalls.push({ fn, args });
+      if (options.rpcHandler) {
+        return Promise.resolve(options.rpcHandler(fn, args));
+      }
+      return Promise.resolve({ data: null, error: null });
+    },
+    from() {
+      return {
+        update(payload: Record<string, unknown>) {
+          return {
+            eq(col: string, val: string) {
+              return {
+                select() {
+                  return {
+                    maybeSingle() {
+                      updateCalls.push({ payload, eqId: val });
+                      if (options.updateHandler) {
+                        return Promise.resolve(options.updateHandler(payload, val));
+                      }
+                      return Promise.resolve({ data: null, error: null });
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as typeof SUPABASE;
 
-/**
- * Lists the groups a user belongs to in the mock data.
- * @param userId User id
- * @returns Group ids the user is a member of
- */
-function groupIdsFor(userId: string): string[] {
-  return Object.entries(mockGroupDetails)
-    .filter(([, d]) => d.members.some((m) => m.user_id === userId))
-    .map(([id]) => id);
+  return { client, rpcCalls, updateCalls };
 }
 
 describe("User Story 2.4: Leave or delete a group", () => {
-  let service: MockGroupService;
-  let saved: MockSnapshot;
+  describe("leaving a group", () => {
+    test("a non-owner member can leave successfully", async () => {
+      const { client, rpcCalls } = createFakeGroupActionClient({
+        rpcHandler: (fn, args) => ({
+          data: {
+            success: true,
+            group_id: String(args.p_group_id),
+            group_name: "Apartment 402",
+            message: "Left Apartment 402",
+          },
+          error: null,
+        }),
+      });
 
-  beforeEach(() => {
-    saved = snapshot();
-    service = new MockGroupService(SEED_GROUPS, []);
-  });
-
-  afterEach(() => {
-    restore(saved);
-  });
-
-  describe("a non-owner member leaving", () => {
-    test("is removed from the member list and their group list", async () => {
-      assert.ok(groupIdsFor("u2").includes("mock-1"));
-
-      const result = await service.leaveGroup("mock-1", "u2");
-
+      const result = await leaveGroup("group-1", client);
       assert.equal(result.success, true);
       if (result.success) {
         assert.equal(result.group_name, "Apartment 402");
         assert.equal(result.message, "Left Apartment 402");
       }
-      const members = mockGroupDetails["mock-1"].members.map((m) => m.user_id);
-      assert.deepEqual(members, ["u1", "u3", "current-user"]);
-      assert.ok(!groupIdsFor("u2").includes("mock-1"));
-      // The alias of the same seed group is updated too.
-      assert.ok(!groupIdsFor("u2").includes("group-apt402"));
-
-      const list = await loadGroupList(MOCK_OPTS);
-      assert.equal(list.status, "ok");
-      if (list.status === "ok") {
-        assert.ok(!list.groups.some((g) => g.id === "mock-1"));
-      }
+      assert.deepEqual(rpcCalls, [{ fn: "leave_group", args: { p_group_id: "group-1" } }]);
     });
 
-    test("leaves a group they joined by invite code", async () => {
-      await service.joinGroupByCode("LUNCH123", "user-zoe");
-      assert.ok(mockGroups.some((g) => g.id === "mock-3"));
+    test("an owner leaving gets OWNER_CANNOT_LEAVE error", async () => {
+      const { client } = createFakeGroupActionClient({
+        rpcHandler: () => ({
+          data: {
+            success: false,
+            error: "OWNER_CANNOT_LEAVE",
+            message: "Group owners cannot leave a group. Please delete the group or transfer ownership.",
+          },
+          error: null,
+        }),
+      });
 
-      const result = await service.leaveGroup("mock-3", "user-zoe");
-
-      assert.equal(result.success, true);
-      assert.deepEqual(service.getMembers(), []);
-      assert.ok(!groupIdsFor("user-zoe").includes("mock-3"));
-      assert.ok(!mockGroups.some((g) => g.id === "mock-3"));
-      // The group itself still exists for its owner.
-      assert.ok(mockGroupDetails["mock-3"]);
-    });
-
-    test("does not touch the group's receipts or claims", async () => {
-      const claimsBefore = mockItemClaims.length;
-      await service.leaveGroup("mock-1", "u3");
-
-      assert.equal(mockGroupDetails["mock-1"].receipts.length, 2);
-      assert.equal(mockItemClaims.length, claimsBefore);
-    });
-  });
-
-  describe("an owner trying to leave", () => {
-    test("gets an error saying to delete the group or transfer ownership", async () => {
-      const result = await service.leaveGroup("mock-1", "u1");
-
+      const result = await leaveGroup("group-1", client);
       assert.equal(result.success, false);
       if (!result.success) {
         assert.equal(result.error, "OWNER_CANNOT_LEAVE");
-        assert.match(result.message, /delete/i);
         assert.match(result.message, /transfer ownership/i);
       }
-      const members = mockGroupDetails["mock-1"].members.map((m) => m.user_id);
-      assert.deepEqual(members, ["u1", "u2", "u3", "current-user"]);
     });
 
-    test("is refused even as the only member", async () => {
-      const result = await service.leaveGroup("mock-3", "u1");
-
+    test("empty group ID returns NOT_FOUND without calling RPC", async () => {
+      const { client, rpcCalls } = createFakeGroupActionClient({});
+      const result = await leaveGroup("", client);
       assert.equal(result.success, false);
-      if (!result.success) assert.equal(result.error, "OWNER_CANNOT_LEAVE");
-      assert.ok(mockGroupDetails["mock-3"]);
+      if (!result.success) {
+        assert.equal(result.error, "NOT_FOUND");
+      }
+      assert.equal(rpcCalls.length, 0);
+    });
+
+    test("unauthenticated call with 42501 returns NOT_SIGNED_IN", async () => {
+      const { client } = createFakeGroupActionClient({
+        rpcHandler: () => ({
+          data: null,
+          error: { code: "42501", message: "Not signed in" },
+        }),
+      });
+
+      const result = await leaveGroup("group-1", client);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error, "NOT_SIGNED_IN");
+      }
     });
   });
 
-  describe("an owner deleting the group", () => {
-    test("removes the group for every member", async () => {
-      const result = await service.deleteGroup("mock-1", "u1");
+  describe("deleting a group", () => {
+    test("the owner can delete the group", async () => {
+      const { client, rpcCalls } = createFakeGroupActionClient({
+        rpcHandler: (fn, args) => ({
+          data: {
+            success: true,
+            group_id: String(args.p_group_id),
+            group_name: "Apartment 402",
+            message: "Apartment 402 deleted",
+          },
+          error: null,
+        }),
+      });
 
+      const result = await deleteGroup("group-1", client);
       assert.equal(result.success, true);
       if (result.success) {
         assert.equal(result.group_name, "Apartment 402");
         assert.equal(result.message, "Apartment 402 deleted");
       }
-      assert.equal(mockGroupDetails["mock-1"], undefined);
-      assert.equal(mockGroupDetails["group-apt402"], undefined);
-      for (const user of ["u1", "u2", "u3", "current-user"]) {
-        assert.ok(!groupIdsFor(user).includes("mock-1"), `${user} still sees it`);
-      }
-      assert.ok(!mockGroups.some((g) => g.id === "mock-1"));
+      assert.deepEqual(rpcCalls, [{ fn: "delete_group", args: { p_group_id: "group-1" } }]);
     });
 
-    test("cascades to receipts, items, claims and guest links", async () => {
-      const receiptIds = mockGroupDetails["mock-1"].receipts.map((r) => r.id);
-      const itemIds = receiptIds.flatMap((rid) =>
-        (mockReceiptItems[rid] ?? []).map((i) => i.id)
-      );
-      assert.ok(itemIds.length > 0);
-      assert.ok(mockItemClaims.some((c) => itemIds.includes(c.item_id)));
-      assert.ok(mockGuestTokens.some((t) => receiptIds.includes(t.receipt_id)));
+    test("non-owner deleting is rejected with FORBIDDEN", async () => {
+      const { client } = createFakeGroupActionClient({
+        rpcHandler: () => ({
+          data: {
+            success: false,
+            error: "FORBIDDEN",
+            message: "Only the group owner can delete this group",
+          },
+          error: null,
+        }),
+      });
 
-      await service.deleteGroup("mock-1", "u1");
-
-      for (const rid of receiptIds) assert.equal(mockReceiptItems[rid], undefined);
-      assert.ok(!mockItemClaims.some((c) => itemIds.includes(c.item_id)));
-      assert.ok(
-        !mockItemClaims.some(
-          (c) => c.receipt_id !== undefined && receiptIds.includes(c.receipt_id)
-        )
-      );
-      assert.ok(!mockGuestTokens.some((t) => receiptIds.includes(t.receipt_id)));
-    });
-
-    test("leaves other groups' receipts and claims alone", async () => {
-      const claimsBefore = mockItemClaims.length;
-      const result = await service.deleteGroup("mock-3", "u1");
-
-      assert.equal(result.success, true);
-      assert.ok(mockGroupDetails["mock-1"]);
-      assert.ok(mockReceiptItems.r1);
-      assert.equal(mockItemClaims.length, claimsBefore);
-    });
-
-    test("stops the invite code from working", async () => {
-      await service.deleteGroup("mock-2", "u2");
-
-      const join = await service.joinGroupByCode("K7Q2XPLM", "user-new");
-      assert.equal(join.success, false);
-      if (!join.success) assert.equal(join.error, "INVALID_CODE");
-    });
-  });
-
-  describe("a non-owner trying to delete", () => {
-    test("a member is rejected as forbidden and nothing is deleted", async () => {
-      const claimsBefore = mockItemClaims.length;
-      const result = await service.deleteGroup("mock-1", "u2");
-
+      const result = await deleteGroup("group-1", client);
       assert.equal(result.success, false);
       if (!result.success) {
         assert.equal(result.error, "FORBIDDEN");
         assert.match(result.message, /only the group owner/i);
       }
-      assert.ok(mockGroupDetails["mock-1"]);
-      assert.equal(mockGroupDetails["mock-1"].members.length, 4);
-      assert.equal(mockItemClaims.length, claimsBefore);
-      assert.ok(mockReceiptItems.r1);
     });
 
-    test("a non-member is told the group doesn't exist", async () => {
-      const result = await service.deleteGroup("mock-1", "stranger");
-
+    test("empty group ID returns NOT_FOUND", async () => {
+      const { client, rpcCalls } = createFakeGroupActionClient({});
+      const result = await deleteGroup("", client);
       assert.equal(result.success, false);
-      if (!result.success) assert.equal(result.error, "NOT_FOUND");
-      assert.ok(mockGroupDetails["mock-1"]);
-    });
-  });
-
-  describe("a group ID that doesn't exist", () => {
-    for (const badId of ["does-not-exist", "", "00000000-0000-0000-0000-000000000000"]) {
-      test(`leave and delete fail gracefully for ${JSON.stringify(badId)}`, async () => {
-        const left = await service.leaveGroup(badId, "u1");
-        const deleted = await service.deleteGroup(badId, "u1");
-
-        assert.equal(left.success, false);
-        assert.equal(deleted.success, false);
-        if (!left.success) assert.equal(left.error, "NOT_FOUND");
-        if (!deleted.success) assert.equal(deleted.error, "NOT_FOUND");
-      });
-    }
-
-    test("the exported leaveGroup/deleteGroup also resolve without throwing", async () => {
-      const left = await leaveGroup("does-not-exist", "u1");
-      const deleted = await deleteGroup("does-not-exist", "u1");
-
-      assert.equal(left.success, false);
-      assert.equal(deleted.success, false);
-    });
-
-    test("a non-member leaving an existing group gets NOT_FOUND", async () => {
-      const result = await service.leaveGroup("mock-1", "stranger");
-
-      assert.equal(result.success, false);
-      if (!result.success) assert.equal(result.error, "NOT_FOUND");
-    });
-  });
-
-  describe("after a group is deleted", () => {
-    beforeEach(async () => {
-      const result = await service.deleteGroup("mock-1", "u1");
-      assert.equal(result.success, true);
-    });
-
-    test("loading it returns forbidden (shown as Group not found)", async () => {
-      const result = await loadGroupDetail("mock-1", MOCK_OPTS);
-      assert.equal(result.status, "forbidden");
-    });
-
-    test("it is gone from the group list", async () => {
-      const list = await loadGroupList(MOCK_OPTS);
-      assert.equal(list.status, "ok");
-      if (list.status === "ok") {
-        assert.ok(!list.groups.some((g) => g.id === "mock-1"));
+      if (!result.success) {
+        assert.equal(result.error, "NOT_FOUND");
       }
-    });
-
-    test("deleting or leaving it again returns NOT_FOUND", async () => {
-      const again = await service.deleteGroup("mock-1", "u1");
-      const leave = await service.leaveGroup("mock-1", "u2");
-
-      assert.equal(again.success, false);
-      assert.equal(leave.success, false);
-      if (!again.success) assert.equal(again.error, "NOT_FOUND");
-      if (!leave.success) assert.equal(leave.error, "NOT_FOUND");
+      assert.equal(rpcCalls.length, 0);
     });
   });
 
   describe("renaming a group", () => {
-    test("allows the owner to rename across mock stores", async () => {
-      const result = await service.renameGroup("mock-1", "  Apt 402 Lounge  ", "u1");
+    test("allows owner to rename group", async () => {
+      const { client, updateCalls } = createFakeGroupActionClient({
+        updateHandler: (payload, id) => ({
+          data: { id, name: String(payload.name) },
+          error: null,
+        }),
+      });
 
+      const result = await renameGroup("group-1", "  Apartment 402 Lounge  ", client);
       assert.equal(result.success, true);
       if (result.success) {
-        assert.equal(result.group_name, "Apt 402 Lounge");
-        assert.equal(result.message, "Group renamed to Apt 402 Lounge");
+        assert.equal(result.group_name, "Apartment 402 Lounge");
+        assert.equal(result.message, "Group renamed to Apartment 402 Lounge");
       }
+      assert.deepEqual(updateCalls, [
+        { payload: { name: "Apartment 402 Lounge" }, eqId: "group-1" },
+      ]);
+    });
 
-      const loaded = await loadGroupDetail("mock-1", MOCK_OPTS);
-      assert.equal(loaded.status, "ok");
-      if (loaded.status === "ok") {
-        assert.equal(loaded.detail.group.name, "Apt 402 Lounge");
+    test("rejects empty group name without query", async () => {
+      const { client, updateCalls } = createFakeGroupActionClient({});
+      const result = await renameGroup("group-1", "   ", client);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error, "EMPTY_NAME");
       }
+      assert.equal(updateCalls.length, 0);
+    });
 
-      const list = await loadGroupList(MOCK_OPTS);
-      assert.equal(list.status, "ok");
-      if (list.status === "ok") {
-        const entry = list.groups.find((g) => g.id === "mock-1");
-        assert.equal(entry?.name, "Apt 402 Lounge");
+    test("rejects too long group name (>50 chars) without query", async () => {
+      const { client, updateCalls } = createFakeGroupActionClient({});
+      const result = await renameGroup("group-1", "a".repeat(51), client);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error, "NAME_TOO_LONG");
+      }
+      assert.equal(updateCalls.length, 0);
+    });
+
+    test("non-owner rename returns FORBIDDEN on 42501 error", async () => {
+      const { client } = createFakeGroupActionClient({
+        updateHandler: () => ({
+          data: null,
+          error: { code: "42501", message: "permission denied" },
+        }),
+      });
+
+      const result = await renameGroup("group-1", "New Name", client);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error, "FORBIDDEN");
+        assert.match(result.message, /only the group owner/i);
       }
     });
 
-    test("rejects non-owners with FORBIDDEN and empty names with EMPTY_NAME", async () => {
-      const forbidden = await service.renameGroup("mock-1", "Hacked", "u2");
-      assert.equal(forbidden.success, false);
-      if (!forbidden.success) assert.equal(forbidden.error, "FORBIDDEN");
+    test("missing group on rename returns FORBIDDEN", async () => {
+      const { client } = createFakeGroupActionClient({
+        updateHandler: () => ({
+          data: null,
+          error: null,
+        }),
+      });
 
-      const empty = await service.renameGroup("mock-1", "   ", "u1");
-      assert.equal(empty.success, false);
-      if (!empty.success) assert.equal(empty.error, "EMPTY_NAME");
+      const result = await renameGroup("missing-group", "New Name", client);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error, "FORBIDDEN");
+      }
+    });
 
-      const missing = await service.renameGroup("does-not-exist", "Valid", "u1");
-      assert.equal(missing.success, false);
-      if (!missing.success) assert.equal(missing.error, "NOT_FOUND");
+    test("missing client returns NETWORK_ERROR", async () => {
+      const result = await renameGroup("g1", "Name", null as unknown as typeof SUPABASE);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error, "NETWORK_ERROR");
+      }
     });
   });
 });
