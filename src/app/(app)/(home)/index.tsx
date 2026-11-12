@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -78,6 +78,28 @@ export default function Index(): JSX.Element {
   useEffect(() => {
     load("initial");
   }, [load]);
+
+  // The group screen sends a toast here after leaving or deleting a group
+  // (US 2.4). toastKey changes on every send, so repeats still show. The
+  // list itself is refreshed by the focus effect below when we land here.
+  const { toastMessage, toastType, toastKey, removedGroupId } =
+    useLocalSearchParams<{
+      toastMessage?: string;
+      toastType?: string;
+      toastKey?: string;
+      removedGroupId?: string;
+    }>();
+  useEffect(() => {
+    // Hide the left/deleted group at once, before the refresh returns.
+    if (removedGroupId) {
+      setGroups((prev) => prev.filter((g) => g.id !== removedGroupId));
+    }
+    if (!toastMessage) return;
+    setToastState({
+      message: toastMessage,
+      type: (toastType as ToastType) || "info",
+    });
+  }, [toastMessage, toastType, toastKey, removedGroupId]);
 
   useFocusEffect(
     useCallback(() => {

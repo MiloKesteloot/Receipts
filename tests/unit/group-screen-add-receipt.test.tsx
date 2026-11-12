@@ -100,7 +100,7 @@ describe("GroupScreen: Add receipt button (US 2.1 Task 1)", () => {
     MOCK_LOAD.mockResolvedValue({ status: "forbidden" });
     const { findByText, queryByLabelText } = await render(<GroupScreen />);
 
-    expect(await findByText("You're not a member of this group.")).toBeTruthy();
+    expect(await findByText(/Group not found/)).toBeTruthy();
     expect(queryByLabelText("Add receipt")).toBeNull();
   });
 

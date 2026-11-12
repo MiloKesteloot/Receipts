@@ -1,13 +1,64 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
-import { mockGroupDetails, mockGroups, USE_MOCK } from "./mock";
+import {
+  mockGroupDetails,
+  mockGroups,
+  mockGuestTokens,
+  mockItemClaims,
+  mockReceiptItems,
+  USE_MOCK,
+} from "./mock";
 import { SUPABASE } from "./supabase";
 import type {
   Group,
+  GroupActionError,
+  GroupActionResult,
   GroupMembership,
   GroupService,
   JoinGroupResult,
 } from "./groups.types";
+
+/**
+ * The seed data has two ids for the same "Apartment 402" group, and joining
+ * one joins both. Leaving and deleting treat them the same way.
+ * @param groupId Group id
+ * @returns The id plus any alias ids
+ */
+function mockAliasIds(groupId: string): string[] {
+  if (groupId === "mock-1") return ["mock-1", "group-apt402"];
+  if (groupId === "group-apt402") return ["group-apt402", "mock-1"];
+  return [groupId];
+}
+
+/**
+ * Removes every element matching a predicate from an array, in place, so
+ * shared mock arrays keep their identity for other importers.
+ * @param list Array to edit
+ * @param shouldRemove Returns true for elements to drop
+ */
+function removeWhere<T>(list: T[], shouldRemove: (value: T) => boolean): void {
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (shouldRemove(list[i])) list.splice(i, 1);
+  }
+}
+
+/**
+ * Builds a failed leave/delete result.
+ * @param error Machine-readable reason
+ * @param message Text to show the user
+ * @returns The failure result
+ */
+function actionFailure(
+  error: GroupActionError,
+  message: string
+): GroupActionResult {
+  return { success: false, error, message };
+}
+
+/**
+ * Message shown when a group doesn't exist or the caller can't see it.
+ */
+const GROUP_NOT_FOUND_MESSAGE = "Group not found";
 
 /**
  * Initial seed groups for development and testing.
@@ -173,6 +224,117 @@ export class MockGroupService implements GroupService {
   }
 
   /**
+   * Leaves a group in memory (US 2.4). Owners are refused so the group is
+   * never left without an owner; they have to delete it instead.
+   * @param groupId Group to leave
+   * @param userId User leaving the group
+   * @returns The left group's name, or why it failed
+   */
+  async leaveGroup(
+    groupId: string,
+    userId: string = "current-user"
+  ): Promise<GroupActionResult> {
+    const detail = mockGroupDetails[groupId];
+    if (!detail) return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+
+    const member = detail.members.find((m) => m.user_id === userId);
+    const isOwner =
+      member?.role === "owner" || detail.group.created_by === userId;
+
+    if (!member && !isOwner) {
+      return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+    }
+    if (isOwner) {
+      return actionFailure(
+        "OWNER_CANNOT_LEAVE",
+        "Owners can't leave their group. Delete the group or transfer ownership instead."
+      );
+    }
+
+    const ids = mockAliasIds(groupId);
+    for (const id of ids) {
+      const target = mockGroupDetails[id];
+      if (target) {
+        target.members = target.members.filter((m) => m.user_id !== userId);
+      }
+    }
+    this.members = this.members.filter(
+      (m) => !(ids.includes(m.group_id) && m.user_id === userId)
+    );
+    // mockGroups is the signed-in device user's group list.
+    removeWhere(mockGroups, (g) => ids.includes(g.id));
+
+    return {
+      success: true,
+      group_id: groupId,
+      group_name: detail.group.name,
+      message: `Left ${detail.group.name}`,
+    };
+  }
+
+  /**
+   * Deletes a group in memory for everyone (US 2.4), along with its
+   * memberships, receipts, items, claims and guest links. Only the owner
+   * can delete it.
+   * @param groupId Group to delete
+   * @param userId User asking to delete it
+   * @returns The deleted group's name, or why it failed
+   */
+  async deleteGroup(
+    groupId: string,
+    userId: string = "current-user"
+  ): Promise<GroupActionResult> {
+    const detail = mockGroupDetails[groupId];
+    if (!detail) return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+
+    const member = detail.members.find((m) => m.user_id === userId);
+    const isOwner =
+      member?.role === "owner" || detail.group.created_by === userId;
+
+    if (!isOwner) {
+      return member
+        ? actionFailure("FORBIDDEN", "Only the group owner can delete this group")
+        : actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+    }
+
+    const ids = mockAliasIds(groupId);
+    const receiptIds = new Set<string>();
+    for (const id of ids) {
+      for (const r of mockGroupDetails[id]?.receipts ?? []) receiptIds.add(r.id);
+      delete mockGroupDetails[id];
+    }
+
+    // Keep receipts another remaining group still lists (shared seed data).
+    for (const other of Object.values(mockGroupDetails)) {
+      for (const r of other.receipts) receiptIds.delete(r.id);
+    }
+
+    const itemIds = new Set<string>();
+    for (const rid of receiptIds) {
+      for (const item of mockReceiptItems[rid] ?? []) itemIds.add(item.id);
+      delete mockReceiptItems[rid];
+    }
+    removeWhere(
+      mockItemClaims,
+      (c) =>
+        itemIds.has(c.item_id) ||
+        (c.receipt_id !== undefined && receiptIds.has(c.receipt_id))
+    );
+    removeWhere(mockGuestTokens, (t) => receiptIds.has(t.receipt_id));
+
+    removeWhere(mockGroups, (g) => ids.includes(g.id));
+    this.groups = this.groups.filter((g) => !ids.includes(g.id));
+    this.members = this.members.filter((m) => !ids.includes(m.group_id));
+
+    return {
+      success: true,
+      group_id: groupId,
+      group_name: detail.group.name,
+      message: `${detail.group.name} deleted`,
+    };
+  }
+
+  /**
    * Gets current in-memory memberships.
    * @returns List of memberships
    */
@@ -254,6 +416,62 @@ export class SupabaseGroupService implements GroupService {
       };
     }
   }
+
+  /**
+   * Leaves a group via the leave_group RPC. The server uses the signed-in
+   * user, so no user ID is sent.
+   * @param groupId Group to leave
+   * @returns The left group's name, or why it failed
+   */
+  async leaveGroup(groupId: string): Promise<GroupActionResult> {
+    return this.callGroupAction("leave_group", groupId);
+  }
+
+  /**
+   * Deletes a group for everyone via the delete_group RPC (owner only).
+   * @param groupId Group to delete
+   * @returns The deleted group's name, or why it failed
+   */
+  async deleteGroup(groupId: string): Promise<GroupActionResult> {
+    return this.callGroupAction("delete_group", groupId);
+  }
+
+  /**
+   * Calls a leave/delete RPC and turns any failure into a result.
+   * @param fn RPC name
+   * @param groupId Group id argument
+   * @returns The RPC's result, or a failure
+   */
+  private async callGroupAction(
+    fn: "leave_group" | "delete_group",
+    groupId: string
+  ): Promise<GroupActionResult> {
+    if (!SUPABASE) {
+      return actionFailure("NETWORK_ERROR", "Supabase client is not configured.");
+    }
+    if (!groupId) return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+
+    try {
+      const { data, error } = await SUPABASE.rpc(fn, { p_group_id: groupId });
+      if (error) {
+        if (error.code === "42501") {
+          return actionFailure("NOT_SIGNED_IN", "Please sign in and try again");
+        }
+        return actionFailure(
+          "NETWORK_ERROR",
+          error.message || "Failed to communicate with server."
+        );
+      }
+      const result = data as GroupActionResult | null;
+      if (!result || typeof result.success !== "boolean") {
+        return actionFailure("NETWORK_ERROR", "Unexpected response from server.");
+      }
+      return result;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
+      return actionFailure("NETWORK_ERROR", msg);
+    }
+  }
 }
 
 /**
@@ -298,3 +516,39 @@ export async function joinGroup(
   return MOCK_GROUP_SERVICE.joinGroupByCode(inviteCode, userId);
 }
 
+
+/**
+ * Leaves a group (US 2.4). Uses mock data when USE_MOCK is on (or Supabase
+ * isn't configured), otherwise the leave_group RPC. Unlike joinGroup, this
+ * never falls back to mock data after a server error, so a failed leave is
+ * never reported as a success.
+ * @param groupId Group to leave
+ * @param userId User leaving (only used by the mock; the server uses auth)
+ * @returns The left group's name, or why it failed
+ */
+export async function leaveGroup(
+  groupId: string,
+  userId: string = "current-user"
+): Promise<GroupActionResult> {
+  if (USE_MOCK || !SUPABASE) {
+    return MOCK_GROUP_SERVICE.leaveGroup(groupId, userId);
+  }
+  return SUPABASE_GROUP_SERVICE.leaveGroup(groupId);
+}
+
+/**
+ * Deletes a group for every member (US 2.4). Only the owner can do this.
+ * Same mock/Supabase choice as leaveGroup.
+ * @param groupId Group to delete
+ * @param userId User deleting (only used by the mock; the server uses auth)
+ * @returns The deleted group's name, or why it failed
+ */
+export async function deleteGroup(
+  groupId: string,
+  userId: string = "current-user"
+): Promise<GroupActionResult> {
+  if (USE_MOCK || !SUPABASE) {
+    return MOCK_GROUP_SERVICE.deleteGroup(groupId, userId);
+  }
+  return SUPABASE_GROUP_SERVICE.deleteGroup(groupId);
+}

@@ -17,9 +17,11 @@ import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
 import { useAuth } from "@/lib/auth-provider";
+import { confirmAction } from "@/lib/confirm-action";
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
 import { isGroupOwner } from "@/lib/group-members";
+import { deleteGroup, leaveGroup } from "@/lib/groups";
 import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
@@ -110,6 +112,9 @@ export default function GroupScreen(): JSX.Element {
   const [refreshing, setRefreshing] = useState(false);
   // True once a load succeeded, so later refreshes keep the page on screen.
   const hasDetailRef = useRef(false);
+  // The ref blocks a second tap before the state update re-renders.
+  const groupActionBusyRef = useRef(false);
+  const [groupActionBusy, setGroupActionBusy] = useState(false);
 
   const load = useCallback(async (pull = false) => {
     if (pull) setRefreshing(true);
@@ -192,7 +197,10 @@ export default function GroupScreen(): JSX.Element {
   if (forbidden) {
     return (
       <View style={STYLES.center}>
-        <Text style={STYLES.error}>You&apos;re not a member of this group.</Text>
+        <Text style={STYLES.error}>
+          Group not found. It may have been deleted, or you&apos;re no longer a
+          member.
+        </Text>
         <Pressable
           onPress={() =>
             router.canGoBack() ? router.back() : router.replace("/")
@@ -218,6 +226,64 @@ export default function GroupScreen(): JSX.Element {
 
   const { group, members, receipts } = detail;
   const isOwner = isGroupOwner(detail, currentUserId);
+  const currentMember = members.find((m) => m.user_id === currentUserId);
+  const canLeaveOrDelete = isOwner || currentMember !== undefined;
+
+  /**
+   * Confirms, then leaves the group (members) or deletes it (owner). On
+   * success, goes back to the group list with a toast. The group screen is
+   * removed from history so Back can't reopen it.
+   */
+  const handleLeaveOrDelete = async (): Promise<void> => {
+    if (groupActionBusyRef.current) return;
+    groupActionBusyRef.current = true;
+    setGroupActionBusy(true);
+
+    try {
+      const confirmed = isOwner
+        ? await confirmAction(
+            "Delete Group",
+            `Are you sure you want to delete ${group.name}? This will permanently delete the group and all receipts for all members.`,
+            "Delete"
+          )
+        : await confirmAction(
+            "Leave Group",
+            `Are you sure you want to leave ${group.name}?`,
+            "Leave"
+          );
+      if (!confirmed) return;
+
+      const userId = currentUserId ?? MOCK_CURRENT_USER_ID;
+      const result = isOwner
+        ? await deleteGroup(group.id, userId)
+        : await leaveGroup(group.id, userId);
+
+      if (!result.success) {
+        setToastState({ message: result.message, type: "error" });
+        return;
+      }
+
+      const href = {
+        pathname: "/" as const,
+        params: {
+          toastMessage: isOwner
+            ? `${group.name} deleted`
+            : `Left ${group.name}`,
+          toastType: "success",
+          removedGroupId: group.id,
+          // Makes the same message show again for a second leave/delete.
+          toastKey: String(Date.now()),
+        },
+      };
+      // dismissTo pops back to the existing list; replace covers deep links
+      // where the group screen is the only screen on the stack.
+      if (router.canGoBack()) router.dismissTo(href);
+      else router.replace(href);
+    } finally {
+      groupActionBusyRef.current = false;
+      setGroupActionBusy(false);
+    }
+  };
 
   /**
    * Opens the receipt entry form for this group.
@@ -485,6 +551,34 @@ export default function GroupScreen(): JSX.Element {
             })
           )}
         </View>
+
+        {canLeaveOrDelete ? (
+          <Pressable
+            onPress={handleLeaveOrDelete}
+            disabled={groupActionBusy}
+            accessibilityRole="button"
+            accessibilityLabel={isOwner ? "Delete Group" : "Leave Group"}
+            accessibilityState={{ disabled: groupActionBusy, busy: groupActionBusy }}
+            style={({ pressed }) => [
+              STYLES.groupActionButton,
+              isOwner && STYLES.groupActionButtonDestructive,
+              (pressed || groupActionBusy) && STYLES.addButtonPressed,
+            ]}
+          >
+            {groupActionBusy ? (
+              <ActivityIndicator color={isOwner ? "white" : palette.error} />
+            ) : (
+              <Text
+                style={[
+                  STYLES.groupActionText,
+                  isOwner && STYLES.groupActionTextDestructive,
+                ]}
+              >
+                {isOwner ? "Delete Group" : "Leave Group"}
+              </Text>
+            )}
+          </Pressable>
+        ) : null}
       </ScrollView>
       <AddReceiptModal
         key={
@@ -649,4 +743,17 @@ const STYLES = StyleSheet.create({
   },
   addButtonPressed: { opacity: 0.7 },
   addButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
+  groupActionButton: {
+    marginTop: 28,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.error,
+    backgroundColor: palette.card,
+  },
+  groupActionButtonDestructive: { backgroundColor: palette.error },
+  groupActionText: { fontSize: 16, fontWeight: "700", color: palette.error },
+  groupActionTextDestructive: { color: "white" },
 });
