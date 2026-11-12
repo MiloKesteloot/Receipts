@@ -399,9 +399,6 @@ async function copyToClipboard(text: string): Promise<boolean> {
         <View style={STYLES.shareCard}>
           <View style={STYLES.shareHeader}>
             <Text style={STYLES.shareTitle}>Guest Claim Link</Text>
-            <View style={STYLES.noAccountBadge}>
-              <Text style={STYLES.noAccountBadgeText}>No account required</Text>
-            </View>
           </View>
 
           <Text style={STYLES.shareDescription}>
@@ -645,17 +642,6 @@ const STYLES = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#1B3B22",
-  },
-  noAccountBadge: {
-    backgroundColor: "#D9EEDC",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  noAccountBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#2C6839",
   },
   shareDescription: {
     fontSize: 14,

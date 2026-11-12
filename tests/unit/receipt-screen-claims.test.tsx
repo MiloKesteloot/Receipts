@@ -214,10 +214,11 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
     expect(await findByText("Your total $32.15 · 3 items")).toBeTruthy();
   });
 
-  it("keeps the guest share-link card", async () => {
-    const { getByText } = await renderReceipt();
+  it("keeps the guest share-link card without the removed green badge", async () => {
+    const { getByText, queryByText } = await renderReceipt();
 
     expect(getByText("Guest Claim Link")).toBeTruthy();
+    expect(queryByText("No account required")).toBeNull();
     expect(getByText("Share Claim Link")).toBeTruthy();
     expect(getByText("Copy Link")).toBeTruthy();
     expect(getByText(/mock-claim-r1-demo/)).toBeTruthy();

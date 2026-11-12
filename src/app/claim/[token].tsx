@@ -154,10 +154,6 @@ export default function GuestClaimScreen(): JSX.Element {
       if (refreshed.success) {
         setReceipt(refreshed.receipt);
       }
-      setToast({
-        message: targetClaim ? "Item claimed!" : "Item unshared/unclaimed",
-        type: "info",
-      });
     } else {
       setToast({
         message: result.message,

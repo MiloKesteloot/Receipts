@@ -14,7 +14,11 @@ type AuthContextValue = {
   // True until the stored session has been read on launch.
   isLoading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<auth.AuthResult>;
-  signUpWithEmail: (email: string, password: string) => Promise<auth.AuthResult>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    displayName?: string
+  ) => Promise<auth.AuthResult>;
   signInWithGoogle: () => Promise<auth.AuthResult>;
   signInWithApple: () => Promise<auth.AuthResult>;
   signOut: () => Promise<auth.AuthResult>;
@@ -64,8 +68,8 @@ function requestAppleCredential(): ReturnType<auth.RequestAppleCredential> {
  */
 const ACTIONS: Omit<AuthContextValue, "session" | "isLoading"> = {
   signInWithEmail: (email, password) => auth.signInWithEmail(CLIENT, email, password),
-  signUpWithEmail: (email, password) =>
-    auth.signUpWithEmail(CLIENT, email, password, redirectUrl()),
+  signUpWithEmail: (email, password, displayName) =>
+    auth.signUpWithEmail(CLIENT, email, password, redirectUrl(), displayName),
   signInWithGoogle: () =>
     auth.signInWithOAuthProvider(CLIENT, "google", redirectUrl(), openAuthSession),
   // Native sheet on iOS; Apple's web sign-in on Android and web.

@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -58,6 +59,7 @@ type GroupDetail = {
   group: {
     id: string;
     name: string;
+    invite_code?: string;
     created_by: string;
     created_at: string;
   };
@@ -70,10 +72,11 @@ type GroupDetail = {
  * @returns JSX element
  */
 export default function GroupScreen(): JSX.Element {
-  const { id, toastMessage, toastType } = useLocalSearchParams<{
+  const { id, toastMessage, toastType, toastKey } = useLocalSearchParams<{
     id: string;
     toastMessage?: string;
     toastType?: string;
+    toastKey?: string;
   }>();
 
   const [toastState, setToastState] = useState<{
@@ -88,7 +91,7 @@ export default function GroupScreen(): JSX.Element {
         type: (toastType as ToastType) || "info",
       });
     }
-  }, [toastMessage, toastType]);
+  }, [toastMessage, toastType, toastKey]);
 
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -423,6 +426,32 @@ export default function GroupScreen(): JSX.Element {
           </Text>
         </View>
 
+        {group.invite_code ? (
+          <View style={STYLES.inviteCard}>
+            <View style={STYLES.inviteInfo}>
+              <Text style={STYLES.inviteLabel}>Invite code</Text>
+              <Text selectable style={STYLES.inviteCode}>
+                {group.invite_code}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                Share.share({
+                  message: `Join "${group.name}" with invite code: ${group.invite_code}`,
+                }).catch(() => {});
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Share invite code"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Share</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {isOwner ? (
           <View style={STYLES.sectionHeaderRow}>
             <Text style={STYLES.sectionLabelFlush}>
@@ -640,8 +669,37 @@ const STYLES = StyleSheet.create({
 
     backgroundColor: palette.bg,
   },
-  content: { padding: 24, gap: 10 },
+  content: { padding: 24, paddingBottom: 112, gap: 10 },
   header: { gap: 6, marginBottom: 8 },
+  inviteCard: {
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  inviteInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  inviteLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+    color: palette.muted,
+  },
+  inviteCode: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: palette.text,
+  },
   eyebrow: {
     fontSize: 12,
     fontWeight: "700",

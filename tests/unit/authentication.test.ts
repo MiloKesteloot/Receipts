@@ -265,6 +265,35 @@ describe("User Story 1.1: Authentication", () => {
       });
     });
 
+    test("stores a trimmed display name in user metadata when provided", async () => {
+      const result = await signUpWithEmail(
+        client,
+        "a@b.co",
+        "secret123",
+        REDIRECT,
+        "  Kelland  "
+      );
+      assert.equal(result.success, true);
+      assert.deepEqual(fake.argOf("signUp"), {
+        email: "a@b.co",
+        password: "secret123",
+        options: {
+          emailRedirectTo: REDIRECT,
+          // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata key
+          data: { full_name: "Kelland", name: "Kelland" },
+        },
+      });
+    });
+
+    test("omits metadata when display name is blank whitespace", async () => {
+      await signUpWithEmail(client, "a@b.co", "secret123", undefined, "   ");
+      assert.deepEqual(fake.argOf("signUp"), {
+        email: "a@b.co",
+        password: "secret123",
+        options: undefined,
+      });
+    });
+
     test("rejects short passwords before contacting Supabase", async () => {
       const result = await signUpWithEmail(client, "a@b.co", "123");
       assert.equal(result.success, false);

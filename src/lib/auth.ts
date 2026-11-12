@@ -214,21 +214,47 @@ export async function signInWithEmail(
  * @param emailRedirectTo Where the confirmation email link should open
  * @returns Result; session is null when the email must be confirmed first
  */
+/**
+ * Create a new account with email and password.
+ * Supabase sends a confirmation link to {@link emailRedirectTo} unless
+ * email confirmations are disabled.
+ * @param client Supabase auth client
+ * @param email User email address
+ * @param password User password
+ * @param emailRedirectTo Optional confirmation redirect URL
+ * @param displayName Optional display name stored in user metadata
+ * @returns Auth result with session (null if email confirmation is required)
+ */
 export async function signUpWithEmail(
   client: AuthClient | null,
   email: string,
   password: string,
-  emailRedirectTo?: string
+  emailRedirectTo?: string,
+  displayName?: string
 ): Promise<AuthResult> {
   if (!client) return NOT_CONFIGURED;
   const invalid = validateCredentials(email, password, "sign-up");
   if (invalid) return invalid;
 
+  const trimmedName = displayName?.trim();
+  const signUpOptions: {
+    emailRedirectTo?: string;
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata key
+    data?: { full_name: string; name: string };
+  } = {};
+  if (emailRedirectTo) signUpOptions.emailRedirectTo = emailRedirectTo;
+  if (trimmedName) {
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata key
+    signUpOptions.data = { full_name: trimmedName, name: trimmedName };
+  }
+  const options =
+    Object.keys(signUpOptions).length > 0 ? signUpOptions : undefined;
+
   try {
     const { data, error } = await client.signUp({
       email: email.trim(),
       password,
-      options: emailRedirectTo ? { emailRedirectTo } : undefined,
+      options,
     });
     if (error) return toAuthFailure(error);
     if (!data.session) {
