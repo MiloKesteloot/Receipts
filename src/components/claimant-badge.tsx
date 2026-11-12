@@ -3,8 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import {
   ClaimantGuestIcon,
-  ClaimantMemberIcon,
-  ClaimantYouIcon,
+  ClaimantVerifiedIcon,
   type IconProps,
 } from "@/components/icons";
 import { PALETTE } from "@/lib/palette";
@@ -33,14 +32,14 @@ const ROLE_META: Record<
     border: PALETTE.accent,
     text: "#FFFFFF",
     roleName: "You",
-    icon: ClaimantYouIcon,
+    icon: ClaimantVerifiedIcon,
   },
   member: {
     bg: "#E8F1F8",
     border: "#BDD5EA",
     text: "#1E568A",
     roleName: "Member",
-    icon: ClaimantMemberIcon,
+    icon: ClaimantVerifiedIcon,
   },
   guest: {
     bg: "#FDF2D6",
