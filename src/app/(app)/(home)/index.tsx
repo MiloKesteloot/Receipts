@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { JSX, useCallback, useEffect, useRef, useState } from "react";
+import { JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,25 +13,32 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
 import { CreateGroupForm } from "@/components/create-group-form";
+import {
+  HomeBalanceCard,
+  HomeGroupCard,
+} from "@/components/home-overview-cards";
 import { JoinGroupModal } from "@/components/join-group-modal";
 import { NewGroupButton } from "@/components/NewGroupButton";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { type CreatedGroup } from "@/lib/create-group";
-// TODO(remove-mock): Remove `@/lib/mock` import once mock mode is deleted.
-import { mockGroups, USE_MOCK } from "@/lib/mock";
+import {
+  type HomeOverview,
+  loadHomeOverview,
+  resolveDisplayName,
+} from "@/lib/home-overview";
 import { palette } from "@/lib/palette";
-import { SUPABASE as supabase } from "@/lib/supabase";
 
-type Group = { id: string; name: string };
+type GroupSummary = { id: string; name: string };
 
 /**
- * Main groups list screen allowing user to view and join groups.
+ * Main Home overview screen displaying personalized greeting, user balances,
+ * and group summary cards.
  * @returns JSX element
  */
 export default function Index(): JSX.Element {
   const { session } = useAuth();
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [overview, setOverview] = useState<HomeOverview | null>(null);
   const [loading, setLoading] = useState(true); // first load only
   const [refreshing, setRefreshing] = useState(false); // pull-to-refresh
   const [error, setError] = useState<string | null>(null);
@@ -46,38 +53,34 @@ export default function Index(): JSX.Element {
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 80 : insets.top + 24;
 
-  const load = useCallback(async (mode: "initial" | "refresh" = "initial") => {
-    if (mode === "initial") setLoading(true);
-    else setRefreshing(true);
-    setError(null);
+  const activeUser = useMemo(() => {
+    const user = session?.user;
+    if (!user) return undefined;
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.user_metadata?.full_name as string | undefined,
+      name: user.user_metadata?.name as string | undefined,
+    };
+  }, [session]);
 
-    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
-    if (USE_MOCK) {
-      setGroups([...mockGroups]);
+  const load = useCallback(
+    async (mode: "initial" | "refresh" = "initial") => {
+      if (mode === "initial") setLoading(true);
+      else setRefreshing(true);
+      setError(null);
+
+      const result = await loadHomeOverview({ user: activeUser });
+      if (result.status === "ok") {
+        setOverview(result.overview);
+      } else {
+        setError(result.message);
+      }
       setLoading(false);
       setRefreshing(false);
-      return;
-    }
-
-    if (!supabase) {
-      setError("Add your Supabase URL and key to .env");
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-
-    // With Row Level Security on, this only returns groups the
-    // signed-in user is a member of.
-    const { data, error } = await supabase
-      .from("groups")
-      .select("id, name")
-      .order("name");
-
-    if (error) setError(error.message);
-    else setGroups(data ?? []);
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
+    },
+    [activeUser]
+  );
 
   useEffect(() => {
     load("initial");
@@ -96,7 +99,14 @@ export default function Index(): JSX.Element {
   useEffect(() => {
     // Hide the left/deleted group at once, before the refresh returns.
     if (removedGroupId) {
-      setGroups((prev) => prev.filter((g) => g.id !== removedGroupId));
+      setOverview((prev) =>
+        prev
+          ? {
+              ...prev,
+              groups: prev.groups.filter((g) => g.id !== removedGroupId),
+            }
+          : prev
+      );
     }
     if (!toastMessage) return;
     setToastState({
@@ -107,12 +117,7 @@ export default function Index(): JSX.Element {
 
   useFocusEffect(
     useCallback(() => {
-      // TODO(remove-mock): Delete `if (USE_MOCK)` branch once offline mock mode is removed.
-      if (USE_MOCK) {
-        setGroups([...mockGroups]);
-      } else {
-        load("refresh");
-      }
+      load("refresh");
     }, [load])
   );
 
@@ -128,12 +133,7 @@ export default function Index(): JSX.Element {
 
   const handleGroupCreated = (group: CreatedGroup) => {
     setModalVisible(false);
-    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
-    if (USE_MOCK) {
-      setGroups([...mockGroups]);
-    } else {
-      load("refresh");
-    }
+    load("refresh");
     router.push({
       pathname: "/groups/[id]",
       params: {
@@ -146,25 +146,19 @@ export default function Index(): JSX.Element {
   };
 
   const handleGroupJoined = (
-    _group: Group,
+    _group: GroupSummary,
     status: "JOINED" | "ALREADY_MEMBER",
     message: string
   ) => {
     setModalVisible(false);
-    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
-    if (USE_MOCK) {
-      setGroups([...mockGroups]);
-    } else {
-      load("refresh");
-    }
+    load("refresh");
     setToastState({
       message,
       type: status === "ALREADY_MEMBER" ? "info" : "success",
     });
   };
 
-
-  if (loading) {
+  if (loading && !overview) {
     return (
       <View style={STYLES.center}>
         <ActivityIndicator color={palette.accent} />
@@ -172,7 +166,7 @@ export default function Index(): JSX.Element {
     );
   }
 
-  if (error) {
+  if (error && !overview) {
     return (
       <View style={STYLES.center}>
         <Text style={STYLES.error}>{error}</Text>
@@ -182,6 +176,16 @@ export default function Index(): JSX.Element {
       </View>
     );
   }
+
+  const greetingName =
+    overview?.displayName ??
+    resolveDisplayName({
+      fullName: activeUser?.fullName,
+      name: activeUser?.name,
+      email: activeUser?.email,
+    });
+  const balances = overview?.balances ?? { owedToMeCents: 0, iOweCents: 0 };
+  const groups = overview?.groups ?? [];
 
   return (
     <View style={STYLES.container}>
@@ -194,13 +198,19 @@ export default function Index(): JSX.Element {
         refreshing={refreshing}
         ListHeaderComponent={
           <View style={STYLES.header}>
-            <Text style={STYLES.title}>Where are we splitting?</Text>
+            <Text style={STYLES.title}>{`Hi, ${greetingName}`}</Text>
             <View style={STYLES.subtitleRow}>
               <Text style={STYLES.subtitle}>
-                Choose a group to see its members and receipts.
+                Here&apos;s where your groups and balances stand.
               </Text>
               <NewGroupButton onPress={handleOpenModal} />
             </View>
+            <HomeBalanceCard
+              owedToMeCents={balances.owedToMeCents}
+              iOweCents={balances.iOweCents}
+            />
+            {error ? <Text style={STYLES.inlineError}>{error}</Text> : null}
+            <Text style={STYLES.sectionTitle}>Your groups</Text>
           </View>
         }
         ListEmptyComponent={
@@ -209,32 +219,16 @@ export default function Index(): JSX.Element {
           </View>
         }
         renderItem={({ item, index }) => (
-          <Pressable
+          <HomeGroupCard
+            group={item}
+            index={index}
             onPress={() =>
               router.push({
                 pathname: "/groups/[id]",
                 params: { id: item.id },
               })
             }
-            style={({ pressed }) => [STYLES.row, pressed && STYLES.rowPressed]}
-          >
-            <View
-              style={[
-                STYLES.tile,
-                {
-                  backgroundColor: palette.tiles[index % palette.tiles.length],
-                },
-              ]}
-            >
-              <Text style={STYLES.tileText}>
-                {item.name.trim().charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <Text style={STYLES.rowText} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <Text style={STYLES.chevron}>›</Text>
-          </Pressable>
+          />
         )}
       />
       <JoinGroupModal
@@ -278,37 +272,23 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.bg,
   },
   list: { padding: 24, paddingBottom: BOTTOM_TAB_CLEARANCE, gap: 12 },
-  header: { marginBottom: 12, gap: 6 },
+  header: { marginBottom: 4, gap: 10 },
   title: { fontSize: 30, fontWeight: "800", color: palette.text },
   subtitleRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
     gap: 12,
-    marginTop: 2,
+    marginBottom: 4,
   },
   subtitle: { flex: 1, fontSize: 15, color: palette.muted },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    padding: 14,
-    backgroundColor: palette.card,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 16,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: palette.text,
+    marginTop: 4,
   },
-  rowPressed: { opacity: 0.7 },
-  tile: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tileText: { fontSize: 20, fontWeight: "700", color: palette.text },
-  rowText: { flex: 1, fontSize: 17, fontWeight: "700", color: palette.text },
-  chevron: { fontSize: 26, color: palette.muted },
+  inlineError: { fontSize: 13, color: palette.error },
   emptyCard: {
     padding: 24,
     alignItems: "center",
@@ -327,4 +307,3 @@ const STYLES = StyleSheet.create({
   buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
   error: { color: palette.error, textAlign: "center" },
 });
-
