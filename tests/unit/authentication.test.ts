@@ -16,6 +16,7 @@ import {
   signOut,
   signUpWithEmail,
   toAuthFailure,
+  updateDisplayName,
   validateCredentials,
   watchSession,
   type AuthClient,
@@ -636,6 +637,33 @@ describe("User Story 1.1: Authentication", () => {
   describe("session storage", () => {
     test("web/Node defer to Supabase's default storage", () => {
       assert.equal(SESSION_STORAGE, undefined);
+    });
+  });
+
+  describe("updateDisplayName", () => {
+    test("updates user_metadata with trimmed full_name and name", async () => {
+      fake.responses.updateUser = {
+        data: { user: { id: "user-1", user_metadata: { full_name: "Kelland M." } } },
+        error: null,
+      };
+      const result = await updateDisplayName(client, "  Kelland M.  ");
+      assert.equal(result.success, true);
+      assert.deepEqual(fake.calls[0], {
+        method: "updateUser",
+        args: [{ data: { full_name: "Kelland M.", name: "Kelland M." } }],
+      });
+    });
+
+    test("rejects blank display names without contacting Supabase", async () => {
+      const result = await updateDisplayName(client, "   ");
+      assert.equal(result.success, false);
+      assert.equal(fake.calls.length, 0);
+    });
+
+    test("fails cleanly when Supabase is not configured", async () => {
+      const result = await updateDisplayName(null, "Alex");
+      assert.equal(result.success, false);
+      if (!result.success) assert.equal(result.error, "NOT_CONFIGURED");
     });
   });
 });

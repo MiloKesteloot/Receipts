@@ -15,8 +15,10 @@ import { useLocalSearchParams } from "expo-router";
 import { Share } from "react-native";
 
 import GroupScreen from "@/app/(app)/(home)/groups/[id]";
+import AccountScreen from "@/app/(app)/account";
 import SignInScreen from "@/app/sign-in";
 import { BottomTabBar } from "@/components/bottom-tab-bar";
+import { ClaimantBadge } from "@/components/claimant-badge";
 import { CreateGroupForm } from "@/components/create-group-form";
 import { PlaceholderScreen } from "@/components/placeholder-screen";
 import { createGroup } from "@/lib/create-group";
@@ -47,13 +49,34 @@ jest.mock("expo-router", () => ({
     jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
 }));
 
+/** Mutable session returned by mocked useAuth. */
+let mockAuthSession: {
+  user: {
+    id: string;
+    email: string;
+    user_metadata?: { full_name?: string; name?: string };
+    app_metadata?: { provider?: string };
+  };
+} | null = null;
+
+/** Display name update mock inspected by AccountScreen tests. */
+const MOCK_UPDATE_DISPLAY_NAME = jest.fn<
+  (displayName: string) => Promise<unknown>
+>(async (displayName: string) => ({
+  success: true as const,
+  session: null,
+  message: `Display name updated to ${displayName}`,
+}));
+
 jest.mock("@/lib/auth-provider", () => ({
   useAuth: () => ({
-    session: null,
+    session: mockAuthSession,
     signInWithEmail: MOCK_SIGN_IN,
     signUpWithEmail: MOCK_SIGN_UP,
     signInWithGoogle: jest.fn(async () => ({ success: true as const })),
     signInWithApple: jest.fn(async () => ({ success: true as const })),
+    updateDisplayName: MOCK_UPDATE_DISPLAY_NAME,
+    signOut: jest.fn(async () => ({ success: true as const })),
     appleAvailable: false,
   }),
 }));
@@ -259,5 +282,69 @@ describe("BottomTabBar and PlaceholderScreen", () => {
     expect(
       getByText("Spending breakdown and trends will appear here.")
     ).toBeTruthy();
+  });
+});
+
+describe("ClaimantBadge: role-distinct SVG badges", () => {
+  it("renders distinct accessible badges and colors for You, Member, and Guest", async () => {
+    const { getByTestId, getByLabelText } = await render(
+      <>
+        <ClaimantBadge role="you" label="You $5.00" />
+        <ClaimantBadge role="member" label="Alex $5.00" />
+        <ClaimantBadge role="guest" label="Casey (Guest) $5.00" />
+      </>
+    );
+
+    const youBadge = getByTestId("claimant-badge-you");
+    const memberBadge = getByTestId("claimant-badge-member");
+    const guestBadge = getByTestId("claimant-badge-guest");
+
+    expect(getByLabelText("You $5.00 (You)")).toBeTruthy();
+    expect(getByLabelText("Alex $5.00 (Member)")).toBeTruthy();
+    expect(getByLabelText("Casey (Guest) $5.00 (Guest)")).toBeTruthy();
+    expect(youBadge.props.style).not.toEqual(memberBadge.props.style);
+    expect(memberBadge.props.style).not.toEqual(guestBadge.props.style);
+  });
+});
+
+describe("AccountScreen: display name editor", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAuthSession = {
+      user: {
+        id: "user-1",
+        email: "k@example.com",
+        user_metadata: { full_name: "Kelland" },
+        app_metadata: { provider: "email" },
+      },
+    };
+  });
+
+  it("lets the signed-in user edit and save their display name", async () => {
+    const { getByText, getByLabelText, findByText } = await render(
+      <AccountScreen />
+    );
+
+    expect(getByText("Kelland")).toBeTruthy();
+
+    await fireEvent.press(getByLabelText("Edit display name"));
+
+    const input = getByLabelText("Display name");
+    await fireEvent.changeText(input, "  Kelland M.  ");
+    await fireEvent.press(getByLabelText("Save display name"));
+
+    expect(MOCK_UPDATE_DISPLAY_NAME).toHaveBeenCalledWith("Kelland M.");
+    expect(await findByText("Display name updated to Kelland M.")).toBeTruthy();
+  });
+
+  it("validates blank display names inline without calling updateDisplayName", async () => {
+    const { getByLabelText, getByText } = await render(<AccountScreen />);
+
+    await fireEvent.press(getByLabelText("Edit display name"));
+    await fireEvent.changeText(getByLabelText("Display name"), "   ");
+    await fireEvent.press(getByLabelText("Save display name"));
+
+    expect(getByText("Please enter a display name")).toBeTruthy();
+    expect(MOCK_UPDATE_DISPLAY_NAME).not.toHaveBeenCalled();
   });
 });

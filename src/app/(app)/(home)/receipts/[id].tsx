@@ -16,6 +16,7 @@ import { Circle, Path, Svg } from "react-native-svg";
 import { JSX } from "react/jsx-runtime";
 
 import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
+import { ClaimantBadge, type ClaimantRole } from "@/components/claimant-badge";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { isGuestClaimKey, toClaimableItems, type ItemShares } from "@/lib/claims";
@@ -254,27 +255,49 @@ export default function ReceiptScreen(): JSX.Element {
   );
 
   /**
-   * The name to show for a claim key.
+   * Determines display label and role for a claimant key.
    * @param key A member's user id or a guest claim key
-   * @returns "You", the member's name, or the guest's name marked as a guest
+   * @returns Claimant role and display label
    */
-  const nameFor = (key: string): string => {
-    if (key === userId) return "You";
-    if (isGuestClaimKey(key)) return `${guestNames[key] ?? "Guest"} (Guest)`;
-    return memberNames[key] ?? "Member";
+  const badgeFor = (key: string): { role: ClaimantRole; name: string } => {
+    if (key === userId) return { role: "you", name: "You" };
+    if (isGuestClaimKey(key)) {
+      return { role: "guest", name: `${guestNames[key] ?? "Guest"} (Guest)` };
+    }
+    return { role: "member", name: memberNames[key] ?? "Member" };
   };
 
   /**
-   * The line under an item's name: who claimed it and what each pays.
+   * Renders color-coded claimant badges under an item's title.
    * @param shares The item's shares from useClaims
-   * @returns The text to show
+   * @returns Badges row or tap-to-claim hint
    */
-  const claimSummary = (shares: ItemShares): string => {
-    if (shares.claimedBy.length === 0) return "Tap to claim";
-    if (!shares.isShared) return nameFor(shares.claimedBy[0]);
-    return shares.shares
-      .map((share) => `${nameFor(share.userId)} ${formatCents(share.cents)}`)
-      .join(" · ");
+  const renderClaimantBadges = (shares: ItemShares): JSX.Element => {
+    if (shares.claimedBy.length === 0) {
+      return <Text style={STYLES.unclaimedText}>Tap to claim</Text>;
+    }
+    if (!shares.isShared) {
+      const info = badgeFor(shares.claimedBy[0]);
+      return (
+        <View style={STYLES.claimantsRow}>
+          <ClaimantBadge role={info.role} label={info.name} />
+        </View>
+      );
+    }
+    return (
+      <View style={STYLES.claimantsRow}>
+        {shares.shares.map((share) => {
+          const info = badgeFor(share.userId);
+          return (
+            <ClaimantBadge
+              key={share.userId}
+              role={info.role}
+              label={`${info.name} ${formatCents(share.cents)}`}
+            />
+          );
+        })}
+      </View>
+    );
   };
 
   /**
@@ -564,15 +587,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
                         </View>
                       ) : null}
                     </View>
-                    <Text
-                      style={
-                        shares.claimedBy.length === 0
-                          ? STYLES.unclaimedText
-                          : STYLES.claimantText
-                      }
-                    >
-                      {claimSummary(shares)}
-                    </Text>
+                    {renderClaimantBadges(shares)}
                   </View>
 
                   <View style={STYLES.itemPricing}>
@@ -817,9 +832,10 @@ const STYLES = StyleSheet.create({
     color: palette.muted,
     fontStyle: "italic",
   },
-  claimantText: {
-    fontSize: 13,
-    color: palette.text,
+  claimantsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
   },
   mineBadge: {
     backgroundColor: palette.accent,

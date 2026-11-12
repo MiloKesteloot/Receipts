@@ -111,7 +111,10 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
     const oil = getByLabelText("Claim Olive Oil 2L");
     expect(oil).toHaveTextContent(/Shared/);
     // $18.49 split 2 ways: 925 + 924 = 1849.
-    expect(getByText("Alex $9.25 · Sam $9.24")).toBeTruthy();
+    expect(getByText("Alex $9.25")).toBeTruthy();
+    expect(getByText("Sam $9.24")).toBeTruthy();
+    expect(getByLabelText("Alex $9.25 (Member)")).toBeTruthy();
+    expect(getByLabelText("Sam $9.24 (Member)")).toBeTruthy();
   });
 
   it("tapping claims, highlights and updates the total right away", async () => {
@@ -181,25 +184,34 @@ describe("ReceiptScreen: claiming items (US 2.3)", () => {
   });
 
   it("joining a shared item splits it 3 ways to the exact cent", async () => {
-    const { getByLabelText, findByText } = await renderReceipt();
+    const { getByLabelText, findByText, findByLabelText } = await renderReceipt();
 
     await fireEvent.press(getByLabelText("Claim Olive Oil 2L"));
 
     // $18.49 / 3: 617 + 616 + 616 = 1849, extra cent to the first id.
-    expect(await findByText("You $6.17 · Alex $6.16 · Sam $6.16")).toBeTruthy();
+    expect(await findByText("You $6.17")).toBeTruthy();
+    expect(await findByText("Alex $6.16")).toBeTruthy();
+    expect(await findByText("Sam $6.16")).toBeTruthy();
+    expect(await findByLabelText("You $6.17 (You)")).toBeTruthy();
+    expect(await findByLabelText("Alex $6.16 (Member)")).toBeTruthy();
     expect(await findByText("Your total $6.17 · 1 item")).toBeTruthy();
   });
 
   it("a guest's claim counts in the split and in my exact share", async () => {
     // eslint-disable-next-line @typescript-eslint/naming-convention -- database column names
     mockItemClaims.push({ id: "g1", item_id: "item-r1-3", receipt_id: "r1", guest_name: "Casey" });
-    const { getByLabelText, getByText, findByText } = await renderReceipt();
+    const { getByLabelText, getByText, findByText, findByLabelText } =
+      await renderReceipt();
     expect(getByText("Casey (Guest)")).toBeTruthy();
+    expect(getByLabelText("Casey (Guest) (Guest)")).toBeTruthy();
 
     await fireEvent.press(getByLabelText("Claim Organic Avocados 6ct"));
 
     // $9.99 / 2: 500 + 499.
-    expect(await findByText("You $5.00 · Casey (Guest) $4.99")).toBeTruthy();
+    expect(await findByText("You $5.00")).toBeTruthy();
+    expect(await findByText("Casey (Guest) $4.99")).toBeTruthy();
+    expect(await findByLabelText("You $5.00 (You)")).toBeTruthy();
+    expect(await findByLabelText("Casey (Guest) $4.99 (Guest)")).toBeTruthy();
     expect(await findByText("Your total $5.00 · 1 item")).toBeTruthy();
   });
 

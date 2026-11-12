@@ -100,21 +100,24 @@ export function BottomTabBar(props: CustomTabBarProps): JSX.Element {
             >
               <View style={STYLES.iconCircle}>
                 {isFocused ? (
-                  <Svg
-                    width={ACTIVE_CIRCLE_SIZE}
-                    height={ACTIVE_CIRCLE_SIZE}
-                    viewBox={`0 0 ${ACTIVE_CIRCLE_SIZE} ${ACTIVE_CIRCLE_SIZE}`}
-                    style={STYLES.activeCircleBg}
-                  >
-                    <Circle
-                      cx={ACTIVE_CIRCLE_SIZE / 2}
-                      cy={ACTIVE_CIRCLE_SIZE / 2}
-                      r={ACTIVE_CIRCLE_SIZE / 2}
-                      fill={palette.accent}
-                    />
-                  </Svg>
+                  <View pointerEvents="none" style={STYLES.activeCircleBg}>
+                    <Svg
+                      width={ACTIVE_CIRCLE_SIZE}
+                      height={ACTIVE_CIRCLE_SIZE}
+                      viewBox={`0 0 ${ACTIVE_CIRCLE_SIZE} ${ACTIVE_CIRCLE_SIZE}`}
+                    >
+                      <Circle
+                        cx={ACTIVE_CIRCLE_SIZE / 2}
+                        cy={ACTIVE_CIRCLE_SIZE / 2}
+                        r={ACTIVE_CIRCLE_SIZE / 2}
+                        fill={palette.accent}
+                      />
+                    </Svg>
+                  </View>
                 ) : null}
-                <item.icon size={20} color={iconColor} strokeWidth={2} />
+                <View style={STYLES.iconForeground}>
+                  <item.icon size={20} color={iconColor} strokeWidth={2} />
+                </View>
               </View>
               <Text
                 style={[STYLES.label, isFocused && STYLES.labelActive]}
@@ -180,6 +183,17 @@ const STYLES = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconForeground: {
+    position: "relative",
+    zIndex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   label: {
     fontSize: 11,

@@ -322,3 +322,76 @@ export function GoogleIcon(props: BrandIconProps): JSX.Element {
     </Svg>
   );
 }
+
+/**
+ * Renders a user-with-check badge icon for items claimed by the current user.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function ClaimantYouIcon(props: IconProps): JSX.Element {
+  const { size = 13, color, strokeWidth = 2.2 } = props;
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={9} cy={7} r={3.5} stroke={color} strokeWidth={strokeWidth} />
+      <Path
+        d="M16 11l2 2 4-4"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * Renders a person badge icon for items claimed by another group member.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function ClaimantMemberIcon(props: IconProps): JSX.Element {
+  const { size = 13, color, strokeWidth = 2.2 } = props;
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={7} r={4} stroke={color} strokeWidth={strokeWidth} />
+    </Svg>
+  );
+}
+
+/**
+ * Renders a guest-pass tag icon for items claimed by an unauthenticated guest.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function ClaimantGuestIcon(props: IconProps): JSX.Element {
+  const { size = 13, color, strokeWidth = 2.2 } = props;
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={7.5} cy={7.5} r={1.5} fill={color} />
+    </Svg>
+  );
+}
