@@ -63,12 +63,15 @@ jest.mock("@/lib/groups", () => ({
   joinGroup: jest.fn(),
 }));
 
+/** Typed Jest mock for `loadHomeOverview`. */
 const MOCK_LOAD_HOME_OVERVIEW = loadHomeOverview as jest.MockedFunction<
   typeof loadHomeOverview
 >;
+/** Typed Jest mock for `createGroup`. */
 const MOCK_CREATE_GROUP = createGroup as jest.MockedFunction<
   typeof createGroup
 >;
+/** Typed Jest mock for `useLocalSearchParams`. */
 const MOCK_USE_PARAMS = useLocalSearchParams as jest.MockedFunction<
   typeof useLocalSearchParams
 >;
