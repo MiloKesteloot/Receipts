@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
+// TODO(remove-mock): Remove `./mock` import once offline mock mode is deleted.
 import {
   mockGroupDetails,
   mockGroups,
@@ -18,6 +19,7 @@ import type {
   JoinGroupResult,
 } from "./groups.types";
 
+// TODO(remove-mock): Delete mockAliasIds and removeWhere helpers once MockGroupService is deleted.
 /**
  * The seed data has two ids for the same "Apartment 402" group, and joining
  * one joins both. Leaving and deleting treat them the same way.
@@ -60,6 +62,40 @@ function actionFailure(
  */
 const GROUP_NOT_FOUND_MESSAGE = "Group not found";
 
+/**
+ * Longest allowed group name. Matches `groups.name` and `create_group`.
+ */
+export const MAX_GROUP_NAME_LENGTH = 50;
+
+/**
+ * Trims and validates a candidate group name.
+ * @param name Raw group name input
+ * @returns Validation outcome with trimmed string or failure reason
+ */
+function validateGroupRename(
+  name: string
+):
+  | { valid: true; trimmed: string }
+  | { valid: false; error: "EMPTY_NAME" | "NAME_TOO_LONG"; message: string } {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return {
+      valid: false,
+      error: "EMPTY_NAME",
+      message: "Please enter a group name",
+    };
+  }
+  if (Array.from(trimmed).length > MAX_GROUP_NAME_LENGTH) {
+    return {
+      valid: false,
+      error: "NAME_TOO_LONG",
+      message: `Group name must be ${MAX_GROUP_NAME_LENGTH} characters or fewer`,
+    };
+  }
+  return { valid: true, trimmed };
+}
+
+// TODO(remove-mock): Delete SEED_GROUPS and MockGroupService once offline mock mode is deleted.
 /**
  * Initial seed groups for development and testing.
  */
@@ -335,6 +371,63 @@ export class MockGroupService implements GroupService {
   }
 
   /**
+   * Renames a group (mock implementation). Only the group owner may rename it.
+   * @param groupId Group to rename
+   * @param name New group name
+   * @param userId ID of user requesting the rename
+   * @returns Result with updated group name or failure reason
+   */
+  async renameGroup(
+    groupId: string,
+    name: string,
+    userId: string = "current-user"
+  ): Promise<GroupActionResult> {
+    const detail = mockGroupDetails[groupId];
+    if (!detail) {
+      return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+    }
+
+    const member = detail.members.find((m) => m.user_id === userId);
+    const isOwner =
+      member?.role === "owner" || detail.group.created_by === userId;
+
+    if (!isOwner) {
+      return member
+        ? actionFailure("FORBIDDEN", "Only the group owner can rename this group")
+        : actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+    }
+
+    const validation = validateGroupRename(name);
+    if (!validation.valid) {
+      return actionFailure(validation.error, validation.message);
+    }
+
+    const ids = mockAliasIds(groupId);
+    for (const id of ids) {
+      if (mockGroupDetails[id]) {
+        mockGroupDetails[id].group.name = validation.trimmed;
+      }
+    }
+    for (const g of mockGroups) {
+      if (ids.includes(g.id)) {
+        g.name = validation.trimmed;
+      }
+    }
+    for (const g of this.groups) {
+      if (ids.includes(g.id)) {
+        g.name = validation.trimmed;
+      }
+    }
+
+    return {
+      success: true,
+      group_id: groupId,
+      group_name: validation.trimmed,
+      message: `Group renamed to ${validation.trimmed}`,
+    };
+  }
+
+  /**
    * Gets current in-memory memberships.
    * @returns List of memberships
    */
@@ -437,6 +530,63 @@ export class SupabaseGroupService implements GroupService {
   }
 
   /**
+   * Renames a group via Supabase table update (owner RLS policy enforces permission).
+   * @param groupId Group to rename
+   * @param name New group name
+   * @returns Result with updated group name or failure reason
+   */
+  async renameGroup(groupId: string, name: string): Promise<GroupActionResult> {
+    if (!SUPABASE) {
+      return actionFailure("NETWORK_ERROR", "Supabase client is not configured.");
+    }
+    if (!groupId) return actionFailure("NOT_FOUND", GROUP_NOT_FOUND_MESSAGE);
+
+    const validation = validateGroupRename(name);
+    if (!validation.valid) {
+      return actionFailure(validation.error, validation.message);
+    }
+
+    try {
+      const { data, error } = await SUPABASE.from("groups")
+        .update({ name: validation.trimmed })
+        .eq("id", groupId)
+        .select("id, name")
+        .maybeSingle();
+
+      if (error) {
+        if (error.code === "42501") {
+          return actionFailure(
+            "FORBIDDEN",
+            "Only the group owner can rename this group"
+          );
+        }
+        return actionFailure(
+          "NETWORK_ERROR",
+          error.message || "Failed to communicate with server."
+        );
+      }
+
+      if (!data) {
+        return actionFailure(
+          "FORBIDDEN",
+          "Group not found or only the owner can rename it"
+        );
+      }
+
+      const updatedName = (data as { name?: string }).name ?? validation.trimmed;
+      return {
+        success: true,
+        group_id: groupId,
+        group_name: updatedName,
+        message: `Group renamed to ${updatedName}`,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
+      return actionFailure("NETWORK_ERROR", msg);
+    }
+  }
+
+  /**
    * Calls a leave/delete RPC and turns any failure into a result.
    * @param fn RPC name
    * @param groupId Group id argument
@@ -474,6 +624,7 @@ export class SupabaseGroupService implements GroupService {
   }
 }
 
+// TODO(remove-mock): Delete MOCK_GROUP_SERVICE and registerMockGroup once MockGroupService is deleted.
 /**
  * Shared in-memory group service instance.
  */
@@ -484,6 +635,7 @@ export const MOCK_GROUP_SERVICE = new MockGroupService();
  */
 export const SUPABASE_GROUP_SERVICE = new SupabaseGroupService();
 
+// TODO(remove-mock): Delete registerMockGroup once createGroupMock/MockGroupService are deleted.
 /**
  * Registers a newly created group (US 1.2) with the mock service so it can
  * be joined by its invite code.
@@ -501,6 +653,7 @@ export function registerMockGroup(group: Group): void {
  */
 export async function joinGroup(
   inviteCode: string,
+  // TODO(remove-mock): Remove `userId` mock param and all MOCK_GROUP_SERVICE fallbacks below; call SUPABASE_GROUP_SERVICE directly.
   userId: string = "current-user"
 ): Promise<JoinGroupResult> {
   if (USE_MOCK) {
@@ -528,6 +681,7 @@ export async function joinGroup(
  */
 export async function leaveGroup(
   groupId: string,
+  // TODO(remove-mock): Remove `userId` mock param and `USE_MOCK` fallback; return SUPABASE_GROUP_SERVICE.leaveGroup(groupId).
   userId: string = "current-user"
 ): Promise<GroupActionResult> {
   if (USE_MOCK || !SUPABASE) {
@@ -545,10 +699,31 @@ export async function leaveGroup(
  */
 export async function deleteGroup(
   groupId: string,
+  // TODO(remove-mock): Remove `userId` mock param and `USE_MOCK` fallback; return SUPABASE_GROUP_SERVICE.deleteGroup(groupId).
   userId: string = "current-user"
 ): Promise<GroupActionResult> {
   if (USE_MOCK || !SUPABASE) {
     return MOCK_GROUP_SERVICE.deleteGroup(groupId, userId);
   }
   return SUPABASE_GROUP_SERVICE.deleteGroup(groupId);
+}
+
+/**
+ * Renames a group. Only the owner can do this.
+ * Same mock/Supabase choice as leaveGroup and deleteGroup.
+ * @param groupId Group to rename
+ * @param name New group name
+ * @param userId User renaming (only used by the mock; the server uses auth)
+ * @returns The updated group name, or why it failed
+ */
+export async function renameGroup(
+  groupId: string,
+  name: string,
+  // TODO(remove-mock): Remove `userId` mock param and `USE_MOCK` fallback; return SUPABASE_GROUP_SERVICE.renameGroup(groupId, name).
+  userId: string = "current-user"
+): Promise<GroupActionResult> {
+  if (USE_MOCK || !SUPABASE) {
+    return MOCK_GROUP_SERVICE.renameGroup(groupId, name, userId);
+  }
+  return SUPABASE_GROUP_SERVICE.renameGroup(groupId, name);
 }

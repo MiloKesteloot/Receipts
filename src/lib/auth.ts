@@ -214,21 +214,47 @@ export async function signInWithEmail(
  * @param emailRedirectTo Where the confirmation email link should open
  * @returns Result; session is null when the email must be confirmed first
  */
+/**
+ * Create a new account with email and password.
+ * Supabase sends a confirmation link to {@link emailRedirectTo} unless
+ * email confirmations are disabled.
+ * @param client Supabase auth client
+ * @param email User email address
+ * @param password User password
+ * @param emailRedirectTo Optional confirmation redirect URL
+ * @param displayName Optional display name stored in user metadata
+ * @returns Auth result with session (null if email confirmation is required)
+ */
 export async function signUpWithEmail(
   client: AuthClient | null,
   email: string,
   password: string,
-  emailRedirectTo?: string
+  emailRedirectTo?: string,
+  displayName?: string
 ): Promise<AuthResult> {
   if (!client) return NOT_CONFIGURED;
   const invalid = validateCredentials(email, password, "sign-up");
   if (invalid) return invalid;
 
+  const trimmedName = displayName?.trim();
+  const signUpOptions: {
+    emailRedirectTo?: string;
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata key
+    data?: { full_name: string; name: string };
+  } = {};
+  if (emailRedirectTo) signUpOptions.emailRedirectTo = emailRedirectTo;
+  if (trimmedName) {
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata key
+    signUpOptions.data = { full_name: trimmedName, name: trimmedName };
+  }
+  const options =
+    Object.keys(signUpOptions).length > 0 ? signUpOptions : undefined;
+
   try {
     const { data, error } = await client.signUp({
       email: email.trim(),
       password,
-      options: emailRedirectTo ? { emailRedirectTo } : undefined,
+      options,
     });
     if (error) return toAuthFailure(error);
     if (!data.session) {
@@ -402,6 +428,56 @@ export async function signInWithAppleNative(
       await client.updateUser({ data: { full_name: fullName } });
     }
     return { success: true, session: data.session };
+  } catch (error) {
+    return toAuthFailure(error);
+  }
+}
+
+/**
+ * Maximum allowed display name length.
+ */
+export const MAX_DISPLAY_NAME_LENGTH = 50;
+
+/**
+ * Updates the signed-in user's display name in Supabase auth metadata, which
+ * also synchronizes `public.profiles.display_name` via the database trigger.
+ * @param client Supabase auth client
+ * @param displayName New display name
+ * @returns Result indicating whether the update succeeded
+ */
+export async function updateDisplayName(
+  client: AuthClient | null,
+  displayName: string
+): Promise<AuthResult> {
+  if (!client) return NOT_CONFIGURED;
+  const trimmed = displayName.trim();
+  if (!trimmed) {
+    return {
+      success: false,
+      error: "AUTH_ERROR",
+      message: "Enter a display name",
+    };
+  }
+  if (Array.from(trimmed).length > MAX_DISPLAY_NAME_LENGTH) {
+    return {
+      success: false,
+      error: "AUTH_ERROR",
+      message: `Display name must be ${MAX_DISPLAY_NAME_LENGTH} characters or fewer`,
+    };
+  }
+  try {
+    const { data, error } = await client.updateUser({
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata keys
+      data: { full_name: trimmed, name: trimmed },
+    });
+    if (error) return toAuthFailure(error);
+    const savedName =
+      (data.user?.user_metadata?.full_name as string | undefined) ?? trimmed;
+    return {
+      success: true,
+      session: null,
+      message: `Display name updated to ${savedName}`,
+    };
   } catch (error) {
     return toAuthFailure(error);
   }

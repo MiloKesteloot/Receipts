@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
+// TODO(remove-mock): Remove `@/lib/mock` imports once offline mock mode is deleted.
 import {
   mockGroupDetails,
   mockGuestTokens,
   mockItemClaims,
   mockReceiptItems,
+  USE_MOCK,
   type MockItemClaim,
   type MockReceiptItem,
-  USE_MOCK,
 } from "@/lib/mock";
 import { SUPABASE } from "@/lib/supabase";
 
@@ -53,35 +54,35 @@ export type GuestReceiptDetail = {
  */
 export type GetGuestReceiptResult =
   | {
-      success: true;
-      receipt: GuestReceiptDetail;
-    }
+    success: true;
+    receipt: GuestReceiptDetail;
+  }
   | {
-      success: false;
-      error: "INVALID_TOKEN" | "EXPIRED_TOKEN" | "NETWORK_ERROR";
-      message: string;
-    };
+    success: false;
+    error: "INVALID_TOKEN" | "EXPIRED_TOKEN" | "NETWORK_ERROR";
+    message: string;
+  };
 
 /**
  * Result returned after attempting to claim or unclaim an item.
  */
 export type ClaimActionResult =
   | {
-      success: true;
-      item_id: string;
-      guest_name: string;
-      claimed: boolean;
-    }
+    success: true;
+    item_id: string;
+    guest_name: string;
+    claimed: boolean;
+  }
   | {
-      success: false;
-      error:
-        | "EMPTY_NAME"
-        | "INVALID_TOKEN"
-        | "EXPIRED_TOKEN"
-        | "ITEM_NOT_FOUND"
-        | "NETWORK_ERROR";
-      message: string;
-    };
+    success: false;
+    error:
+    | "EMPTY_NAME"
+    | "INVALID_TOKEN"
+    | "EXPIRED_TOKEN"
+    | "ITEM_NOT_FOUND"
+    | "NETWORK_ERROR";
+    message: string;
+  };
 
 /**
  * Base URL used when generating shareable web claiming links.
@@ -143,6 +144,7 @@ export async function createGuestClaimLink(receiptId: string): Promise<string> {
  * @returns Unique token string
  */
 export async function createGuestClaimToken(receiptId: string): Promise<string> {
+  // TODO(remove-mock): Replace with a `!SUPABASE` error and remove the mock token branch once mock mode is deleted.
   if (USE_MOCK || !SUPABASE) {
     const randomSuffix = Math.random().toString(36).substring(2, 8);
     const token = `mock-claim-${receiptId}-${randomSuffix}`;
@@ -193,6 +195,7 @@ export async function createGuestClaimToken(receiptId: string): Promise<string> 
   return token;
 }
 
+// TODO(remove-mock): Delete buildItemWithClaims (or update to non-mock types if needed) once offline mock mode is deleted.
 /**
  * Builds item claim models with split calculations.
  * @param item The receipt item
@@ -244,6 +247,7 @@ export async function getReceiptByGuestToken(
     };
   }
 
+  // TODO(remove-mock): Replace with a `!SUPABASE` error and delete the mock branch once mock mode is deleted.
   if (USE_MOCK || !SUPABASE) {
     const tokenRecord = mockGuestTokens.find((t) => t.token === token);
     if (!tokenRecord) {
@@ -385,6 +389,7 @@ export async function claimItemAsGuest(
     };
   }
 
+  // TODO(remove-mock): Replace with a `!SUPABASE` error and delete the mock branch once mock mode is deleted.
   if (USE_MOCK || !SUPABASE) {
     const tokenRecord = mockGuestTokens.find((t) => t.token === token);
     if (!tokenRecord) {

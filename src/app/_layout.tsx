@@ -1,12 +1,26 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import { hide as hideSplash, preventAutoHideAsync } from "expo-splash-screen";
 import { useEffect } from "react";
-import { useColorScheme } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
 import { isSignedIn } from "@/lib/auth";
 import { AuthProvider, useAuth } from "@/lib/auth-provider";
+// TODO(remove-mock): Remove USE_MOCK import and replace auth bypass below with `isSignedIn(session)`.
 import { USE_MOCK } from "@/lib/mock";
+import { PALETTE as palette } from "@/lib/palette";
+
+/** Light navigation theme aligned with the app's cream-and-orange palette. */
+const APP_THEME = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: palette.accent,
+    background: palette.bg,
+    card: palette.bg,
+    text: palette.text,
+    border: palette.border,
+  },
+};
 
 // Keep the splash screen up until we know whether someone is signed in.
 preventAutoHideAsync();
@@ -30,8 +44,8 @@ export default function RootLayout(): JSX.Element {
  * @returns JSX element
  */
 function RootNavigator(): JSX.Element {
-  const colorScheme = useColorScheme();
   const { session, isLoading } = useAuth();
+  // TODO(remove-mock): Replace with `const signedIn = isSignedIn(session);` once offline mock mode is removed.
   // When USE_MOCK is true, bypass authentication for demos and offline testing.
   // When USE_MOCK is false, enforce real sign-in via Supabase session.
   const signedIn = USE_MOCK ? true : isSignedIn(session);
@@ -41,7 +55,7 @@ function RootNavigator(): JSX.Element {
   }, [isLoading]);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={APP_THEME}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(app)" />

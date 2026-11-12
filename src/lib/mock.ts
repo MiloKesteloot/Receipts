@@ -1,3 +1,4 @@
+// TODO(remove-mock): DELETE THIS ENTIRE FILE once offline mock mode is removed (also update tests in `tests/unit/` that import `@/lib/mock`).
 /* eslint-disable @typescript-eslint/naming-convention */
 import type { ReceiptDraft } from "@/lib/receipt-form";
 

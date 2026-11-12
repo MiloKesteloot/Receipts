@@ -14,9 +14,14 @@ type AuthContextValue = {
   // True until the stored session has been read on launch.
   isLoading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<auth.AuthResult>;
-  signUpWithEmail: (email: string, password: string) => Promise<auth.AuthResult>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    displayName?: string
+  ) => Promise<auth.AuthResult>;
   signInWithGoogle: () => Promise<auth.AuthResult>;
   signInWithApple: () => Promise<auth.AuthResult>;
+  updateDisplayName: (displayName: string) => Promise<auth.AuthResult>;
   signOut: () => Promise<auth.AuthResult>;
 };
 
@@ -62,10 +67,10 @@ function requestAppleCredential(): ReturnType<auth.RequestAppleCredential> {
 /**
  * The value AuthProvider shares; actions are bound to the real Supabase client.
  */
-const ACTIONS: Omit<AuthContextValue, "session" | "isLoading"> = {
+const ACTIONS: Omit<AuthContextValue, "session" | "isLoading" | "updateDisplayName"> = {
   signInWithEmail: (email, password) => auth.signInWithEmail(CLIENT, email, password),
-  signUpWithEmail: (email, password) =>
-    auth.signUpWithEmail(CLIENT, email, password, redirectUrl()),
+  signUpWithEmail: (email, password, displayName) =>
+    auth.signUpWithEmail(CLIENT, email, password, redirectUrl(), displayName),
   signInWithGoogle: () =>
     auth.signInWithOAuthProvider(CLIENT, "google", redirectUrl(), openAuthSession),
   // Native sheet on iOS; Apple's web sign-in on Android and web.
@@ -110,8 +115,38 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     };
   }, []);
 
+  /**
+   * Updates the signed-in user's display name and mirrors it into local session state.
+   * @param displayName New display name
+   * @returns Auth result from Supabase
+   */
+  async function updateDisplayName(displayName: string): Promise<auth.AuthResult> {
+    const result = await auth.updateDisplayName(CLIENT, displayName);
+    if (result.success) {
+      const trimmed = displayName.trim();
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              user: {
+                ...prev.user,
+                // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata keys
+                user_metadata: {
+                  ...prev.user.user_metadata,
+                  // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata keys
+                  full_name: trimmed,
+                  name: trimmed,
+                },
+              },
+            }
+          : prev
+      );
+    }
+    return result;
+  }
+
   return (
-    <AuthContext.Provider value={{ session, isLoading, ...ACTIONS }}>
+    <AuthContext.Provider value={{ session, isLoading, ...ACTIONS, updateDisplayName }}>
       {children}
     </AuthContext.Provider>
   );

@@ -11,6 +11,7 @@ import {
 import { JSX } from "react/jsx-runtime";
 
 import { useAuth } from "@/lib/auth-provider";
+// TODO(remove-mock): Remove MOCK_CURRENT_USER_ID and USE_MOCK once mock mode is retired.
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import type { GroupSummary } from "@/lib/group-data";
 import { loadOwnedGroups, type GroupMembersClient } from "@/lib/group-members";
@@ -41,6 +42,7 @@ function withCurrentFirst(
 export default function RemoveMembersPicker(): JSX.Element {
   const { from } = useLocalSearchParams<{ from?: string }>();
   const { session } = useAuth();
+  // TODO(remove-mock): Replace with `const currentUserId = session?.user.id;` once mock mode is removed.
   // Mock data only knows the placeholder user (see create-group.ts).
   const currentUserId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
 
@@ -50,6 +52,7 @@ export default function RemoveMembersPicker(): JSX.Element {
   const load = useCallback(async () => {
     setError(null);
     const result = await loadOwnedGroups(currentUserId, {
+      // TODO(remove-mock): Remove `useMock` option once mock mode is retired.
       useMock: USE_MOCK,
       // Checking Supabase's generic .eq() against the narrow client type
       // hits TS's depth limit (TS2589), so it is cast through unknown.
@@ -150,7 +153,7 @@ export default function RemoveMembersPicker(): JSX.Element {
  */
 const STYLES = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg },
-  content: { padding: 24, gap: 10 },
+  content: { padding: 24, paddingBottom: 128, gap: 10 },
   center: {
     flex: 1,
     alignItems: "center",

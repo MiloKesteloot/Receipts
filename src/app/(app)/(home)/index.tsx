@@ -11,11 +11,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
 import { CreateGroupForm } from "@/components/create-group-form";
 import { JoinGroupModal } from "@/components/join-group-modal";
 import { NewGroupButton } from "@/components/NewGroupButton";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
+import { type CreatedGroup } from "@/lib/create-group";
+// TODO(remove-mock): Remove `@/lib/mock` import once mock mode is deleted.
 import { mockGroups, USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { SUPABASE as supabase } from "@/lib/supabase";
@@ -48,6 +51,7 @@ export default function Index(): JSX.Element {
     else setRefreshing(true);
     setError(null);
 
+    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
     if (USE_MOCK) {
       setGroups([...mockGroups]);
       setLoading(false);
@@ -103,6 +107,7 @@ export default function Index(): JSX.Element {
 
   useFocusEffect(
     useCallback(() => {
+      // TODO(remove-mock): Delete `if (USE_MOCK)` branch once offline mock mode is removed.
       if (USE_MOCK) {
         setGroups([...mockGroups]);
       } else {
@@ -121,12 +126,23 @@ export default function Index(): JSX.Element {
     setModalVisible(false);
   };
 
-  const handleGroupCreated = () => {
+  const handleGroupCreated = (group: CreatedGroup) => {
+    setModalVisible(false);
+    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
     if (USE_MOCK) {
       setGroups([...mockGroups]);
     } else {
       load("refresh");
     }
+    router.push({
+      pathname: "/groups/[id]",
+      params: {
+        id: group.id,
+        toastMessage: `Successfully created group ${group.name}`,
+        toastType: "success",
+        toastKey: String(Date.now()),
+      },
+    });
   };
 
   const handleGroupJoined = (
@@ -135,6 +151,7 @@ export default function Index(): JSX.Element {
     message: string
   ) => {
     setModalVisible(false);
+    // TODO(remove-mock): Delete `if (USE_MOCK)` block once offline mock mode is removed.
     if (USE_MOCK) {
       setGroups([...mockGroups]);
     } else {
@@ -177,7 +194,6 @@ export default function Index(): JSX.Element {
         refreshing={refreshing}
         ListHeaderComponent={
           <View style={STYLES.header}>
-            <Text style={STYLES.eyebrow}>Your groups</Text>
             <Text style={STYLES.title}>Where are we splitting?</Text>
             <View style={STYLES.subtitleRow}>
               <Text style={STYLES.subtitle}>
@@ -261,15 +277,8 @@ const STYLES = StyleSheet.create({
     paddingHorizontal: 24,
     backgroundColor: palette.bg,
   },
-  list: { padding: 24, gap: 12 },
+  list: { padding: 24, paddingBottom: BOTTOM_TAB_CLEARANCE, gap: 12 },
   header: { marginBottom: 12, gap: 6 },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: palette.accent,
-  },
   title: { fontSize: 30, fontWeight: "800", color: palette.text },
   subtitleRow: {
     flexDirection: "row",

@@ -1,7 +1,8 @@
 /**
  * User Story 1.2, Task 1.1: the "Create a new group" form, shown inline in
- * Kellar's Add Group modal through its `renderCreateSection` slot. After a
- * group is created, the form is replaced by its invite code card.
+ * Kellar's Add Group modal through its `renderCreateSection` slot. Once a
+ * group is created, `onCreated` receives the new group so the screen can close
+ * the modal, show a toast, and navigate directly to the group page.
  *
  * ============================== PLACEHOLDERS ==============================
  * 1. The "Demo mode" note shows while the team's `USE_MOCK` flag is true,
@@ -27,13 +28,13 @@ import {
   View,
 } from "react-native";
 
-import { InviteCodeCard } from "@/components/invite-code-card";
 import {
   CreatedGroup,
   createGroup,
   MAX_GROUP_NAME_LENGTH,
   validateGroupName,
 } from "@/lib/create-group";
+// TODO(remove-mock): Remove USE_MOCK import and demo banner once mock mode is deleted.
 import { USE_MOCK } from "@/lib/mock";
 
 type Props = {
@@ -58,15 +59,10 @@ export function CreateGroupForm({
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createdGroup, setCreatedGroup] = useState<CreatedGroup | null>(null);
 
   // State updates aren't instant, so a fast double tap could get past a
   // `saving` check. A ref changes immediately and blocks the second tap.
   const submittingRef = useRef(false);
-
-  // Same idea for the share sheet: closing the modal while the share sheet
-  // is still on top can leave a frozen blank screen on iOS.
-  const sharingRef = useRef(false);
 
   // Latest callback, so the cleanup below always reaches the screen.
   const onBusyChangeRef = useRef(onBusyChange);
@@ -82,16 +78,7 @@ export function CreateGroupForm({
    * Tells the screen whether the modal must stay open right now.
    */
   function reportBusy() {
-    onBusyChangeRef.current?.(submittingRef.current || sharingRef.current);
-  }
-
-  /**
-   * Tracks whether the share sheet is open, so the modal waits for it.
-   * @param isSharing True while the share sheet is open or closing
-   */
-  function handleSharingChange(isSharing: boolean) {
-    sharingRef.current = isSharing;
-    reportBusy();
+    onBusyChangeRef.current?.(submittingRef.current);
   }
 
   /**
@@ -122,16 +109,16 @@ export function CreateGroupForm({
       return;
     }
 
-    setCreatedGroup(result.group);
+    setName("");
+    setError(null);
     onCreated?.(result.group);
   }
 
   return (
     <View style={STYLES.section}>
-      <Text style={STYLES.sectionLabel}>
-        {createdGroup ? "Group created" : "Create a new group"}
-      </Text>
+      <Text style={STYLES.sectionLabel}>Create a new group</Text>
 
+      {/* TODO(remove-mock): Remove demo mode banner once mock mode is deleted. */}
       {USE_MOCK && (
         // PLACEHOLDER #1: disappears when USE_MOCK is switched off.
         <Text style={STYLES.demoNote}>
@@ -139,50 +126,41 @@ export function CreateGroupForm({
         </Text>
       )}
 
-      {createdGroup ? (
-        <InviteCodeCard
-          group={createdGroup}
-          onSharingChange={handleSharingChange}
-        />
-      ) : (
-        <>
-          <TextInput
-            value={name}
-            onChangeText={(text) => {
-              setName(text);
-              if (error) setError(null);
-            }}
-            placeholder="Group name, e.g. Apartment 402"
-            placeholderTextColor="#9CA3AF"
-            maxLength={MAX_GROUP_NAME_LENGTH}
-            editable={!saving}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-            style={[STYLES.input, error ? STYLES.inputError : null]}
-          />
-          <Text style={STYLES.counter}>
-            {name.length}/{MAX_GROUP_NAME_LENGTH}
-          </Text>
+      <TextInput
+        value={name}
+        onChangeText={(text) => {
+          setName(text);
+          if (error) setError(null);
+        }}
+        placeholder="Group name, e.g. Apartment 402"
+        placeholderTextColor="#9CA3AF"
+        maxLength={MAX_GROUP_NAME_LENGTH}
+        editable={!saving}
+        returnKeyType="done"
+        onSubmitEditing={handleSubmit}
+        style={[STYLES.input, error ? STYLES.inputError : null]}
+      />
+      <Text style={STYLES.counter}>
+        {name.length}/{MAX_GROUP_NAME_LENGTH}
+      </Text>
 
-          {error && <Text style={STYLES.error}>{error}</Text>}
+      {error && <Text style={STYLES.error}>{error}</Text>}
 
-          <Pressable
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            style={({ pressed }) => [
-              STYLES.button,
-              pressed && STYLES.buttonPressed,
-              !canSubmit && STYLES.disabled,
-            ]}
-          >
-            {saving ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={STYLES.buttonText}>Create group</Text>
-            )}
-          </Pressable>
-        </>
-      )}
+      <Pressable
+        onPress={handleSubmit}
+        disabled={!canSubmit}
+        style={({ pressed }) => [
+          STYLES.button,
+          pressed && STYLES.buttonPressed,
+          !canSubmit && STYLES.disabled,
+        ]}
+      >
+        {saving ? (
+          <ActivityIndicator color="#FFFFFF" size="small" />
+        ) : (
+          <Text style={STYLES.buttonText}>Create group</Text>
+        )}
+      </Pressable>
     </View>
   );
 }

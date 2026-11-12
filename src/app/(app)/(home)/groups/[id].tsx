@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -17,16 +18,20 @@ import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
 import { useAuth } from "@/lib/auth-provider";
-import { confirmAction } from "@/lib/confirm-action";
+// TODO(remove-mock): Remove MOCK_CURRENT_USER_ID once offline mock mode is deleted.
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { loadGroupDetail } from "@/lib/group-data";
 import { isGroupOwner } from "@/lib/group-members";
 import { deleteGroup, leaveGroup } from "@/lib/groups";
+// TODO(remove-mock): Remove USE_MOCK import once offline mock mode is deleted.
 import { USE_MOCK } from "@/lib/mock";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
 
 import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
+import { ConfirmCardModal } from "@/components/confirm-card-modal";
+import { EditGroupModal } from "@/components/edit-group-modal";
 import { ReceiptCameraSheet } from "@/components/receipt-camera-sheet";
 import {
   formatCents,
@@ -58,6 +63,7 @@ type GroupDetail = {
   group: {
     id: string;
     name: string;
+    invite_code?: string;
     created_by: string;
     created_at: string;
   };
@@ -70,10 +76,11 @@ type GroupDetail = {
  * @returns JSX element
  */
 export default function GroupScreen(): JSX.Element {
-  const { id, toastMessage, toastType } = useLocalSearchParams<{
+  const { id, toastMessage, toastType, toastKey } = useLocalSearchParams<{
     id: string;
     toastMessage?: string;
     toastType?: string;
+    toastKey?: string;
   }>();
 
   const [toastState, setToastState] = useState<{
@@ -88,7 +95,7 @@ export default function GroupScreen(): JSX.Element {
         type: (toastType as ToastType) || "info",
       });
     }
-  }, [toastMessage, toastType]);
+  }, [toastMessage, toastType, toastKey]);
 
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +114,7 @@ export default function GroupScreen(): JSX.Element {
   const [scanNotes, setScanNotes] = useState<string[]>([]);
   const [scanSession, setScanSession] = useState(0);
   const { session } = useAuth();
+  // TODO(remove-mock): Replace with `const currentUserId = session?.user.id;` once mock mode is deleted.
   // Mock data only knows the placeholder user (see create-group.ts).
   const currentUserId = USE_MOCK ? MOCK_CURRENT_USER_ID : session?.user.id;
   const [refreshing, setRefreshing] = useState(false);
@@ -115,6 +123,8 @@ export default function GroupScreen(): JSX.Element {
   // The ref blocks a second tap before the state update re-renders.
   const groupActionBusyRef = useRef(false);
   const [groupActionBusy, setGroupActionBusy] = useState(false);
+  const [editGroupVisible, setEditGroupVisible] = useState(false);
+  const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
 
   const load = useCallback(async (pull = false) => {
     if (pull) setRefreshing(true);
@@ -123,6 +133,7 @@ export default function GroupScreen(): JSX.Element {
     setForbidden(false);
 
     const result = await loadGroupDetail(id, {
+      // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
       useMock: USE_MOCK,
       client: supabase,
     });
@@ -156,6 +167,7 @@ export default function GroupScreen(): JSX.Element {
   // without it.
   useEffect(() => {
     const client = supabase;
+    // TODO(remove-mock): Replace with `if (!client) return;` once mock mode is deleted.
     if (USE_MOCK || !client) return;
     const channel = client
       .channel(`group-members-${id}`)
@@ -227,62 +239,93 @@ export default function GroupScreen(): JSX.Element {
   const { group, members, receipts } = detail;
   const isOwner = isGroupOwner(detail, currentUserId);
   const currentMember = members.find((m) => m.user_id === currentUserId);
-  const canLeaveOrDelete = isOwner || currentMember !== undefined;
+  const canLeave = !isOwner && currentMember !== undefined;
 
   /**
-   * Confirms, then leaves the group (members) or deletes it (owner). On
-   * success, goes back to the group list with a toast. The group screen is
-   * removed from history so Back can't reopen it.
+   * Navigates back to the group list after leaving or deleting a group.
+   * @param message Confirmation toast message
    */
-  const handleLeaveOrDelete = async (): Promise<void> => {
+  const navigateAfterGroupRemoval = (message: string): void => {
+    const href = {
+      pathname: "/" as const,
+      params: {
+        toastMessage: message,
+        toastType: "success",
+        removedGroupId: group.id,
+        // Makes the same message show again for a second leave/delete.
+        toastKey: String(Date.now()),
+      },
+    };
+    // dismissTo pops back to the existing list; replace covers deep links
+    // where the group screen is the only screen on the stack.
+    if (router.canGoBack()) router.dismissTo(href);
+    else router.replace(href);
+  };
+
+  /**
+   * Executes group deletion (owner only) after confirmation in EditGroupModal.
+   */
+  const executeDeleteGroup = async (): Promise<void> => {
     if (groupActionBusyRef.current) return;
     groupActionBusyRef.current = true;
     setGroupActionBusy(true);
 
     try {
-      const confirmed = isOwner
-        ? await confirmAction(
-            "Delete Group",
-            `Are you sure you want to delete ${group.name}? This will permanently delete the group and all receipts for all members.`,
-            "Delete"
-          )
-        : await confirmAction(
-            "Leave Group",
-            `Are you sure you want to leave ${group.name}?`,
-            "Leave"
-          );
-      if (!confirmed) return;
-
+      // TODO(remove-mock): Remove MOCK_CURRENT_USER_ID fallback once mock mode is deleted.
       const userId = currentUserId ?? MOCK_CURRENT_USER_ID;
-      const result = isOwner
-        ? await deleteGroup(group.id, userId)
-        : await leaveGroup(group.id, userId);
+      const result = await deleteGroup(group.id, userId);
+
+      setEditGroupVisible(false);
 
       if (!result.success) {
         setToastState({ message: result.message, type: "error" });
         return;
       }
 
-      const href = {
-        pathname: "/" as const,
-        params: {
-          toastMessage: isOwner
-            ? `${group.name} deleted`
-            : `Left ${group.name}`,
-          toastType: "success",
-          removedGroupId: group.id,
-          // Makes the same message show again for a second leave/delete.
-          toastKey: String(Date.now()),
-        },
-      };
-      // dismissTo pops back to the existing list; replace covers deep links
-      // where the group screen is the only screen on the stack.
-      if (router.canGoBack()) router.dismissTo(href);
-      else router.replace(href);
+      navigateAfterGroupRemoval(`${group.name} deleted`);
     } finally {
       groupActionBusyRef.current = false;
       setGroupActionBusy(false);
     }
+  };
+
+  /**
+   * Executes leaving a group (non-owner member) after confirmation card prompt.
+   */
+  const executeLeaveGroup = async (): Promise<void> => {
+    if (groupActionBusyRef.current) return;
+    groupActionBusyRef.current = true;
+    setGroupActionBusy(true);
+
+    try {
+      // TODO(remove-mock): Remove MOCK_CURRENT_USER_ID fallback once mock mode is deleted.
+      const userId = currentUserId ?? MOCK_CURRENT_USER_ID;
+      const result = await leaveGroup(group.id, userId);
+
+      setLeaveConfirmVisible(false);
+
+      if (!result.success) {
+        setToastState({ message: result.message, type: "error" });
+        return;
+      }
+
+      navigateAfterGroupRemoval(`Left ${group.name}`);
+    } finally {
+      groupActionBusyRef.current = false;
+      setGroupActionBusy(false);
+    }
+  };
+
+  /**
+   * Updates local group header state and displays a toast when renamed.
+   * @param newName Updated group name
+   * @param message Toast feedback message
+   */
+  const handleGroupRenamed = (newName: string, message: string): void => {
+    setDetail((prev) =>
+      prev ? { ...prev, group: { ...prev.group, name: newName } } : prev
+    );
+    setToastState({ message, type: "success" });
   };
 
   /**
@@ -344,6 +387,7 @@ export default function GroupScreen(): JSX.Element {
     status: ReceiptStatus
   ): Promise<string | null> => {
     const result = await saveReceipt(group.id, draft, status, {
+      // TODO(remove-mock): Remove `useMock` option once offline mock mode is deleted.
       useMock: USE_MOCK,
       existingId: scanDraft === null ? editingReceipt?.id : undefined,
     });
@@ -386,6 +430,7 @@ export default function GroupScreen(): JSX.Element {
     if (target === null) return;
 
     const result = await deleteReceipt(group.id, target.id, {
+      // TODO(remove-mock): Remove `useMock` option once mock mode is deleted.
       useMock: USE_MOCK,
     });
     if (result.status === "error") {
@@ -416,12 +461,52 @@ export default function GroupScreen(): JSX.Element {
         }
       >
         <View style={STYLES.header}>
-          <Text style={STYLES.eyebrow}>Group</Text>
-          <Text style={STYLES.title}>{group.name}</Text>
+          <View style={STYLES.titleRow}>
+            <Text style={STYLES.title}>{group.name}</Text>
+            {isOwner ? (
+              <Pressable
+                onPress={() => setEditGroupVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Edit group"
+                style={({ pressed }) => [
+                  STYLES.editGroupButton,
+                  pressed && STYLES.addButtonPressed,
+                ]}
+              >
+                <Text style={STYLES.editGroupButtonText}>Edit group</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <Text style={STYLES.subtitle}>
             {members.length} {members.length === 1 ? "member" : "members"}
           </Text>
         </View>
+
+        {group.invite_code ? (
+          <View style={STYLES.inviteCard}>
+            <View style={STYLES.inviteInfo}>
+              <Text style={STYLES.inviteLabel}>Invite code</Text>
+              <Text selectable style={STYLES.inviteCode}>
+                {group.invite_code}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                Share.share({
+                  message: `Join "${group.name}" with invite code: ${group.invite_code}`,
+                }).catch(() => {});
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Share invite code"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Share</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {isOwner ? (
           <View style={STYLES.sectionHeaderRow}>
@@ -552,34 +637,52 @@ export default function GroupScreen(): JSX.Element {
           )}
         </View>
 
-        {canLeaveOrDelete ? (
+        {canLeave ? (
           <Pressable
-            onPress={handleLeaveOrDelete}
+            onPress={() => setLeaveConfirmVisible(true)}
             disabled={groupActionBusy}
             accessibilityRole="button"
-            accessibilityLabel={isOwner ? "Delete Group" : "Leave Group"}
+            accessibilityLabel="Leave Group"
             accessibilityState={{ disabled: groupActionBusy, busy: groupActionBusy }}
             style={({ pressed }) => [
               STYLES.groupActionButton,
-              isOwner && STYLES.groupActionButtonDestructive,
               (pressed || groupActionBusy) && STYLES.addButtonPressed,
             ]}
           >
             {groupActionBusy ? (
-              <ActivityIndicator color={isOwner ? "white" : palette.error} />
+              <ActivityIndicator color={palette.error} />
             ) : (
-              <Text
-                style={[
-                  STYLES.groupActionText,
-                  isOwner && STYLES.groupActionTextDestructive,
-                ]}
-              >
-                {isOwner ? "Delete Group" : "Leave Group"}
-              </Text>
+              <Text style={STYLES.groupActionText}>Leave Group</Text>
             )}
           </Pressable>
         ) : null}
       </ScrollView>
+
+      <EditGroupModal
+        visible={editGroupVisible}
+        groupId={group.id}
+        groupName={group.name}
+        // TODO(remove-mock): Remove MOCK_CURRENT_USER_ID fallback once mock mode is deleted.
+        userId={currentUserId ?? MOCK_CURRENT_USER_ID}
+        deleting={groupActionBusy}
+        onClose={() => setEditGroupVisible(false)}
+        onRenamed={handleGroupRenamed}
+        onDelete={executeDeleteGroup}
+      />
+      <ConfirmCardModal
+        visible={leaveConfirmVisible}
+        title="Leave Group"
+        message={`Are you sure you want to leave ${group.name}?`}
+        confirmLabel="Leave"
+        destructive
+        busy={groupActionBusy}
+        onCancel={() => {
+          if (!groupActionBusy) setLeaveConfirmVisible(false);
+        }}
+        onConfirm={() => {
+          void executeLeaveGroup();
+        }}
+      />
       <AddReceiptModal
         key={
           scanDraft !== null
@@ -640,16 +743,57 @@ const STYLES = StyleSheet.create({
 
     backgroundColor: palette.bg,
   },
-  content: { padding: 24, gap: 10 },
+  content: { padding: 24, paddingBottom: BOTTOM_TAB_CLEARANCE, gap: 10 },
   header: { gap: 6, marginBottom: 8 },
-  eyebrow: {
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  editGroupButton: {
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  editGroupButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: palette.text,
+  },
+  inviteCard: {
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  inviteInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  inviteLabel: {
     fontSize: 12,
     fontWeight: "700",
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
     textTransform: "uppercase",
-    color: palette.accent,
+    color: palette.muted,
   },
-  title: { fontSize: 30, fontWeight: "800", color: palette.text },
+  inviteCode: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: palette.text,
+  },
+  title: { flex: 1, fontSize: 30, fontWeight: "800", color: palette.text },
   subtitle: { fontSize: 15, color: palette.muted },
   sectionLabel: {
     fontSize: 12,
@@ -753,7 +897,5 @@ const STYLES = StyleSheet.create({
     borderColor: palette.error,
     backgroundColor: palette.card,
   },
-  groupActionButtonDestructive: { backgroundColor: palette.error },
   groupActionText: { fontSize: 16, fontWeight: "700", color: palette.error },
-  groupActionTextDestructive: { color: "white" },
 });

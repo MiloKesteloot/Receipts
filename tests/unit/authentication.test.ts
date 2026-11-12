@@ -16,6 +16,7 @@ import {
   signOut,
   signUpWithEmail,
   toAuthFailure,
+  updateDisplayName,
   validateCredentials,
   watchSession,
   type AuthClient,
@@ -258,6 +259,35 @@ describe("User Story 1.1: Authentication", () => {
         assert.equal(result.session, null);
         assert.match(result.message ?? "", /check your email/i);
       }
+      assert.deepEqual(fake.argOf("signUp"), {
+        email: "a@b.co",
+        password: "secret123",
+        options: undefined,
+      });
+    });
+
+    test("stores a trimmed display name in user metadata when provided", async () => {
+      const result = await signUpWithEmail(
+        client,
+        "a@b.co",
+        "secret123",
+        REDIRECT,
+        "  Kelland  "
+      );
+      assert.equal(result.success, true);
+      assert.deepEqual(fake.argOf("signUp"), {
+        email: "a@b.co",
+        password: "secret123",
+        options: {
+          emailRedirectTo: REDIRECT,
+          // eslint-disable-next-line @typescript-eslint/naming-convention -- Supabase user_metadata key
+          data: { full_name: "Kelland", name: "Kelland" },
+        },
+      });
+    });
+
+    test("omits metadata when display name is blank whitespace", async () => {
+      await signUpWithEmail(client, "a@b.co", "secret123", undefined, "   ");
       assert.deepEqual(fake.argOf("signUp"), {
         email: "a@b.co",
         password: "secret123",
@@ -607,6 +637,33 @@ describe("User Story 1.1: Authentication", () => {
   describe("session storage", () => {
     test("web/Node defer to Supabase's default storage", () => {
       assert.equal(SESSION_STORAGE, undefined);
+    });
+  });
+
+  describe("updateDisplayName", () => {
+    test("updates user_metadata with trimmed full_name and name", async () => {
+      fake.responses.updateUser = {
+        data: { user: { id: "user-1", user_metadata: { full_name: "Kelland M." } } },
+        error: null,
+      };
+      const result = await updateDisplayName(client, "  Kelland M.  ");
+      assert.equal(result.success, true);
+      assert.deepEqual(fake.calls[0], {
+        method: "updateUser",
+        args: [{ data: { full_name: "Kelland M.", name: "Kelland M." } }],
+      });
+    });
+
+    test("rejects blank display names without contacting Supabase", async () => {
+      const result = await updateDisplayName(client, "   ");
+      assert.equal(result.success, false);
+      assert.equal(fake.calls.length, 0);
+    });
+
+    test("fails cleanly when Supabase is not configured", async () => {
+      const result = await updateDisplayName(null, "Alex");
+      assert.equal(result.success, false);
+      if (!result.success) assert.equal(result.error, "NOT_CONFIGURED");
     });
   });
 });

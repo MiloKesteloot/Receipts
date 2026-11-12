@@ -22,6 +22,7 @@
  * ==========================================================================
  */
 
+// TODO(remove-mock): Remove MOCK_CURRENT_USER_ID and `@/lib/mock` imports once offline mock mode is deleted.
 import { MOCK_CURRENT_USER_ID } from "@/lib/create-group";
 import { mockGroupDetails, mockItemClaims } from "@/lib/mock";
 import { SUPABASE } from "@/lib/supabase";
@@ -193,6 +194,7 @@ export type MyTotal = {
 };
 
 export type ClaimOptions = {
+  // TODO(remove-mock): Remove `useMock` and `mockUserId` options once offline mock mode is deleted.
   useMock: boolean;
   /** PLACEHOLDER #2: who is acting in mock mode. */
   mockUserId?: string;
@@ -242,6 +244,7 @@ function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : "Network error occurred.";
 }
 
+// TODO(remove-mock): Delete mockMemberId once offline mock mode is removed.
 /**
  * PLACEHOLDER #1 and #3: checks membership in the mock data. An unknown group
  * behaves like "not a member", the same as `loadGroupDetail`.
@@ -272,6 +275,7 @@ export async function claimItem(
   itemId: string,
   options: ClaimOptions
 ): Promise<ClaimActionResult> {
+  // TODO(remove-mock): Unwrap `if (!options.useMock)` and delete the mock branch below once mock mode is deleted.
   if (!options.useMock) {
     const client = clientFor(options);
     if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
@@ -339,6 +343,7 @@ export async function unclaimItem(
   itemId: string,
   options: ClaimOptions
 ): Promise<ClaimActionResult> {
+  // TODO(remove-mock): Unwrap `if (!options.useMock)` and delete the mock branch below once mock mode is deleted.
   if (!options.useMock) {
     const client = clientFor(options);
     if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
@@ -392,6 +397,7 @@ export async function getClaims(
   itemIds: string[],
   options: ClaimOptions
 ): Promise<GetClaimsResult> {
+  // TODO(remove-mock): Unwrap `if (!options.useMock)` and delete the mock branch below once mock mode is deleted.
   if (!options.useMock) {
     const client = clientFor(options);
     if (!client) return { status: "error", message: SERVER_NOT_SET_UP };
