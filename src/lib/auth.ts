@@ -299,16 +299,46 @@ export async function completeOAuthRedirect(
     return { success: false, error: "AUTH_ERROR", message: callback.message };
   }
 
+  // A code can only be exchanged once. On Android the same redirect can reach
+  // both the OAuth flow and the deep-link listener, so share one attempt.
+  if (callback.kind === "code") {
+    const pending = PENDING_EXCHANGES.get(callback.code);
+    if (pending) return pending;
+    const attempt = exchangeCode(client, callback.code).finally(() =>
+      PENDING_EXCHANGES.delete(callback.code)
+    );
+    PENDING_EXCHANGES.set(callback.code, attempt);
+    return attempt;
+  }
+
   try {
-    const { data, error } =
-      callback.kind === "code"
-        ? await client.exchangeCodeForSession(callback.code)
-        : await client.setSession({
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            access_token: callback.accessToken,
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            refresh_token: callback.refreshToken,
-          });
+    const { data, error } = await client.setSession({
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      access_token: callback.accessToken,
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      refresh_token: callback.refreshToken,
+    });
+    if (error) return toAuthFailure(error);
+    return { success: true, session: data.session };
+  } catch (error) {
+    return toAuthFailure(error);
+  }
+}
+
+/**
+ * Code exchanges still in flight, keyed by code.
+ */
+const PENDING_EXCHANGES = new Map<string, Promise<AuthResult>>();
+
+/**
+ * Trades a PKCE code for a session.
+ * @param client Supabase auth client
+ * @param code Code from the redirect URL
+ * @returns Result with the new session
+ */
+async function exchangeCode(client: AuthClient, code: string): Promise<AuthResult> {
+  try {
+    const { data, error } = await client.exchangeCodeForSession(code);
     if (error) return toAuthFailure(error);
     return { success: true, session: data.session };
   } catch (error) {

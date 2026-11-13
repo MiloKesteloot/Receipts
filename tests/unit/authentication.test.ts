@@ -381,6 +381,26 @@ describe("User Story 1.1: Authentication", () => {
       assert.equal(result.success, false);
     });
 
+    test("exchanges a code once when the same redirect arrives twice", async () => {
+      // e.g. the OAuth flow and the deep-link listener both see it on Android
+      const [first, second] = await Promise.all([
+        completeOAuthRedirect(client, "receipts://sign-in?code=abc"),
+        completeOAuthRedirect(client, "receipts://sign-in?code=abc"),
+      ]);
+      assert.deepEqual(fake.methods(), ["exchangeCodeForSession"]);
+      assert.deepEqual(first, { success: true, session: SESSION });
+      assert.deepEqual(second, first);
+    });
+
+    test("can retry a code after the first attempt finishes", async () => {
+      fake.responses.exchangeCodeForSession = new Error("offline");
+      await completeOAuthRedirect(client, "receipts://sign-in?code=abc");
+      delete fake.responses.exchangeCodeForSession;
+      const retry = await completeOAuthRedirect(client, "receipts://sign-in?code=abc");
+      assert.equal(retry.success, true);
+      assert.equal(fake.methods().length, 2);
+    });
+
     test("fails cleanly when Supabase is not configured", async () => {
       const result = await completeOAuthRedirect(null, "receipts://sign-in?code=abc");
       assert.equal(result.success, false);
