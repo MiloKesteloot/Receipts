@@ -1,6 +1,4 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { mockGroupDetails, mockGroups } from "@/lib/mock";
-
 export type GroupSummary = { id: string; name: string };
 
 export type Member = {
@@ -47,8 +45,7 @@ export type GroupsClient = {
 };
 
 export type LoadOptions = {
-  useMock: boolean;
-  client: GroupsClient | null | undefined;
+  client?: GroupsClient | null;
 };
 
 export type GroupListResult =
@@ -78,14 +75,13 @@ const messageOf = (e: unknown): string =>
 
 /**
  * Loads the groups the signed-in user belongs to.
- * @param opts Mock flag and Supabase client
+ * @param opts Supabase client options
  * @returns The groups, or an error message
  */
 export async function loadGroupList(
-  opts: LoadOptions
+  opts?: LoadOptions
 ): Promise<GroupListResult> {
-  if (opts.useMock) return { status: "ok", groups: [...mockGroups] };
-  if (!opts.client) return { status: "error", message: NOT_CONFIGURED };
+  if (!opts?.client) return { status: "error", message: NOT_CONFIGURED };
 
   try {
     const { data, error } = await opts.client
@@ -102,20 +98,14 @@ export async function loadGroupList(
 /**
  * Loads one group's members, join code and receipts. Non-members get "forbidden".
  * @param id Group id
- * @param opts Mock flag and Supabase client
+ * @param opts Supabase client options
  * @returns The group detail, "forbidden", or an error message
  */
 export async function loadGroupDetail(
   id: string,
-  opts: LoadOptions
+  opts?: LoadOptions
 ): Promise<GroupDetailResult> {
-  if (opts.useMock) {
-    const d = mockGroupDetails[id];
-    return d
-      ? { status: "ok", detail: d as GroupDetail }
-      : { status: "forbidden" }; // unknown id behaves like "not a member"
-  }
-  if (!opts.client) return { status: "error", message: NOT_CONFIGURED };
+  if (!opts?.client) return { status: "error", message: NOT_CONFIGURED };
 
   try {
     const { data, error } = await opts.client.rpc("get_group", {

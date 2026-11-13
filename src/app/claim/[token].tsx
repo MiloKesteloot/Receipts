@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
+import { ClaimantBadge } from "@/components/claimant-badge";
 import { Toast, ToastType } from "@/components/toast";
 import {
   calculateGuestTotalCents,
@@ -154,10 +155,6 @@ export default function GuestClaimScreen(): JSX.Element {
       if (refreshed.success) {
         setReceipt(refreshed.receipt);
       }
-      setToast({
-        message: targetClaim ? "Item claimed!" : "Item unshared/unclaimed",
-        type: "info",
-      });
     } else {
       setToast({
         message: result.message,
@@ -293,31 +290,29 @@ export default function GuestClaimScreen(): JSX.Element {
                     {item.claims.length === 0 ? (
                       <Text style={STYLES.noClaimsText}>Tap to claim</Text>
                     ) : (
-                      item.claims.map((c, i) => (
-                        <View
-                          key={c.id ?? i}
-                          style={[
-                            STYLES.claimChip,
-                            c.guest_name?.trim().toLowerCase() ===
-                              guestName.trim().toLowerCase() &&
-                              STYLES.claimChipMe,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              STYLES.claimChipText,
-                              c.guest_name?.trim().toLowerCase() ===
-                                guestName.trim().toLowerCase() &&
-                                STYLES.claimChipMeText,
-                            ]}
-                          >
-                            {c.guest_name?.trim().toLowerCase() ===
-                            guestName.trim().toLowerCase()
-                              ? "You"
-                              : c.display_name}
-                          </Text>
-                        </View>
-                      ))
+                      item.claims.map((c, i) => {
+                        const isYou =
+                          c.is_guest &&
+                          c.guest_name?.trim().toLowerCase() ===
+                            guestName.trim().toLowerCase();
+                        const role = isYou
+                          ? "you"
+                          : c.is_guest
+                            ? "guest"
+                            : "member";
+                        const label = isYou
+                          ? "You"
+                          : c.is_guest
+                            ? `${c.display_name} (Guest)`
+                            : c.display_name;
+                        return (
+                          <ClaimantBadge
+                            key={c.id ?? i}
+                            role={role}
+                            label={label}
+                          />
+                        );
+                      })
                     )}
                   </View>
                 </View>
@@ -614,23 +609,6 @@ const STYLES = StyleSheet.create({
     fontSize: 12,
     color: palette.muted,
     fontStyle: "italic",
-  },
-  claimChip: {
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  claimChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B5563",
-  },
-  claimChipMe: {
-    backgroundColor: palette.accent,
-  },
-  claimChipMeText: {
-    color: "#FFFFFF",
   },
   itemPriceCol: {
     alignItems: "flex-end",

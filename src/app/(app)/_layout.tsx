@@ -1,56 +1,25 @@
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { Tabs } from "expo-router";
 import { JSX } from "react/jsx-runtime";
 
+import { BottomTabBar } from "@/components/bottom-tab-bar";
+
 /**
- * Signed-in layout: system tab bar (Liquid Glass on iOS 26+, Material on Android).
- * The root layout only renders this group when there is a session.
+ * Signed-in layout: custom floating bottom navigation bubble aligned with the
+ * app's cream-and-orange palette. The root layout only renders this group when
+ * there is a session.
  * @returns JSX element
  */
 export default function AppLayout(): JSX.Element {
   return (
-    <NativeTabs minimizeBehavior="onScrollDown">
-      <NativeTabs.Trigger name="(home)">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: "house", selected: "house.fill" }}
-          md="home"
-        />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="stats">
-        <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: "chart.bar", selected: "chart.bar.fill" }}
-          md="bar_chart"
-        />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="payments">
-        <NativeTabs.Trigger.Label>Payments</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: "creditcard", selected: "creditcard.fill" }}
-          md="credit_card"
-        />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: "gearshape", selected: "gearshape.fill" }}
-          md="settings"
-        />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="account">
-        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{
-            default: "person.crop.circle",
-            selected: "person.crop.circle.fill",
-          }}
-          md="account_circle"
-        />
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <Tabs
+      tabBar={(props) => <BottomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tabs.Screen name="(home)" options={{ title: "Home" }} />
+      <Tabs.Screen name="stats" options={{ title: "Stats" }} />
+      <Tabs.Screen name="payments" options={{ title: "Payments" }} />
+      <Tabs.Screen name="settings" options={{ title: "Settings" }} />
+      <Tabs.Screen name="account" options={{ title: "Account" }} />
+    </Tabs>
   );
 }

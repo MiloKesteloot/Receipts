@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -15,12 +17,17 @@ import {
 import { Toast, ToastType } from "@/components/toast";
 import { JSX } from "react/jsx-runtime";
 
+import { useAuth } from "@/lib/auth-provider";
 import { loadGroupDetail } from "@/lib/group-data";
-import { USE_MOCK } from "@/lib/mock";
+import { isGroupOwner } from "@/lib/group-members";
+import { deleteGroup, leaveGroup } from "@/lib/groups";
 import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
 
 import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
+import { ConfirmCardModal } from "@/components/confirm-card-modal";
+import { EditGroupModal } from "@/components/edit-group-modal";
 import { ReceiptCameraSheet } from "@/components/receipt-camera-sheet";
 import {
   formatCents,
@@ -52,6 +59,7 @@ type GroupDetail = {
   group: {
     id: string;
     name: string;
+    invite_code?: string;
     created_by: string;
     created_at: string;
   };
@@ -64,10 +72,11 @@ type GroupDetail = {
  * @returns JSX element
  */
 export default function GroupScreen(): JSX.Element {
-  const { id, toastMessage, toastType } = useLocalSearchParams<{
+  const { id, toastMessage, toastType, toastKey } = useLocalSearchParams<{
     id: string;
     toastMessage?: string;
     toastType?: string;
+    toastKey?: string;
   }>();
 
   const [toastState, setToastState] = useState<{
@@ -82,7 +91,7 @@ export default function GroupScreen(): JSX.Element {
         type: (toastType as ToastType) || "info",
       });
     }
-  }, [toastMessage, toastType]);
+  }, [toastMessage, toastType, toastKey]);
 
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,31 +109,79 @@ export default function GroupScreen(): JSX.Element {
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
   const [scanNotes, setScanNotes] = useState<string[]>([]);
   const [scanSession, setScanSession] = useState(0);
+  const { session } = useAuth();
+  const currentUserId = session?.user.id;
+  const [refreshing, setRefreshing] = useState(false);
+  // True once a load succeeded, so later refreshes keep the page on screen.
+  const hasDetailRef = useRef(false);
+  // The ref blocks a second tap before the state update re-renders.
+  const groupActionBusyRef = useRef(false);
+  const [groupActionBusy, setGroupActionBusy] = useState(false);
+  const [editGroupVisible, setEditGroupVisible] = useState(false);
+  const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (pull = false) => {
+    if (pull) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     setForbidden(false);
 
     const result = await loadGroupDetail(id, {
-      useMock: USE_MOCK,
       client: supabase,
     });
 
-    if (result.status === "ok") setDetail(result.detail);
-    else if (result.status === "forbidden") {
+    if (result.status === "ok") {
+      hasDetailRef.current = true;
+      // Copy so member updates trigger a re-render.
+      setDetail({ ...result.detail, members: [...result.detail.members] });
+    } else if (result.status === "forbidden") {
+      // e.g. the owner removed this user (US 3.2).
+      hasDetailRef.current = false;
       setForbidden(true);
       setDetail(null);
+    } else if (hasDetailRef.current) {
+      setToastState({ message: result.message, type: "error" });
     } else setError(result.message);
 
     setLoading(false);
+    setRefreshing(false);
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reload on every focus so members removed elsewhere disappear (US 3.2).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
-  if (loading) {
+  // Optional live updates (US 3.2). Needs group_members in the
+  // supabase_realtime publication; focus reload and pull-to-refresh work
+  // without it.
+  useEffect(() => {
+    const client = supabase;
+    if (!client || typeof client.channel !== "function") return;
+    const channel = client
+      .channel(`group-members-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "group_members",
+          filter: `group_id=eq.${id}`,
+        },
+        () => {
+          load();
+        }
+      )
+      .subscribe();
+    return () => {
+      client.removeChannel?.(channel);
+    };
+  }, [id, load]);
+
+  // Full-screen loader on the first load only; refreshes keep the page.
+  if (loading && detail === null) {
     return (
       <View style={STYLES.center}>
         <ActivityIndicator color={palette.accent} />
@@ -143,7 +200,10 @@ export default function GroupScreen(): JSX.Element {
   if (forbidden) {
     return (
       <View style={STYLES.center}>
-        <Text style={STYLES.error}>You&apos;re not a member of this group.</Text>
+        <Text style={STYLES.error}>
+          Group not found. It may have been deleted, or you&apos;re no longer a
+          member.
+        </Text>
         <Pressable
           onPress={() =>
             router.canGoBack() ? router.back() : router.replace("/")
@@ -160,7 +220,7 @@ export default function GroupScreen(): JSX.Element {
     return (
       <View style={STYLES.center}>
         <Text style={STYLES.error}>{error ?? "Group not found"}</Text>
-        <Pressable onPress={load} style={STYLES.button}>
+        <Pressable onPress={() => load()} style={STYLES.button}>
           <Text style={STYLES.buttonText}>Try again</Text>
         </Pressable>
       </View>
@@ -168,6 +228,102 @@ export default function GroupScreen(): JSX.Element {
   }
 
   const { group, members, receipts } = detail;
+  const isOwner = isGroupOwner(detail, currentUserId);
+  const currentMember = members.find((m) => m.user_id === currentUserId);
+  const canLeave = !isOwner && currentMember !== undefined;
+
+  /**
+   * Navigates back to the group list after leaving or deleting a group.
+   * @param message Confirmation toast message
+   */
+  const navigateAfterGroupRemoval = (message: string): void => {
+    const href = {
+      pathname: "/" as const,
+      params: {
+        toastMessage: message,
+        toastType: "success",
+        removedGroupId: group.id,
+        // Makes the same message show again for a second leave/delete.
+        toastKey: String(Date.now()),
+      },
+    };
+    // dismissTo pops back to the existing list; replace covers deep links
+    // where the group screen is the only screen on the stack.
+    if (router.canGoBack()) router.dismissTo(href);
+    else router.replace(href);
+  };
+
+  /**
+   * Executes group deletion (owner only) after confirmation in EditGroupModal.
+   */
+  const executeDeleteGroup = async (): Promise<void> => {
+    if (groupActionBusyRef.current) return;
+    groupActionBusyRef.current = true;
+    setGroupActionBusy(true);
+
+    try {
+      const userId = currentUserId;
+      if (!userId) {
+        setToastState({ message: "Sign in to delete this group.", type: "error" });
+        return;
+      }
+      const result = await deleteGroup(group.id);
+
+      setEditGroupVisible(false);
+
+      if (!result.success) {
+        setToastState({ message: result.message, type: "error" });
+        return;
+      }
+
+      navigateAfterGroupRemoval(`${group.name} deleted`);
+    } finally {
+      groupActionBusyRef.current = false;
+      setGroupActionBusy(false);
+    }
+  };
+
+  /**
+   * Executes leaving a group (non-owner member) after confirmation card prompt.
+   */
+  const executeLeaveGroup = async (): Promise<void> => {
+    if (groupActionBusyRef.current) return;
+    groupActionBusyRef.current = true;
+    setGroupActionBusy(true);
+
+    try {
+      const userId = currentUserId;
+      if (!userId) {
+        setToastState({ message: "Sign in to leave this group.", type: "error" });
+        return;
+      }
+      const result = await leaveGroup(group.id);
+
+      setLeaveConfirmVisible(false);
+
+      if (!result.success) {
+        setToastState({ message: result.message, type: "error" });
+        return;
+      }
+
+      navigateAfterGroupRemoval(`Left ${group.name}`);
+    } finally {
+      groupActionBusyRef.current = false;
+      setGroupActionBusy(false);
+    }
+  };
+
+  /**
+   * Updates local group header state and displays a toast when renamed.
+   * @param newName Updated group name
+   * @param message Toast feedback message
+   */
+  const handleGroupRenamed = (newName: string, message: string): void => {
+    setDetail((prev) =>
+      prev ? { ...prev, group: { ...prev.group, name: newName } } : prev
+    );
+    setToastState({ message, type: "success" });
+  };
 
   /**
    * Opens the receipt entry form for this group.
@@ -228,7 +384,6 @@ export default function GroupScreen(): JSX.Element {
     status: ReceiptStatus
   ): Promise<string | null> => {
     const result = await saveReceipt(group.id, draft, status, {
-      useMock: USE_MOCK,
       existingId: scanDraft === null ? editingReceipt?.id : undefined,
     });
     if (result.status === "error") return result.message;
@@ -269,9 +424,7 @@ export default function GroupScreen(): JSX.Element {
     setEditingReceipt(null);
     if (target === null) return;
 
-    const result = await deleteReceipt(group.id, target.id, {
-      useMock: USE_MOCK,
-    });
+    const result = await deleteReceipt(group.id, target.id);
     if (result.status === "error") {
       setToastState({ message: result.message, type: "error" });
       return;
@@ -287,16 +440,91 @@ export default function GroupScreen(): JSX.Element {
 
   return (
     <View style={STYLES.container}>
-      <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
+      <ScrollView
+        style={STYLES.screen}
+        contentContainerStyle={STYLES.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load(true)}
+            tintColor={palette.accent}
+            colors={[palette.accent]}
+          />
+        }
+      >
         <View style={STYLES.header}>
-          <Text style={STYLES.eyebrow}>Group</Text>
-          <Text style={STYLES.title}>{group.name}</Text>
+          <View style={STYLES.titleRow}>
+            <Text style={STYLES.title}>{group.name}</Text>
+            {isOwner ? (
+              <Pressable
+                onPress={() => setEditGroupVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Edit group"
+                style={({ pressed }) => [
+                  STYLES.editGroupButton,
+                  pressed && STYLES.addButtonPressed,
+                ]}
+              >
+                <Text style={STYLES.editGroupButtonText}>Edit group</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <Text style={STYLES.subtitle}>
             {members.length} {members.length === 1 ? "member" : "members"}
           </Text>
         </View>
 
-        <Text style={STYLES.sectionLabel}>Members ({members.length})</Text>
+        {group.invite_code ? (
+          <View style={STYLES.inviteCard}>
+            <View style={STYLES.inviteInfo}>
+              <Text style={STYLES.inviteLabel}>Invite code</Text>
+              <Text selectable style={STYLES.inviteCode}>
+                {group.invite_code}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                Share.share({
+                  message: `Join "${group.name}" with invite code: ${group.invite_code}`,
+                }).catch(() => {});
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Share invite code"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Share</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {isOwner ? (
+          <View style={STYLES.sectionHeaderRow}>
+            <Text style={STYLES.sectionLabelFlush}>
+              Members ({members.length})
+            </Text>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/remove-members",
+                  params: { from: group.id },
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Remove members"
+              style={({ pressed }) => [
+                STYLES.scanButton,
+                pressed && STYLES.addButtonPressed,
+              ]}
+            >
+              <Text style={STYLES.pillText}>Remove members</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={STYLES.sectionLabel}>Members ({members.length})</Text>
+        )}
         <View style={STYLES.card}>
           {members.map((m, i) => {
             const name = m.display_name ?? "Unknown";
@@ -400,7 +628,52 @@ export default function GroupScreen(): JSX.Element {
             })
           )}
         </View>
+
+        {canLeave ? (
+          <Pressable
+            onPress={() => setLeaveConfirmVisible(true)}
+            disabled={groupActionBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Leave Group"
+            accessibilityState={{ disabled: groupActionBusy, busy: groupActionBusy }}
+            style={({ pressed }) => [
+              STYLES.groupActionButton,
+              (pressed || groupActionBusy) && STYLES.addButtonPressed,
+            ]}
+          >
+            {groupActionBusy ? (
+              <ActivityIndicator color={palette.error} />
+            ) : (
+              <Text style={STYLES.groupActionText}>Leave Group</Text>
+            )}
+          </Pressable>
+        ) : null}
       </ScrollView>
+
+      <EditGroupModal
+        visible={editGroupVisible}
+        groupId={group.id}
+        groupName={group.name}
+        userId={currentUserId ?? ""}
+        deleting={groupActionBusy}
+        onClose={() => setEditGroupVisible(false)}
+        onRenamed={handleGroupRenamed}
+        onDelete={executeDeleteGroup}
+      />
+      <ConfirmCardModal
+        visible={leaveConfirmVisible}
+        title="Leave Group"
+        message={`Are you sure you want to leave ${group.name}?`}
+        confirmLabel="Leave"
+        destructive
+        busy={groupActionBusy}
+        onCancel={() => {
+          if (!groupActionBusy) setLeaveConfirmVisible(false);
+        }}
+        onConfirm={() => {
+          void executeLeaveGroup();
+        }}
+      />
       <AddReceiptModal
         key={
           scanDraft !== null
@@ -433,6 +706,14 @@ export default function GroupScreen(): JSX.Element {
           onPhoto={handleScanPhoto}
         />
       ) : null}
+      {toastState ? (
+        <Toast
+          visible={Boolean(toastState)}
+          message={toastState.message}
+          type={toastState.type}
+          onDismiss={() => setToastState(null)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -453,16 +734,57 @@ const STYLES = StyleSheet.create({
 
     backgroundColor: palette.bg,
   },
-  content: { padding: 24, gap: 10 },
+  content: { padding: 24, paddingBottom: BOTTOM_TAB_CLEARANCE, gap: 10 },
   header: { gap: 6, marginBottom: 8 },
-  eyebrow: {
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  editGroupButton: {
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  editGroupButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: palette.text,
+  },
+  inviteCard: {
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  inviteInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  inviteLabel: {
     fontSize: 12,
     fontWeight: "700",
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
     textTransform: "uppercase",
-    color: palette.accent,
+    color: palette.muted,
   },
-  title: { fontSize: 30, fontWeight: "800", color: palette.text },
+  inviteCode: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: palette.text,
+  },
+  title: { flex: 1, fontSize: 30, fontWeight: "800", color: palette.text },
   subtitle: { fontSize: 15, color: palette.muted },
   sectionLabel: {
     fontSize: 12,
@@ -556,4 +878,15 @@ const STYLES = StyleSheet.create({
   },
   addButtonPressed: { opacity: 0.7 },
   addButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
+  groupActionButton: {
+    marginTop: 28,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.error,
+    backgroundColor: palette.card,
+  },
+  groupActionText: { fontSize: 16, fontWeight: "700", color: palette.error },
 });

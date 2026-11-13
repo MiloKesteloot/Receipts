@@ -26,7 +26,6 @@ export interface AddGroupModalProps {
  * Add Group modal overlay component.
  * @param root0 Component props
  * @param root0.visible Visibility flag
- * @param root0.userId User ID of the joining user
  * @param root0.onClose Callback when modal closes
  * @param root0.onSuccess Callback when group is joined
  * @param root0.renderCreateSection Custom renderer for group creation
@@ -34,7 +33,6 @@ export interface AddGroupModalProps {
  */
 export function AddGroupModal({
   visible,
-  userId = "current-user",
   onClose,
   onSuccess,
   renderCreateSection,
@@ -78,7 +76,7 @@ export function AddGroupModal({
     setLoading(true);
 
     try {
-      const result = await joinGroup(trimmed, userId);
+      const result = await joinGroup(trimmed);
 
       if (result.success) {
         setHasError(false);

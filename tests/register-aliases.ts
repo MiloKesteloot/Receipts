@@ -15,8 +15,6 @@
 import { registerHooks, type ResolveHookSync } from "node:module";
 import { pathToFileURL } from "node:url";
 
-process.env.EXPO_PUBLIC_USE_MOCK = "true";
-
 /**
  * Absolute URL of the project's `src/` folder.
  */

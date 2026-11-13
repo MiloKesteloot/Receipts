@@ -188,7 +188,7 @@ function TotalRow({
  */
 const STYLES = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg },
-  content: { padding: 24, gap: 10 },
+  content: { padding: 24, paddingBottom: 128, gap: 10 },
   header: { gap: 6, marginBottom: 8 },
   eyebrow: {
     fontSize: 12,
