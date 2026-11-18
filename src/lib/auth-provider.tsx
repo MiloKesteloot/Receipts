@@ -7,6 +7,7 @@ import { AppState, Platform } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
 import * as auth from "./auth";
+import { unregisterThisDevice } from "./push-notifications";
 import { SUPABASE } from "./supabase";
 
 type AuthContextValue = {
@@ -78,7 +79,12 @@ const ACTIONS: Omit<AuthContextValue, "session" | "isLoading" | "updateDisplayNa
     Platform.OS === "ios"
       ? auth.signInWithAppleNative(CLIENT, requestAppleCredential)
       : auth.signInWithOAuthProvider(CLIENT, "apple", redirectUrl(), openAuthSession),
-  signOut: () => auth.signOut(CLIENT),
+  // Drop this phone's push token first, so the next account on it doesn't
+  // get this one's Pay me pushes (US 3.5).
+  signOut: async () => {
+    await unregisterThisDevice();
+    return auth.signOut(CLIENT);
+  },
 };
 
 /**

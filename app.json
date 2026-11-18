@@ -48,7 +48,13 @@
         }
       ],
       "expo-sqlite",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-notifications",
+        {
+          "color": "#E8734A"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
