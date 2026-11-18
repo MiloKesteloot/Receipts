@@ -107,6 +107,24 @@ create index if not exists group_members_user_idx
 create index if not exists group_members_group_idx
   on public.group_members (group_id);
 
+-- Realtime (US 3.2): open group screens subscribe to group_members changes
+-- filtered by group_id, so a removed member disappears on every phone.
+-- Supabase only filters DELETE events when replica identity is FULL.
+alter table public.group_members replica identity full;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'group_members'
+  ) then
+    alter publication supabase_realtime add table public.group_members;
+  end if;
+end;
+$$;
+
 -- Helper functions for RLS
 drop function if exists public.is_group_member(uuid) cascade;
 create or replace function public.is_group_member(p_group_id uuid)
@@ -1040,6 +1058,13 @@ begin
 
   if v_user = v_target_uuid then
     return jsonb_build_object('success', false, 'message', 'Cannot remove yourself as owner');
+  end if;
+
+  if exists (
+    select 1 from public.group_members
+    where group_id = v_group_uuid and user_id = v_target_uuid and role = 'owner'
+  ) then
+    return jsonb_build_object('success', false, 'message', 'The group owner can''t be removed');
   end if;
 
   delete from public.group_members
