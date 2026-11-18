@@ -17,9 +17,13 @@ import { JSX } from "react/jsx-runtime";
 
 import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
 import { ClaimantBadge, type ClaimantRole } from "@/components/claimant-badge";
+import { ConfirmCardModal } from "@/components/confirm-card-modal";
+import { FinalSplitCard } from "@/components/final-split-card";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { isGuestClaimKey, toClaimableItems, type ItemShares } from "@/lib/claims";
+import { finalizeReceipt } from "@/lib/finalize-receipt";
+import { computeFinalSplit, findUnclaimedItems } from "@/lib/finalize-split";
 import { loadGroupDetail } from "@/lib/group-data";
 import {
   createGuestClaimLink,
@@ -42,8 +46,35 @@ type ScreenReceipt = {
   token: string;
   title: string;
   total_cents: number;
+  /** "submitted" or "finalized" (US 3.3); drafts don't open here. */
+  status: string;
+  /** The uploader, the only one who can finalize. */
+  created_by: string;
+  tax_cents: number;
+  tip_cents: number;
   items: ReceiptLine[];
 };
+
+/**
+ * Reads a stored amount in cents, treating anything invalid as 0.
+ * @param value The value as loaded (bigint can arrive as a string)
+ * @returns Whole cents
+ */
+function centsOrZero(value: unknown): number {
+  const cents = Number(value);
+  return Number.isInteger(cents) && cents >= 0 ? cents : 0;
+}
+
+/**
+ * Formats the number of items still needing a claim.
+ * @param count How many items are unclaimed
+ * @returns E.g. "1 item still needs a claim"
+ */
+function unclaimedLabel(count: number): string {
+  return count === 1
+    ? "1 item still needs a claim"
+    : `${count} items still need a claim`;
+}
 
 type LoadResult =
   | {
@@ -81,7 +112,7 @@ async function loadMemberReceipt(id: string, token: string): Promise<LoadResult>
 
   const { data: rRow, error: rError } = await SUPABASE
     .from("receipts")
-    .select("id, title, total_cents, created_at, group_id, status")
+    .select("id, title, total_cents, tax_cents, tip_cents, created_at, created_by, group_id, status")
     .eq("id", id)
     .single();
   if (rError || !rRow) {
@@ -114,7 +145,11 @@ async function loadMemberReceipt(id: string, token: string): Promise<LoadResult>
       token,
       title: rRow.title,
       total_cents: Number(rRow.total_cents),
-      items: (itemsData ?? []).map((item) => ({
+      status: String(rRow.status),
+      created_by: String(rRow.created_by),
+      tax_cents: centsOrZero(rRow.tax_cents),
+      tip_cents: centsOrZero(rRow.tip_cents),
+      items:(itemsData ?? []).map((item) => ({
         id: String(item.id),
         name: item.name,
         amount_cents: item.amount_cents,
@@ -148,6 +183,8 @@ export default function ReceiptScreen(): JSX.Element {
   const [sharing, setSharing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
+  const [confirmingFinalize, setConfirmingFinalize] = useState(false);
 
   /**
    * Gets (or makes) the guest share token, then loads the receipt.
@@ -236,6 +273,56 @@ export default function ReceiptScreen(): JSX.Element {
     }
     return { role: "member", name: memberNames[key] ?? "Member" };
   };
+
+  // Finalizing (US 3.3).
+  const isFinalized = receipt?.status === "finalized";
+  const isUploader = userId !== undefined && receipt?.created_by === userId;
+  const canFinalize = receipt?.status === "submitted" && claimable.length > 0;
+  const unclaimedCount = useMemo(
+    () => findUnclaimedItems(claimable, claims).length,
+    [claimable, claims]
+  );
+  const finalSplit = useMemo(
+    () =>
+      isFinalized && receipt
+        ? computeFinalSplit({
+            items: claimable,
+            claims,
+            taxCents: receipt.tax_cents,
+            tipCents: receipt.tip_cents,
+          })
+        : null,
+    [isFinalized, receipt, claimable, claims]
+  );
+  const myFinalCents =
+    finalSplit?.status === "ok"
+      ? finalSplit.split.people.find((p) => p.userId === userId)?.totalCents
+      : undefined;
+
+  /**
+   * Finalizes the receipt once the uploader confirms in the dialog. The
+   * dialog stays open with a spinner until the request finishes.
+   */
+  async function handleFinalize(): Promise<void> {
+    if (!id || finalizing) return;
+
+    setFinalizing(true);
+    try {
+      const result = await finalizeReceipt(id);
+      if (result.status === "ok") {
+        setReceipt((current) => (current ? { ...current, status: "finalized" } : current));
+        setToast({ message: "Receipt finalized.", type: "success" });
+      } else if (result.status === "unclaimed") {
+        setToast({ message: `Can't finalize yet: ${unclaimedLabel(result.unclaimedCount)}.`, type: "error" });
+      } else {
+        setToast({ message: result.message, type: "error" });
+        if (result.error === "ALREADY_FINALIZED") void loadReceiptData();
+      }
+    } finally {
+      setFinalizing(false);
+      setConfirmingFinalize(false);
+    }
+  }
 
   /**
    * Renders color-coded claimant badges under an item's title.
@@ -390,77 +477,142 @@ async function copyToClipboard(text: string): Promise<boolean> {
       >
         {/* Receipt Header */}
         <View style={STYLES.headerCard}>
-          <Text style={STYLES.eyebrow}>Receipt Details</Text>
+          <View style={STYLES.headerTopRow}>
+            <Text style={STYLES.eyebrow}>Receipt Details</Text>
+            {isFinalized ? (
+              <View style={STYLES.finalizedBadge}>
+                <Text style={STYLES.finalizedBadgeText}>Finalized</Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={STYLES.receiptTitle}>{receipt.title}</Text>
           <Text style={STYLES.totalAmount}>
             {formatCents(receipt.total_cents)}
           </Text>
         </View>
 
-        {/* Share with Guests Card */}
-        <View style={STYLES.shareCard}>
-          <View style={STYLES.shareHeader}>
-            <Text style={STYLES.shareTitle}>Guest Claim Link</Text>
+        {/* Final split, once finalized (US 3.3) */}
+        {finalSplit?.status === "ok" ? (
+          <FinalSplitCard
+            split={finalSplit.split}
+            receiptTotalCents={receipt.total_cents}
+            currentUserId={userId}
+            nameFor={(key) => badgeFor(key).name}
+          />
+        ) : null}
+        {finalSplit !== null && finalSplit.status !== "ok" && !claimsLoading ? (
+          <View style={STYLES.finalizeCard}>
+            <Text style={STYLES.finalizeHint}>
+              {"Couldn't work out the final split for this receipt."}
+            </Text>
           </View>
+        ) : null}
 
-          <Text style={STYLES.shareDescription}>
-            Send this link to friends or guests so they can open this receipt in
-            any browser and claim their items without signing up.
-          </Text>
-
-          {claimUrl ? (
-            <View style={STYLES.linkPreviewBox}>
-              <Text style={STYLES.linkText} numberOfLines={1} selectable>
-                {claimUrl}
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={STYLES.buttonRow}>
-            <Pressable
-              onPress={handleShare}
-              disabled={sharing || generatingLink}
-              style={({ pressed }) => [
-                STYLES.primaryShareButton,
-                (pressed || sharing) && STYLES.pressed,
-              ]}
-            >
-              {generatingLink ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={STYLES.primaryShareButtonText}>
-                  Share Claim Link
+        {/* Finalize, for submitted receipts (US 3.3) */}
+        {canFinalize && !claimsLoading ? (
+          <View style={STYLES.finalizeCard}>
+            {isUploader ? (
+              <>
+                <Text style={STYLES.finalizeHint}>
+                  {unclaimedCount > 0
+                    ? unclaimedLabel(unclaimedCount)
+                    : "Every item is claimed."}
                 </Text>
-              )}
-            </Pressable>
+                <Pressable
+                  onPress={() => setConfirmingFinalize(true)}
+                  disabled={unclaimedCount > 0 || finalizing}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    disabled: unclaimedCount > 0 || finalizing,
+                    busy: finalizing,
+                  }}
+                  style={({ pressed }) => [
+                    STYLES.finalizeButton,
+                    (unclaimedCount > 0 || finalizing) && STYLES.finalizeButtonDisabled,
+                    pressed && STYLES.pressed,
+                  ]}
+                >
+                  {finalizing ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={STYLES.finalizeButtonText}>Finalize receipt</Text>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <Text style={STYLES.finalizeHint}>
+                {`Waiting for ${memberNames[receipt.created_by] ?? "the uploader"} to finalize.`}
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        {/* Share with Guests Card (hidden once finalized: claims are locked) */}
+        {isFinalized ? null : (
+          <View style={STYLES.shareCard}>
+            <View style={STYLES.shareHeader}>
+              <Text style={STYLES.shareTitle}>Guest Claim Link</Text>
+            </View>
+
+            <Text style={STYLES.shareDescription}>
+              Send this link to friends or guests so they can open this receipt in
+              any browser and claim their items without signing up.
+            </Text>
+
+            {claimUrl ? (
+              <View style={STYLES.linkPreviewBox}>
+                <Text style={STYLES.linkText} numberOfLines={1} selectable>
+                  {claimUrl}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={STYLES.buttonRow}>
+              <Pressable
+                onPress={handleShare}
+                disabled={sharing || generatingLink}
+                style={({ pressed }) => [
+                  STYLES.primaryShareButton,
+                  (pressed || sharing) && STYLES.pressed,
+                ]}
+              >
+                {generatingLink ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={STYLES.primaryShareButtonText}>
+                    Share Claim Link
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={handleCopyLink}
+                style={({ pressed }) => [
+                  STYLES.copyButton,
+                  pressed && STYLES.pressed,
+                ]}
+              >
+                <Text style={STYLES.copyButtonText}>Copy Link</Text>
+              </Pressable>
+            </View>
 
             <Pressable
-              onPress={handleCopyLink}
+              onPress={() => {
+                if (receipt.token) {
+                  router.push(`/claim/${receipt.token}` as never);
+                }
+              }}
               style={({ pressed }) => [
-                STYLES.copyButton,
+                STYLES.previewButton,
                 pressed && STYLES.pressed,
               ]}
             >
-              <Text style={STYLES.copyButtonText}>Copy Link</Text>
+              <Text style={STYLES.previewButtonText}>
+                Open Guest Claim Web Page ›
+              </Text>
             </Pressable>
           </View>
-
-          <Pressable
-            onPress={() => {
-              if (receipt.token) {
-                router.push(`/claim/${receipt.token}` as never);
-              }
-            }}
-            style={({ pressed }) => [
-              STYLES.previewButton,
-              pressed && STYLES.pressed,
-            ]}
-          >
-            <Text style={STYLES.previewButtonText}>
-              Open Guest Claim Web Page ›
-            </Text>
-          </Pressable>
-        </View>
+        )}
 
         {/* Items Section */}
         <View style={STYLES.sectionHeaderRow}>
@@ -501,12 +653,17 @@ async function copyToClipboard(text: string): Promise<boolean> {
                 <Pressable
                   key={item.id}
                   onPress={() => {
+                    // Claims are locked once finalized (US 3.3).
+                    if (isFinalized) return;
                     // The hook updates the screen itself; nothing to wait for.
                     void toggle(item.id);
                   }}
+                  disabled={isFinalized}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: isMine, busy: inFlight }}
-                  accessibilityLabel={`${isMine ? "Unclaim" : "Claim"} ${item.name}`}
+                  accessibilityState={{ selected: isMine, busy: inFlight, disabled: isFinalized }}
+                  accessibilityLabel={
+                    isFinalized ? item.name : `${isMine ? "Unclaim" : "Claim"} ${item.name}`
+                  }
                   style={({ pressed }) => [
                     STYLES.itemCard,
                     isMine && STYLES.itemCardClaimed,
@@ -578,15 +735,32 @@ async function copyToClipboard(text: string): Promise<boolean> {
         <View style={[STYLES.totalBarWrapper, { paddingBottom: floatingTabOffset }]}>
           <View style={STYLES.totalBar} accessibilityLiveRegion="polite">
             <Text style={STYLES.totalBarText}>
-              {myTotal.claimedCount === 0
-                ? "Tap items you bought to claim them"
-                : `Your total ${formatCents(myTotal.totalCents)} · ${myTotal.claimedCount} ${
-                    myTotal.claimedCount === 1 ? "item" : "items"
-                  }`}
+              {isFinalized
+                ? myFinalCents !== undefined
+                  ? `You owe ${formatCents(myFinalCents)}`
+                  : "You don't owe anything on this receipt"
+                : myTotal.claimedCount === 0
+                  ? "Tap items you bought to claim them"
+                  : `Your total ${formatCents(myTotal.totalCents)} · ${myTotal.claimedCount} ${
+                      myTotal.claimedCount === 1 ? "item" : "items"
+                    }`}
             </Text>
           </View>
         </View>
       ) : null}
+
+      <ConfirmCardModal
+        visible={confirmingFinalize}
+        title="Finalize receipt?"
+        message="Everyone's share will be locked in, including tax and tip, and items can't be claimed or unclaimed anymore."
+        confirmLabel="Finalize"
+        destructive={false}
+        busy={finalizing}
+        onCancel={() => setConfirmingFinalize(false)}
+        onConfirm={() => {
+          void handleFinalize();
+        }}
+      />
 
       {toast ? (
         <Toast
@@ -630,6 +804,50 @@ const STYLES = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     gap: 6,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  finalizedBadge: {
+    backgroundColor: palette.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  finalizedBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  finalizeCard: {
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 16,
+    padding: 18,
+    gap: 12,
+  },
+  finalizeHint: {
+    fontSize: 14,
+    color: palette.muted,
+    textAlign: "center",
+  },
+  finalizeButton: {
+    backgroundColor: palette.accent,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  finalizeButtonDisabled: {
+    opacity: 0.45,
+  },
+  finalizeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
   },
   eyebrow: {
     fontSize: 12,
