@@ -20,6 +20,7 @@ import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
 import { ClaimantBadge, type ClaimantRole } from "@/components/claimant-badge";
 import { ConfirmCardModal } from "@/components/confirm-card-modal";
 import { FinalSplitCard } from "@/components/final-split-card";
+import { PayMeCard } from "@/components/pay-me-card";
 import { PaymentsCard } from "@/components/payments-card";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
@@ -33,6 +34,7 @@ import {
   formatClaimUrl,
 } from "@/lib/guest-claim";
 import { palette } from "@/lib/palette";
+import { countNudgeable, loadLastPayMe } from "@/lib/pay-me";
 import type { PaymentActionResult } from "@/lib/payments";
 import { computeSettlement, type Settlement, type SettlementPerson } from "@/lib/settlement";
 import { SUPABASE } from "@/lib/supabase";
@@ -365,6 +367,18 @@ export default function ReceiptScreen(): JSX.Element {
     : "The uploader";
   const isSettled = settlement?.settled === true;
 
+  // Pay me (US 3.5): when the last one went out, so the countdown survives
+  // reopening the screen. Only the uploader needs it.
+  const [lastPayMeAt, setLastPayMeAt] = useState<string | null>(null);
+  const refreshLastPayMe = useCallback(async () => {
+    if (!id) return;
+    const result = await loadLastPayMe(id);
+    if (result.status === "ok") setLastPayMeAt(result.lastSentAt);
+  }, [id]);
+  useEffect(() => {
+    if (isFinalized && isUploader) void refreshLastPayMe();
+  }, [isFinalized, isUploader, refreshLastPayMe]);
+
   /**
    * Finalizes the receipt once the uploader confirms in the dialog. The
    * dialog stays open with a spinner until the request finishes.
@@ -447,7 +461,7 @@ export default function ReceiptScreen(): JSX.Element {
   async function handleRefresh(): Promise<void> {
     setRefreshing(true);
     try {
-      await reloadPayments();
+      await Promise.all([reloadPayments(), isUploader ? refreshLastPayMe() : Promise.resolve()]);
     } finally {
       setRefreshing(false);
     }
@@ -665,6 +679,20 @@ async function copyToClipboard(text: string): Promise<boolean> {
             }}
             onNotReceived={(payerKey) => {
               void handleNotReceived(payerKey);
+            }}
+          />
+        ) : null}
+
+        {/* Pay me, for the uploader until the receipt is settled (US 3.5) */}
+        {settlement && !isSettled && isUploader && id &&
+        !(paymentsLoading && !refreshing && payments.length === 0) ? (
+          <PayMeCard
+            receiptId={id}
+            owingCount={countNudgeable(settlement)}
+            lastSentAt={lastPayMeAt}
+            onMessage={(message, type) => setToast({ message, type })}
+            onNobodyOwes={() => {
+              void reloadPayments();
             }}
           />
         ) : null}

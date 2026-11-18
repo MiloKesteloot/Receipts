@@ -1,12 +1,13 @@
 import type { Session } from "@supabase/supabase-js";
 import { AppleAuthenticationScope, signInAsync } from "expo-apple-authentication";
-import { createURL } from "expo-linking";
+import { createURL, useLinkingURL } from "expo-linking";
 import { openAuthSessionAsync } from "expo-web-browser";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { AppState, Platform } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
 import * as auth from "./auth";
+import { unregisterThisDevice } from "./push-notifications";
 import { SUPABASE } from "./supabase";
 
 type AuthContextValue = {
@@ -78,7 +79,12 @@ const ACTIONS: Omit<AuthContextValue, "session" | "isLoading" | "updateDisplayNa
     Platform.OS === "ios"
       ? auth.signInWithAppleNative(CLIENT, requestAppleCredential)
       : auth.signInWithOAuthProvider(CLIENT, "apple", redirectUrl(), openAuthSession),
-  signOut: () => auth.signOut(CLIENT),
+  // Drop this phone's push token first, so the next account on it doesn't
+  // get this one's Pay me pushes (US 3.5).
+  signOut: async () => {
+    await unregisterThisDevice();
+    return auth.signOut(CLIENT);
+  },
 };
 
 /**
@@ -99,6 +105,16 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       }),
     []
   );
+
+  // A confirmation email link opens the app with `?code=`; trade it for a
+  // session so the user lands signed in. If it fails (e.g. the link was opened
+  // on another device), the email is still confirmed and they can sign in.
+  const linkingUrl = useLinkingURL();
+  useEffect(() => {
+    if (linkingUrl && auth.parseAuthCallbackUrl(linkingUrl)?.kind === "code") {
+      auth.completeOAuthRedirect(CLIENT, linkingUrl);
+    }
+  }, [linkingUrl]);
 
   // Only refresh tokens while the app is in the foreground (Supabase's RN advice).
   useEffect(() => {

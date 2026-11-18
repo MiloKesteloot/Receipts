@@ -124,9 +124,11 @@ jest.mock("@/lib/payments", () => ({
   respondToPayment: jest.fn(),
 }));
 
-/** Mocked payment functions. */
+/** Mocked payments load. */
 const mockGetPayments = getPayments as unknown as jest.Mock<typeof getPayments>;
+/** Mocked Mark as paid. */
 const mockMarkPaid = markSharePaid as unknown as jest.Mock<typeof markSharePaid>;
+/** Mocked Confirm / Not received. */
 const mockRespond = respondToPayment as unknown as jest.Mock<typeof respondToPayment>;
 
 /** Mocked route params hook. */
