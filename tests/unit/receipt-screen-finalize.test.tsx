@@ -229,7 +229,8 @@ describe("ReceiptScreen: finalize and split (US 3.3)", () => {
     expect(getByText("Subtotal $20.00 · Tax $2.00 · Tip $4.00")).toBeTruthy();
     expect(getByText("Total $26.00")).toBeTruthy();
     expect(queryByText(/doesn't match the receipt total/)).toBeNull();
-    expect(getByText("You owe $6.50")).toBeTruthy();
+    // The uploader paid the bill, so the bar shows what they're owed (US 3.4).
+    expect(getByText("You're owed $19.50")).toBeTruthy();
     expect(queryByText("Finalize receipt")).toBeNull();
   });
 
