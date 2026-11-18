@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -19,6 +20,7 @@ import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
 import { ClaimantBadge, type ClaimantRole } from "@/components/claimant-badge";
 import { ConfirmCardModal } from "@/components/confirm-card-modal";
 import { FinalSplitCard } from "@/components/final-split-card";
+import { PaymentsCard } from "@/components/payments-card";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { isGuestClaimKey, toClaimableItems, type ItemShares } from "@/lib/claims";
@@ -31,8 +33,11 @@ import {
   formatClaimUrl,
 } from "@/lib/guest-claim";
 import { palette } from "@/lib/palette";
+import type { PaymentActionResult } from "@/lib/payments";
+import { computeSettlement, type Settlement, type SettlementPerson } from "@/lib/settlement";
 import { SUPABASE } from "@/lib/supabase";
 import { useClaims } from "@/lib/use-claims";
+import { MY_SHARE_BUSY_KEY, usePayments } from "@/lib/use-payments";
 
 /** Delay in ms after closing share sheet to allow animations to settle. */
 const SHARE_SHEET_CLOSE_DELAY_MS = 500;
@@ -94,6 +99,46 @@ type LoadResult =
  */
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** A payment action waiting on the in-app confirm card (US 3.4). */
+type PendingPayment =
+  | { kind: "markPaid"; amountCents: number }
+  | { kind: "confirm"; payerKey: string; name: string; amountCents: number };
+
+/**
+ * The bottom bar's text on a finalized receipt (US 3.4).
+ * @param settlement Everyone's payment status
+ * @param me The signed-in user's share, if they have one
+ * @param isUploader Whether the signed-in user uploaded the receipt
+ * @param uploaderName The uploader's display name
+ * @returns The text to show
+ */
+function finalizedBarText(
+  settlement: Settlement | null,
+  me: SettlementPerson | undefined,
+  isUploader: boolean,
+  uploaderName: string
+): string {
+  if (isUploader && settlement) {
+    return settlement.settled
+      ? "Everyone has paid you back"
+      : `You're owed ${formatCents(settlement.outstandingCents)}`;
+  }
+  if (!me) return "You don't owe anything on this receipt";
+  const amount = formatCents(me.owesCents);
+  switch (me.status) {
+    case "paid":
+      return `You marked ${amount} as paid`;
+    case "not_received":
+      return `${uploaderName} didn't receive your ${amount}`;
+    case "confirmed":
+      return `Your ${amount} payment was confirmed`;
+    case "nothing_owed":
+      return "You don't owe anything on this receipt";
+    default:
+      return `You owe ${amount}`;
+  }
 }
 
 /**
@@ -294,10 +339,31 @@ export default function ReceiptScreen(): JSX.Element {
         : null,
     [isFinalized, receipt, claimable, claims]
   );
-  const myFinalCents =
-    finalSplit?.status === "ok"
-      ? finalSplit.split.people.find((p) => p.userId === userId)?.totalCents
-      : undefined;
+  // Paying and confirming shares (US 3.4).
+  const {
+    payments,
+    busyKey: paymentBusyKey,
+    reload: reloadPayments,
+    loading: paymentsLoading,
+    markPaid,
+    respond,
+  } = usePayments(id, isFinalized);
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const settlement = useMemo(
+    () =>
+      finalSplit?.status === "ok" && receipt
+        ? computeSettlement(finalSplit.split, payments, receipt.created_by)
+        : null,
+    [finalSplit, payments, receipt]
+  );
+  const mySettlement = settlement?.people.find((p) => p.userId === userId);
+  const uploaderName = receipt
+    ? receipt.created_by === userId
+      ? "You"
+      : (memberNames[receipt.created_by] ?? "The uploader")
+    : "The uploader";
+  const isSettled = settlement?.settled === true;
 
   /**
    * Finalizes the receipt once the uploader confirms in the dialog. The
@@ -321,6 +387,69 @@ export default function ReceiptScreen(): JSX.Element {
     } finally {
       setFinalizing(false);
       setConfirmingFinalize(false);
+    }
+  }
+
+  /**
+   * Shows a toast for a failed payment action.
+   * @param result The action's result
+   * @returns True if the action succeeded
+   */
+  function reportPaymentResult(result: PaymentActionResult): boolean {
+    if (result.status === "ok") return true;
+    setToast({ message: result.message, type: "error" });
+    return false;
+  }
+
+  /**
+   * Runs the payment action the user confirmed in the confirm card. The card
+   * stays open with a spinner until the request finishes.
+   */
+  async function handleConfirmPayment(): Promise<void> {
+    if (!pendingPayment || paymentBusyKey !== null) return;
+    try {
+      if (pendingPayment.kind === "markPaid") {
+        if (reportPaymentResult(await markPaid())) {
+          setToast({ message: "Marked as paid.", type: "success" });
+        }
+      } else {
+        // Was this the last share left to settle?
+        const lastOne =
+          settlement?.outstandingCount === 1 &&
+          settlement.people.some(
+            (p) => p.userId === pendingPayment.payerKey && p.status !== "confirmed"
+          );
+        if (reportPaymentResult(await respond(pendingPayment.payerKey, true))) {
+          setToast({
+            message: lastOne ? "Receipt settled!" : "Payment confirmed.",
+            type: "success",
+          });
+        }
+      }
+    } finally {
+      setPendingPayment(null);
+    }
+  }
+
+  /**
+   * The uploader says a payment wasn't received.
+   * @param payerKey Whose payment
+   */
+  async function handleNotReceived(payerKey: string): Promise<void> {
+    if (reportPaymentResult(await respond(payerKey, false))) {
+      setToast({ message: "Marked as not received.", type: "success" });
+    }
+  }
+
+  /**
+   * Pull to refresh: reloads the payments on a finalized receipt.
+   */
+  async function handleRefresh(): Promise<void> {
+    setRefreshing(true);
+    try {
+      await reloadPayments();
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -474,14 +603,28 @@ async function copyToClipboard(text: string): Promise<boolean> {
               claimable.length > 0 ? 24 : BOTTOM_TAB_CLEARANCE + insets.bottom,
           },
         ]}
+        refreshControl={
+          isFinalized ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                void handleRefresh();
+              }}
+              tintColor={palette.accent}
+              colors={[palette.accent]}
+            />
+          ) : undefined
+        }
       >
         {/* Receipt Header */}
         <View style={STYLES.headerCard}>
           <View style={STYLES.headerTopRow}>
             <Text style={STYLES.eyebrow}>Receipt Details</Text>
             {isFinalized ? (
-              <View style={STYLES.finalizedBadge}>
-                <Text style={STYLES.finalizedBadgeText}>Finalized</Text>
+              <View style={[STYLES.finalizedBadge, isSettled && STYLES.settledBadge]}>
+                <Text style={STYLES.finalizedBadgeText}>
+                  {isSettled ? "Settled" : "Finalized"}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -498,6 +641,31 @@ async function copyToClipboard(text: string): Promise<boolean> {
             receiptTotalCents={receipt.total_cents}
             currentUserId={userId}
             nameFor={(key) => badgeFor(key).name}
+          />
+        ) : null}
+
+        {/* Mark paid and confirm (US 3.4). Hidden until payments first load. */}
+        {settlement && !(paymentsLoading && !refreshing && payments.length === 0) ? (
+          <PaymentsCard
+            settlement={settlement}
+            viewer={{ userId, isUploader }}
+            nameFor={(key) => badgeFor(key).name}
+            busyKey={paymentBusyKey === MY_SHARE_BUSY_KEY ? (userId ?? null) : paymentBusyKey}
+            onMarkPaid={() =>
+              setPendingPayment({ kind: "markPaid", amountCents: mySettlement?.owesCents ?? 0 })
+            }
+            onConfirm={(payerKey) => {
+              const person = settlement.people.find((p) => p.userId === payerKey);
+              setPendingPayment({
+                kind: "confirm",
+                payerKey,
+                name: badgeFor(payerKey).name,
+                amountCents: person?.owesCents ?? 0,
+              });
+            }}
+            onNotReceived={(payerKey) => {
+              void handleNotReceived(payerKey);
+            }}
           />
         ) : null}
         {finalSplit !== null && finalSplit.status !== "ok" && !claimsLoading ? (
@@ -736,9 +904,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
           <View style={STYLES.totalBar} accessibilityLiveRegion="polite">
             <Text style={STYLES.totalBarText}>
               {isFinalized
-                ? myFinalCents !== undefined
-                  ? `You owe ${formatCents(myFinalCents)}`
-                  : "You don't owe anything on this receipt"
+                ? finalizedBarText(settlement, mySettlement, isUploader, uploaderName)
                 : myTotal.claimedCount === 0
                   ? "Tap items you bought to claim them"
                   : `Your total ${formatCents(myTotal.totalCents)} · ${myTotal.claimedCount} ${
@@ -759,6 +925,25 @@ async function copyToClipboard(text: string): Promise<boolean> {
         onCancel={() => setConfirmingFinalize(false)}
         onConfirm={() => {
           void handleFinalize();
+        }}
+      />
+
+      <ConfirmCardModal
+        visible={pendingPayment !== null}
+        title={pendingPayment?.kind === "confirm" ? "Confirm payment?" : "Mark as paid?"}
+        message={
+          pendingPayment?.kind === "confirm"
+            ? `Confirm you received ${formatCents(pendingPayment.amountCents)} from ${pendingPayment.name}. This can't be undone.`
+            : `Let ${uploaderName} know you've paid ${formatCents(
+                pendingPayment?.amountCents ?? 0
+              )}. They'll confirm once they get it.`
+        }
+        confirmLabel={pendingPayment?.kind === "confirm" ? "Confirm" : "Mark as paid"}
+        destructive={false}
+        busy={paymentBusyKey !== null}
+        onCancel={() => setPendingPayment(null)}
+        onConfirm={() => {
+          void handleConfirmPayment();
         }}
       />
 
@@ -815,6 +1000,9 @@ const STYLES = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
+  },
+  settledBadge: {
+    backgroundColor: palette.text,
   },
   finalizedBadgeText: {
     fontSize: 12,
