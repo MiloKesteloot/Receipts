@@ -236,8 +236,17 @@ function compareReceiptsNewestFirst(
 }
 
 /**
+ * Whether a receipt counts on Home: submitted or finalized (US 3.3), not a draft.
+ * @param status The receipt's status
+ * @returns True for submitted and finalized receipts
+ */
+export function isPostedReceipt(status: string | null | undefined): boolean {
+  return status === "submitted" || status === "finalized";
+}
+
+/**
  * Builds sorted group card view models containing unique member counts and the
- * newest submitted receipt per group.
+ * newest submitted or finalized receipt per group.
  * @param groups User's groups
  * @param members Membership rows across those groups
  * @param receipts Receipt rows across those groups
@@ -257,7 +266,7 @@ export function buildGroupOverviewCards(
 
   const latestByGroup = new Map<string, OverviewReceiptRow>();
   for (const receipt of receipts) {
-    if (receipt.status !== "submitted") continue;
+    if (!isPostedReceipt(receipt.status)) continue;
     const currentLatest = latestByGroup.get(receipt.group_id);
     if (
       !currentLatest ||
@@ -301,7 +310,7 @@ function claimantKeyForRow(row: OverviewClaimRow): string | null {
 
 /**
  * Calculates gross amounts owed to the current user and owed by the current user
- * across all `submitted` receipts using deterministic exact-cent splits (`splitCents`).
+ * across all `submitted` and `finalized` receipts using deterministic exact-cent splits (`splitCents`).
  * Draft receipts, unclaimed items, and items with invalid prices contribute `0`.
  * @param currentUserId Signed-in user ID
  * @param receipts Group receipt rows
@@ -317,7 +326,7 @@ export function calculateUserBalances(
 ): HomeBalanceSummary {
   const payerByReceipt = new Map<string, string>();
   for (const receipt of receipts) {
-    if (receipt.status === "submitted") {
+    if (isPostedReceipt(receipt.status)) {
       payerByReceipt.set(receipt.id, receipt.created_by);
     }
   }
@@ -479,18 +488,18 @@ export async function loadHomeOverview(
       ),
     ]);
 
-    const submittedReceiptIds = receipts
-      .filter((r) => r.status === "submitted")
+    const postedReceiptIds = receipts
+      .filter((r) => isPostedReceipt(r.status))
       .map((r) => r.id);
 
     let items: OverviewItemRow[] = [];
     let claims: OverviewClaimRow[] = [];
-    if (submittedReceiptIds.length > 0) {
+    if (postedReceiptIds.length > 0) {
       items = await unwrapRows<OverviewItemRow>(
         client
           .from("receipt_items")
           .select("id, receipt_id, amount_cents")
-          .in("receipt_id", submittedReceiptIds)
+          .in("receipt_id", postedReceiptIds)
       );
 
       const itemIds = items.map((item) => item.id);

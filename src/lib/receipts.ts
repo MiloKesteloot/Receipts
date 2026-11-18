@@ -63,7 +63,7 @@ export async function saveReceipt(
         };
       }
 
-      const totalCents = computeTotals(draft).totalCents;
+      const { totalCents, taxCents, tipCents } = computeTotals(draft);
 
       if (options?.existingId !== undefined) {
         const existingId = options.existingId;
@@ -71,6 +71,10 @@ export async function saveReceipt(
           title: draft.store.trim(),
           // eslint-disable-next-line @typescript-eslint/naming-convention
           total_cents: totalCents,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          tax_cents: taxCents,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          tip_cents: tipCents,
           status,
           // eslint-disable-next-line @typescript-eslint/naming-convention
           draft_data: status === "draft" ? draft : null,
@@ -133,6 +137,10 @@ export async function saveReceipt(
           title: draft.store.trim(),
           // eslint-disable-next-line @typescript-eslint/naming-convention
           total_cents: totalCents,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          tax_cents: taxCents,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          tip_cents: tipCents,
           status,
           // eslint-disable-next-line @typescript-eslint/naming-convention
           draft_data: status === "draft" ? draft : null,
