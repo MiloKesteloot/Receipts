@@ -49,8 +49,13 @@ function fakeClient(answer: Answer | (() => never)) {
   return { client, rpcCalls, selects };
 }
 
-/** A successful RPC answer for a share in `state`. */
-const ok = (state: string, payerKey = "u-blake"): Answer => ({
+/**
+ * A successful RPC answer for a share in `state`.
+ * @param state The share's payment state
+ * @param payerKey Whose share
+ * @returns The RPC answer
+ */
+const ok =(state: string, payerKey = "u-blake"): Answer => ({
   data: {
     success: true,
     payer_key: payerKey,
