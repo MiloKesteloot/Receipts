@@ -83,8 +83,11 @@ You need an account to use the app. Every screen except sign-in is hidden until 
 Set these up in the Supabase dashboard under **Authentication**:
 
 - **Email:** on by default. With **Confirm email** on, new accounts must click the link in their email before they can sign in.
-- **URL Configuration → Redirect URLs:** add `receipts://**` and `exp://**`. This is where Google, Apple and confirmation emails send people back to the app.
-- **Google:** under **Sign In / Providers**, turn on Google and paste in a Web client ID and secret from [Google Cloud](https://console.cloud.google.com/apis/credentials). Add the callback URL Supabase shows you to the Google client.
+- **URL Configuration → Redirect URLs:** add `receipts://**`, `exp://**` and (for `npx expo start --web`) `http://localhost:8081/**`. This is where Google, Apple and confirmation emails send people back to the app.
+- **Google:** Google sign-in is off until you do all of these:
+  1. In [Google Cloud](https://console.cloud.google.com/apis/credentials), set up the **OAuth consent screen** (External, with your app name and support email). While it is in "Testing", add each tester's Gmail under **Test users**.
+  2. Create an **OAuth client ID** of type **Web application**. Under **Authorized redirect URIs**, add `https://<project-ref>.supabase.co/auth/v1/callback`, the callback URL Supabase shows on its Google provider page.
+  3. In Supabase under **Sign In / Providers → Google**, turn it on and paste in that client's ID and secret. The secret only goes here, never in `.env` or the repo.
 - **Apple:** turn on Apple. On iPhone the app uses Apple's own sign-in sheet, so add the app's bundle ID to **Client IDs**. Expo Go uses `host.exp.Exponent`. Android and web use Apple's web sign-in, which also needs a Services ID and secret key from the [Apple Developer site](https://developer.apple.com/account/resources/identifiers/list/serviceId).
 
 Google and Apple sign-in redirect back into the app, which works best in a development build (`npx expo run:ios` / `run:android`) rather than Expo Go.
@@ -100,3 +103,6 @@ npm test
 - **The app looks like the Expo welcome screen:** you opened an old project in Expo Go. Scan the QR code again.
 - **Phone can't connect:** check you're on the same Wi-Fi, or run `npx expo start --tunnel`.
 - **Something looks stale:** run `npx expo start --clear`.
+- **"Google sign-in isn't turned on yet"** in the app, or `Unsupported provider: provider is not enabled` in a browser: Google is off in Supabase. Follow the Google steps under [Sign-in](#sign-in).
+- **Google says `redirect_uri_mismatch`:** the Google client's authorized redirect URI must be exactly `https://<project-ref>.supabase.co/auth/v1/callback`.
+- **After picking a Google account, the browser lands on another page (like `localhost:3000`) instead of going back to the app:** the app's redirect (`receipts://…` or `exp://…`) is missing from Supabase's **Redirect URLs**, so Supabase falls back to its Site URL.

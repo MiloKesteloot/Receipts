@@ -490,7 +490,10 @@ describe("User Story 1.1: Authentication", () => {
       );
       const result = await signInWithOAuthProvider(client, "google", REDIRECT, openAuthSession);
       assert.equal(result.success, false);
-      if (!result.success) assert.match(result.message, /not enabled/);
+      if (!result.success) {
+        assert.equal(result.error, "PROVIDER_DISABLED");
+        assert.match(result.message, /isn't turned on yet/);
+      }
       assert.deepEqual(opened, []);
     });
 
