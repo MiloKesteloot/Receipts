@@ -73,8 +73,8 @@
     ],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1",
-      "^react-native-reanimated$": "<rootDir>/tests/mocks/reanimated.js",
-      "^react-native-worklets$": "<rootDir>/tests/mocks/worklets.js"
+      "^react-native-reanimated$": "<rootDir>/tests/mocks/reanimated.ts",
+      "^react-native-worklets$": "<rootDir>/tests/mocks/worklets.ts"
     }
   },
   "private": true
