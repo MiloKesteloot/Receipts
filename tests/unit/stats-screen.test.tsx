@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention -- mirrors route/auth mock shapes */
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
