@@ -1,6 +1,4 @@
 /// <reference types="node" />
-// Supabase's API uses snake_case fields (access_token, skip_browser_redirect).
-/* eslint-disable @typescript-eslint/naming-convention */
 import assert from "node:assert/strict";
 import test, { beforeEach, describe } from "node:test";
 import type { Session } from "@supabase/supabase-js";

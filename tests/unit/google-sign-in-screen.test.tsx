@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention -- mirrors route, mock and Supabase export names */
 /**
  * Sign-in screen tests for User Story 4.2 (Sign in with Google): what the user
  * sees after tapping "Continue with Google".
