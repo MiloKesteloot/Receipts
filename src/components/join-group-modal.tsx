@@ -13,6 +13,10 @@ import {
 import { JSX } from "react/jsx-runtime";
 import { joinGroup } from "../lib/groups";
 import { Group } from "../lib/groups.types";
+import { AnimatedView, DIALOG_ENTERING } from "@/components/animated";
+import { CloseIcon } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
 export interface AddGroupModalProps {
   visible: boolean;
@@ -37,6 +41,8 @@ export function AddGroupModal({
   onSuccess,
   renderCreateSection,
 }: AddGroupModalProps): JSX.Element {
+  const palette = useTheme();
+  const styles = useStyles();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -120,61 +126,58 @@ export function AddGroupModal({
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={STYLES.backdrop}
+        style={styles.backdrop}
       >
-        <Pressable style={STYLES.backdropTouch} onPress={handleClose} />
+        <Pressable style={styles.backdropTouch} onPress={handleClose} />
 
-        <View style={STYLES.card}>
-          <View style={STYLES.header}>
-            <View style={STYLES.headerTextGroup}>
-              <Text style={STYLES.title}>Add a group</Text>
+        <AnimatedView entering={DIALOG_ENTERING} style={styles.card}>
+          <View style={styles.header}>
+            <View style={styles.headerTextGroup}>
+              <Text style={styles.title}>Add a group</Text>
             </View>
-            <Pressable
+            <ScalePressable
               onPress={handleClose}
               hitSlop={12}
-              style={({ pressed }) => [
-                STYLES.closeButton,
-                pressed && STYLES.closeButtonPressed,
-              ]}
+              style={styles.closeButton}
             >
-              <Text style={STYLES.closeIcon}>✕</Text>
-            </Pressable>
+              <CloseIcon size={14} color={palette.muted} strokeWidth={2.4} />
+            </ScalePressable>
           </View>
 
           {renderCreateSection ? (
             renderCreateSection()
           ) : (
-            <View style={STYLES.sectionContainer}>
-              <Text style={STYLES.sectionLabel}>Create a new group</Text>
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionLabel}>Create a new group</Text>
               <TextInput
-                style={[STYLES.input, STYLES.disabledInput]}
+                style={[styles.input, styles.disabledInput]}
                 placeholder="Group name"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={palette.placeholder}
                 editable={false}
               />
-              <View style={STYLES.placeholderCreateButton}>
-                <Text style={STYLES.placeholderCreateButtonText}>
+              <View style={styles.placeholderCreateButton}>
+                <Text style={styles.placeholderCreateButtonText}>
                   Create group
                 </Text>
               </View>
             </View>
           )}
 
-          <View style={STYLES.dividerRow}>
-            <View style={STYLES.dividerLine} />
-            <Text style={STYLES.dividerText}>or</Text>
-            <View style={STYLES.dividerLine} />
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
           </View>
 
-          <View style={STYLES.sectionContainer}>
-            <Text style={STYLES.sectionLabel}>Join an existing group</Text>
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionLabel}>Join an existing group</Text>
             <TextInput
               style={[
-                STYLES.input,
-                hasError && STYLES.inputError,
+                styles.input,
+                hasError && styles.inputError,
               ]}
               placeholder="Enter 8-character invite code"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={palette.placeholder}
               value={code}
               onChangeText={handleCodeChange}
               autoCapitalize="characters"
@@ -185,26 +188,22 @@ export function AddGroupModal({
               editable={!loading}
             />
             {hasError && inlineError ? (
-              <Text style={STYLES.inlineErrorText}>{inlineError}</Text>
+              <Text style={styles.inlineErrorText}>{inlineError}</Text>
             ) : null}
 
-            <Pressable
-              style={({ pressed }) => [
-                STYLES.joinButton,
-                pressed && STYLES.joinButtonPressed,
-                loading && STYLES.buttonDisabled,
-              ]}
+            <ScalePressable
+              style={[styles.joinButton, loading && styles.buttonDisabled]}
               onPress={handleJoin}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={palette.onAccent} size="small" />
               ) : (
-                <Text style={STYLES.joinButtonText}>Join group</Text>
+                <Text style={styles.joinButtonText}>Join group</Text>
               )}
-            </Pressable>
+            </ScalePressable>
           </View>
-        </View>
+        </AnimatedView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -218,10 +217,10 @@ export const JoinGroupModal = AddGroupModal;
 /**
  * Modal stylesheet.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    backgroundColor: palette.overlay,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -232,12 +231,12 @@ const STYLES = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 400,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.card,
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000",
+    borderColor: palette.border,
+    shadowColor: palette.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -256,26 +255,17 @@ const STYLES = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#111827",
+    color: palette.text,
     letterSpacing: -0.3,
   },
   closeButton: {
     padding: 6,
     borderRadius: 16,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: palette.surface,
     marginLeft: 8,
   },
   closeButtonPressed: {
     opacity: 0.7,
-  },
-  closeIcon: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "700",
-    textAlign: "center",
-    width: 16,
-    height: 16,
-    lineHeight: 16,
   },
   sectionContainer: {
     width: "100%",
@@ -283,27 +273,27 @@ const STYLES = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#374151",
+    color: palette.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.card,
     borderWidth: 1.5,
-    borderColor: "#D1D5DB",
+    borderColor: palette.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 13,
     fontSize: 15,
-    color: "#111827",
+    color: palette.text,
     marginBottom: 12,
   },
   inputError: {
-    borderColor: "#EF4444",
-    backgroundColor: "#FEF2F2",
+    borderColor: palette.error,
+    backgroundColor: palette.errorSoft,
     marginBottom: 4,
   },
   inlineErrorText: {
-    color: "#EF4444",
+    color: palette.error,
     fontSize: 13,
     fontWeight: "600",
     marginBottom: 10,
@@ -311,14 +301,14 @@ const STYLES = StyleSheet.create({
   },
 
   disabledInput: {
-    backgroundColor: "#F9FAFB",
-    borderColor: "#E5E7EB",
-    color: "#9CA3AF",
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    color: palette.placeholder,
   },
   placeholderCreateButton: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: palette.surface,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: palette.border,
     borderStyle: "dashed",
     borderRadius: 12,
     paddingVertical: 12,
@@ -326,7 +316,7 @@ const STYLES = StyleSheet.create({
     justifyContent: "center",
   },
   placeholderCreateButtonText: {
-    color: "#9CA3AF",
+    color: palette.placeholder,
     fontSize: 14,
     fontWeight: "500",
   },
@@ -338,31 +328,31 @@ const STYLES = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: palette.border,
   },
   dividerText: {
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#9CA3AF",
+    color: palette.placeholder,
     fontWeight: "500",
   },
   joinButton: {
-    backgroundColor: "#4F8A5B",
+    backgroundColor: palette.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#4F8A5B",
+    shadowColor: palette.accent,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 3,
   },
   joinButtonPressed: {
-    backgroundColor: "#42774C",
+    backgroundColor: palette.accent,
   },
   joinButtonText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 15,
     fontWeight: "700",
     letterSpacing: 0.2,
@@ -370,4 +360,4 @@ const STYLES = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-});
+}));

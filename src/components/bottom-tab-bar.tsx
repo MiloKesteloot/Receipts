@@ -1,13 +1,24 @@
 /**
- * Floating bottom navigation bubble matching the cream-and-orange app palette,
- * highlighting the active tab inside a warm orange circle with a label below.
+ * Floating bottom navigation bubble. The active tab sits inside a warm orange
+ * circle that springs between tabs; on iOS 26+ the bubble is Liquid Glass.
  */
 
-import type { ComponentProps, JSX } from "react";
+import {
+  GlassView,
+  isGlassEffectAPIAvailable,
+  isLiquidGlassAvailable,
+} from "expo-glass-effect";
+import type { ComponentProps, JSX, ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type { Tabs } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Circle, Svg } from "react-native-svg";
+import { type LayoutChangeEvent, Platform, Pressable, Text, View } from "react-native";
+import {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
+import { AnimatedView } from "@/components/animated";
 import {
   CreditCardIcon,
   GearIcon,
@@ -16,13 +27,34 @@ import {
   PersonIcon,
   type IconProps,
 } from "@/components/icons";
-import { PALETTE as palette } from "@/lib/palette";
+import { selectHaptic } from "@/lib/haptics";
+import { createThemedStyles, elevation, useIsDark, useTheme } from "@/lib/theme";
 
 /** Bottom clearance (dp) scrollable tab screens should reserve above the bubble. */
 export const BOTTOM_TAB_CLEARANCE = 144;
 
 /** Pixel size of the active tab circle behind each navigation icon. */
 const ACTIVE_CIRCLE_SIZE = 38;
+
+/** Horizontal padding inside the bubble. */
+const BUBBLE_PADDING_X = 8;
+
+/** Vertical padding inside the bubble. */
+const BUBBLE_PADDING_Y = 8;
+
+/** Spring for the sliding active indicator. */
+const INDICATOR_SPRING = { damping: 20, stiffness: 260, mass: 0.7 };
+
+/** Whether this device can draw Liquid Glass (iOS 26+). */
+const GLASS_AVAILABLE =
+  Platform.OS === "ios" &&
+  (() => {
+    try {
+      return isGlassEffectAPIAvailable() && isLiquidGlassAvailable();
+    } catch {
+      return false;
+    }
+  })();
 
 /** Props supplied by Expo Router `<Tabs tabBar={...}>`. */
 type CustomTabBarProps = Parameters<
@@ -42,29 +74,111 @@ const TAB_ITEMS: Record<string, { label: string; icon: TabIconComponent }> = {
 };
 
 /**
+ * Bubble background: Liquid Glass where available, a solid card elsewhere.
+ * @param root0 Props
+ * @param root0.children Tab buttons
+ * @param root0.onLayout Reports the bubble's size
+ * @returns JSX element
+ */
+function Bubble({
+  children,
+  onLayout,
+}: {
+  children: ReactNode;
+  onLayout: (event: LayoutChangeEvent) => void;
+}): JSX.Element {
+  const styles = useStyles();
+  const isDark = useIsDark();
+
+  if (GLASS_AVAILABLE) {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        colorScheme={isDark ? "dark" : "light"}
+        style={[styles.bubble, styles.bubbleGlass]}
+        onLayout={onLayout}
+        accessibilityRole="tablist"
+      >
+        {children}
+      </GlassView>
+    );
+  }
+
+  return (
+    <View
+      style={[styles.bubble, styles.bubbleSolid]}
+      onLayout={onLayout}
+      accessibilityRole="tablist"
+    >
+      {children}
+    </View>
+  );
+}
+
+/**
  * Custom floating bottom navigation bubble for app tabs.
  * @param props Expo Router tab bar state, descriptors, emitter, and navigation helper
  * @returns Floating bottom navigation bubble JSX element
  */
 export function BottomTabBar(props: CustomTabBarProps): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const { state, descriptors, emitter, navigateToTab, insets } = props;
+
+  const visibleRoutes = state.routes.filter((route) => TAB_ITEMS[route.name]);
+  const activeKey = state.routes[state.index]?.key;
+  const activeIndex = Math.max(
+    0,
+    visibleRoutes.findIndex((route) => route.key === activeKey)
+  );
+
+  const [bubbleWidth, setBubbleWidth] = useState(0);
+  const tabWidth =
+    bubbleWidth > 0
+      ? (bubbleWidth - BUBBLE_PADDING_X * 2) / visibleRoutes.length
+      : 0;
+  const targetX =
+    BUBBLE_PADDING_X + activeIndex * tabWidth + (tabWidth - ACTIVE_CIRCLE_SIZE) / 2;
+
+  const indicatorX = useSharedValue(0);
+  const [placed, setPlaced] = useState(false);
+
+  useEffect(() => {
+    if (tabWidth <= 0) return;
+    if (!placed) {
+      // First layout: jump into place without animating from the edge.
+      indicatorX.set(targetX);
+      setPlaced(true);
+    } else {
+      indicatorX.set(withSpring(targetX, INDICATOR_SPRING));
+    }
+  }, [targetX, tabWidth, placed, indicatorX]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorX.get() }],
+  }));
 
   return (
     <View
       pointerEvents="box-none"
-      style={[STYLES.wrapper, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 12) }]}
     >
-      <View style={STYLES.bubble} accessibilityRole="tablist">
-        {state.routes.map((route, index) => {
-          const item = TAB_ITEMS[route.name];
-          if (!item) return null;
+      <Bubble onLayout={(event) => setBubbleWidth(event.nativeEvent.layout.width)}>
+        {placed ? (
+          <AnimatedView
+            pointerEvents="none"
+            style={[styles.indicator, indicatorStyle]}
+          />
+        ) : null}
 
+        {visibleRoutes.map((route, index) => {
+          const item = TAB_ITEMS[route.name];
           const descriptor = descriptors[route.key];
           const options = descriptor?.options;
           const label =
             typeof options?.title === "string" ? options.title : item.label;
-          const isFocused = state.index === index;
-          const iconColor = isFocused ? "#FFFFFF" : palette.muted;
+          const isFocused = index === activeIndex;
+          const iconColor = isFocused ? palette.onAccent : palette.muted;
 
           const onPress = () => {
             const event = emitter.emit({
@@ -73,6 +187,7 @@ export function BottomTabBar(props: CustomTabBarProps): JSX.Element {
               canPreventDefault: true,
             });
             if (!isFocused && !event.defaultPrevented) {
+              selectHaptic();
               navigateToTab(route.key);
             }
           };
@@ -93,34 +208,15 @@ export function BottomTabBar(props: CustomTabBarProps): JSX.Element {
               testID={options?.tabBarButtonTestID}
               onPress={onPress}
               onLongPress={onLongPress}
-              style={({ pressed }) => [
-                STYLES.tab,
-                pressed && STYLES.tabPressed,
-              ]}
+              style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
             >
-              <View style={STYLES.iconCircle}>
-                {isFocused ? (
-                  <View pointerEvents="none" style={STYLES.activeCircleBg}>
-                    <Svg
-                      width={ACTIVE_CIRCLE_SIZE}
-                      height={ACTIVE_CIRCLE_SIZE}
-                      viewBox={`0 0 ${ACTIVE_CIRCLE_SIZE} ${ACTIVE_CIRCLE_SIZE}`}
-                    >
-                      <Circle
-                        cx={ACTIVE_CIRCLE_SIZE / 2}
-                        cy={ACTIVE_CIRCLE_SIZE / 2}
-                        r={ACTIVE_CIRCLE_SIZE / 2}
-                        fill={palette.accent}
-                      />
-                    </Svg>
-                  </View>
-                ) : null}
-                <View style={STYLES.iconForeground}>
-                  <item.icon size={20} color={iconColor} strokeWidth={2} />
-                </View>
+              <View style={styles.iconCircle}>
+                {/* Static circle until the sliding indicator has measured. */}
+                {isFocused && !placed ? <View style={styles.staticCircle} /> : null}
+                <item.icon size={20} color={iconColor} strokeWidth={2} />
               </View>
               <Text
-                style={[STYLES.label, isFocused && STYLES.labelActive]}
+                style={[styles.label, isFocused && styles.labelActive]}
                 numberOfLines={1}
               >
                 {label}
@@ -128,13 +224,13 @@ export function BottomTabBar(props: CustomTabBarProps): JSX.Element {
             </Pressable>
           );
         })}
-      </View>
+      </Bubble>
     </View>
   );
 }
 
 /** Stylesheet for the floating bottom navigation bubble. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: {
     position: "absolute",
     left: 0,
@@ -149,17 +245,38 @@ const STYLES = StyleSheet.create({
     justifyContent: "space-between",
     width: "100%",
     maxWidth: 520,
+    borderRadius: 32,
+    paddingHorizontal: BUBBLE_PADDING_X,
+    paddingVertical: BUBBLE_PADDING_Y,
+  },
+  bubbleGlass: {
+    overflow: "hidden",
+  },
+  bubbleSolid: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 32,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    shadowColor: palette.text,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 6,
+    ...elevation(palette, 2),
+  },
+  indicator: {
+    position: "absolute",
+    left: 0,
+    top: BUBBLE_PADDING_Y + 2,
+    width: ACTIVE_CIRCLE_SIZE,
+    height: ACTIVE_CIRCLE_SIZE,
+    borderRadius: ACTIVE_CIRCLE_SIZE / 2,
+    backgroundColor: palette.accent,
+    shadowColor: palette.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  staticCircle: {
+    position: "absolute",
+    width: ACTIVE_CIRCLE_SIZE,
+    height: ACTIVE_CIRCLE_SIZE,
+    borderRadius: ACTIVE_CIRCLE_SIZE / 2,
+    backgroundColor: palette.accent,
   },
   tab: {
     flex: 1,
@@ -174,24 +291,6 @@ const STYLES = StyleSheet.create({
   iconCircle: {
     width: ACTIVE_CIRCLE_SIZE,
     height: ACTIVE_CIRCLE_SIZE,
-    borderRadius: ACTIVE_CIRCLE_SIZE / 2,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activeCircleBg: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconForeground: {
-    position: "relative",
-    zIndex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -205,4 +304,4 @@ const STYLES = StyleSheet.create({
     color: palette.accent,
     fontWeight: "700",
   },
-});
+}));

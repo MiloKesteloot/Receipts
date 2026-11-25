@@ -1,7 +1,9 @@
 import { JSX } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Text } from "react-native";
 
-import { palette } from "@/lib/palette";
+import { PlusIcon } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
 type Props = { onPress: () => void };
 
@@ -12,35 +14,39 @@ type Props = { onPress: () => void };
  * @returns JSX element
  */
 export function NewGroupButton({ onPress }: Props): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
+
   return (
-    <Pressable
+    <ScalePressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="New group"
-      style={({ pressed }) => [STYLES.button, pressed && STYLES.pressed]}
+      style={styles.button}
     >
-      <Text style={STYLES.plus}>+</Text>
-      <Text style={STYLES.label}>New group</Text>
-    </Pressable>
+      <PlusIcon size={16} color={palette.onAccent} strokeWidth={2.6} />
+      <Text style={styles.label}>New group</Text>
+    </ScalePressable>
   );
 }
 
 /**
  * Stylesheet for NewGroupButton.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   button: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: palette.card,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 12,
+    paddingVertical: 11,
+    backgroundColor: palette.accent,
+    borderRadius: 999,
+    shadowColor: palette.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  pressed: { opacity: 0.7 },
-  plus: { fontSize: 20, lineHeight: 20, color: palette.text },
-  label: { fontSize: 14, fontWeight: "700", color: palette.text },
-});
+  label: { fontSize: 14, fontWeight: "700", color: palette.onAccent },
+}));

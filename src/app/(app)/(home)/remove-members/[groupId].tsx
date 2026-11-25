@@ -2,14 +2,15 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
+import { CheckIcon } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
+import { SkeletonScreen } from "@/components/skeleton";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { confirmAction } from "@/lib/confirm-action";
@@ -20,8 +21,8 @@ import {
   removeGroupMembers,
   type RemoveFailure,
 } from "@/lib/group-members";
-import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 /**
  * Display name for a member, with a fallback when they have none.
@@ -65,6 +66,8 @@ function failureMessage(
  * @returns JSX element
  */
 export default function RemoveMembersScreen(): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { session } = useAuth();
   const currentUserId = session?.user.id;
@@ -125,16 +128,14 @@ export default function RemoveMembersScreen(): JSX.Element {
 
   if (loading && detail === null && !forbidden) {
     return (
-      <View style={STYLES.center}>
-        <ActivityIndicator color={palette.accent} />
-      </View>
+      <SkeletonScreen paddingTop={16} />
     );
   }
 
   if (forbidden) {
     return (
-      <View style={STYLES.center}>
-        <Text style={STYLES.error}>You&apos;re not a member of this group.</Text>
+      <View style={styles.center}>
+        <Text style={styles.error}>You&apos;re not a member of this group.</Text>
         <GoBackButton />
       </View>
     );
@@ -142,19 +143,19 @@ export default function RemoveMembersScreen(): JSX.Element {
 
   if (detail === null) {
     return (
-      <View style={STYLES.center}>
-        <Text style={STYLES.error}>{error ?? "Group not found"}</Text>
-        <Pressable onPress={() => load()} style={STYLES.button}>
-          <Text style={STYLES.buttonText}>Try again</Text>
-        </Pressable>
+      <View style={styles.center}>
+        <Text style={styles.error}>{error ?? "Group not found"}</Text>
+        <ScalePressable onPress={() => load()} style={styles.button}>
+          <Text style={styles.buttonText}>Try again</Text>
+        </ScalePressable>
       </View>
     );
   }
 
   if (!isGroupOwner(detail, currentUserId)) {
     return (
-      <View style={STYLES.center}>
-        <Text style={STYLES.error}>Only the group owner can remove members.</Text>
+      <View style={styles.center}>
+        <Text style={styles.error}>Only the group owner can remove members.</Text>
         <GoBackButton />
       </View>
     );
@@ -236,25 +237,25 @@ export default function RemoveMembersScreen(): JSX.Element {
   };
 
   return (
-    <View style={STYLES.container}>
-      <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
-        <View style={STYLES.header}>
-          <Text style={STYLES.eyebrow}>Remove members</Text>
-          <Text style={STYLES.title}>{group.name}</Text>
-          <Text style={STYLES.subtitle}>Select members to remove</Text>
+    <View style={styles.container}>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Remove members</Text>
+          <Text style={styles.title}>{group.name}</Text>
+          <Text style={styles.subtitle}>Select members to remove</Text>
         </View>
 
-        <View style={STYLES.card}>
+        <View style={styles.card}>
           {members.map((m, i) => {
             const name = nameOf(m.display_name);
             const avatar = (
               <View
                 style={[
-                  STYLES.avatar,
+                  styles.avatar,
                   { backgroundColor: palette.tiles[i % palette.tiles.length] },
                 ]}
               >
-                <Text style={STYLES.avatarText}>
+                <Text style={styles.avatarText}>
                   {name.charAt(0).toUpperCase()}
                 </Text>
               </View>
@@ -264,12 +265,12 @@ export default function RemoveMembersScreen(): JSX.Element {
               return (
                 <View
                   key={m.user_id}
-                  style={[STYLES.memberRow, i > 0 && STYLES.divider]}
+                  style={[styles.memberRow, i > 0 && styles.divider]}
                 >
                   {avatar}
-                  <Text style={STYLES.memberName}>{name}</Text>
-                  <View style={STYLES.pill}>
-                    <Text style={STYLES.pillText}>
+                  <Text style={styles.memberName}>{name}</Text>
+                  <View style={styles.pill}>
+                    <Text style={styles.pillText}>
                       {m.role === "owner" ? "Owner" : "You"}
                     </Text>
                   </View>
@@ -279,53 +280,47 @@ export default function RemoveMembersScreen(): JSX.Element {
 
             const checked = selected.includes(m.user_id);
             return (
-              <Pressable
+              <ScalePressable
                 key={m.user_id}
+                haptic="select"
                 onPress={() => toggle(m.user_id)}
                 disabled={busy}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked, disabled: busy }}
                 accessibilityLabel={`Remove ${name}`}
-                style={({ pressed }) => [
-                  STYLES.memberRow,
-                  i > 0 && STYLES.divider,
-                  pressed && STYLES.pressed,
-                ]}
+                style={[styles.memberRow, i > 0 && styles.divider]}
               >
                 {avatar}
-                <Text style={STYLES.memberName}>{name}</Text>
-                <Text style={STYLES.removeHint}>Remove</Text>
-                <View style={[STYLES.checkbox, checked && STYLES.checkboxOn]}>
-                  {checked ? <Text style={STYLES.checkmark}>✓</Text> : null}
+                <Text style={styles.memberName}>{name}</Text>
+                <Text style={styles.removeHint}>Remove</Text>
+                <View style={[styles.checkbox, checked && styles.checkboxOn]}>
+                  {checked ? <CheckIcon size={14} color={palette.onAccent} strokeWidth={3} /> : null}
                 </View>
-              </Pressable>
+              </ScalePressable>
             );
           })}
           {removableIds.size === 0 ? (
-            <Text style={[STYLES.emptyText, STYLES.divider]}>
+            <Text style={[styles.emptyText, styles.divider]}>
               No one else is in this group yet.
             </Text>
           ) : null}
         </View>
 
         {removableIds.size > 0 ? (
-          <Pressable
+          <ScalePressable
             onPress={handleRemove}
             disabled={!canRemove}
             accessibilityRole="button"
             accessibilityLabel={`Remove ${count} selected`}
             accessibilityState={{ disabled: !canRemove, busy }}
-            style={({ pressed }) => [
-              STYLES.removeButton,
-              (!canRemove || pressed) && STYLES.removeButtonDim,
-            ]}
+            style={[styles.removeButton, !canRemove && styles.removeButtonDim]}
           >
             {busy ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color={palette.onAccent} />
             ) : (
-              <Text style={STYLES.removeButtonText}>Remove ({count})</Text>
+              <Text style={styles.removeButtonText}>Remove ({count})</Text>
             )}
-          </Pressable>
+          </ScalePressable>
         ) : null}
       </ScrollView>
       {toastState ? (
@@ -345,20 +340,21 @@ export default function RemoveMembersScreen(): JSX.Element {
  * @returns JSX element
  */
 function GoBackButton(): JSX.Element {
+  const styles = useStyles();
   return (
-    <Pressable
+    <ScalePressable
       onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-      style={STYLES.button}
+      style={styles.button}
     >
-      <Text style={STYLES.buttonText}>Go back</Text>
-    </Pressable>
+      <Text style={styles.buttonText}>Go back</Text>
+    </ScalePressable>
   );
 }
 
 /**
  * Styles for the member checklist, matching the group screen.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   container: { flex: 1, backgroundColor: palette.bg },
   screen: { backgroundColor: palette.bg },
   content: { padding: 24, paddingBottom: 128, gap: 10 },
@@ -378,14 +374,15 @@ const STYLES = StyleSheet.create({
     textTransform: "uppercase",
     color: palette.accent,
   },
-  title: { fontSize: 30, fontWeight: "800", color: palette.text },
+  title: { fontSize: 34, fontWeight: "800", color: palette.text },
   subtitle: { fontSize: 15, color: palette.muted },
   card: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 14,
+    ...elevation(palette),
   },
   memberRow: {
     flexDirection: "row",
@@ -423,7 +420,6 @@ const STYLES = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxOn: { backgroundColor: palette.error, borderColor: palette.error },
-  checkmark: { color: "white", fontSize: 14, fontWeight: "800" },
   emptyText: { paddingVertical: 16, color: palette.muted, fontSize: 15 },
   removeButton: {
     marginTop: 18,
@@ -434,13 +430,13 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.error,
   },
   removeButtonDim: { opacity: 0.5 },
-  removeButtonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  removeButtonText: { color: palette.onAccent, fontSize: 16, fontWeight: "700" },
   button: {
     backgroundColor: palette.accent,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: palette.onAccent, fontSize: 16, fontWeight: "700" },
   error: { color: palette.error, textAlign: "center" },
-});
+}));

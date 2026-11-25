@@ -2,19 +2,19 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
+import { ChevronRightIcon } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
 import { useAuth } from "@/lib/auth-provider";
 import type { GroupSummary } from "@/lib/group-data";
 import { loadOwnedGroups, type GroupMembersClient } from "@/lib/group-members";
-import { palette } from "@/lib/palette";
 import { supabase } from "@/lib/supabase";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 /**
  * Puts the group the user came from first, when they own it.
@@ -37,6 +37,8 @@ function withCurrentFirst(
  * @returns JSX element
  */
 export default function RemoveMembersPicker(): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const { session } = useAuth();
   const currentUserId = session?.user.id;
@@ -66,18 +68,18 @@ export default function RemoveMembersPicker(): JSX.Element {
 
   if (error) {
     return (
-      <View style={STYLES.center}>
-        <Text style={STYLES.error}>{error}</Text>
-        <Pressable onPress={() => load()} style={STYLES.button}>
-          <Text style={STYLES.buttonText}>Try again</Text>
-        </Pressable>
+      <View style={styles.center}>
+        <Text style={styles.error}>{error}</Text>
+        <ScalePressable onPress={() => load()} style={styles.button}>
+          <Text style={styles.buttonText}>Try again</Text>
+        </ScalePressable>
       </View>
     );
   }
 
   if (groups === null) {
     return (
-      <View style={STYLES.center}>
+      <View style={styles.center}>
         <ActivityIndicator color={palette.accent} />
       </View>
     );
@@ -86,19 +88,19 @@ export default function RemoveMembersPicker(): JSX.Element {
   const ordered = withCurrentFirst(groups, from);
 
   return (
-    <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
-      <View style={STYLES.header}>
-        <Text style={STYLES.eyebrow}>Manage</Text>
-        <Text style={STYLES.title}>Remove members</Text>
-        <Text style={STYLES.subtitle}>Choose a group you own</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={styles.header}>
+        <Text style={styles.eyebrow}>Manage</Text>
+        <Text style={styles.title}>Remove members</Text>
+        <Text style={styles.subtitle}>Choose a group you own</Text>
       </View>
 
-      <View style={STYLES.card}>
+      <View style={styles.card}>
         {ordered.length === 0 ? (
-          <Text style={STYLES.emptyText}>You don&apos;t own any groups yet.</Text>
+          <Text style={styles.emptyText}>You don&apos;t own any groups yet.</Text>
         ) : (
           ordered.map((g, i) => (
-            <Pressable
+            <ScalePressable
               key={g.id}
               onPress={() =>
                 router.push({
@@ -108,32 +110,28 @@ export default function RemoveMembersPicker(): JSX.Element {
               }
               accessibilityRole="button"
               accessibilityLabel={`Manage members of ${g.name}`}
-              style={({ pressed }) => [
-                STYLES.row,
-                i > 0 && STYLES.divider,
-                pressed && STYLES.pressed,
-              ]}
+              style={[styles.row, i > 0 && styles.divider]}
             >
               <View
                 style={[
-                  STYLES.tile,
+                  styles.tile,
                   { backgroundColor: palette.tiles[i % palette.tiles.length] },
                 ]}
               >
-                <Text style={STYLES.tileText}>
+                <Text style={styles.tileText}>
                   {g.name.trim().charAt(0).toUpperCase()}
                 </Text>
               </View>
-              <Text style={STYLES.name} numberOfLines={1}>
+              <Text style={styles.name} numberOfLines={1}>
                 {g.name}
               </Text>
               {g.id === from ? (
-                <View style={STYLES.pill}>
-                  <Text style={STYLES.pillText}>Current</Text>
+                <View style={styles.pill}>
+                  <Text style={styles.pillText}>Current</Text>
                 </View>
               ) : null}
-              <Text style={STYLES.chevron}>›</Text>
-            </Pressable>
+              <ChevronRightIcon size={16} color={palette.muted} strokeWidth={2.4} />
+            </ScalePressable>
           ))
         )}
       </View>
@@ -144,7 +142,7 @@ export default function RemoveMembersPicker(): JSX.Element {
 /**
  * Styles for the Remove members picker, matching the group screen.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.bg },
   content: { padding: 24, paddingBottom: 128, gap: 10 },
   center: {
@@ -163,14 +161,15 @@ const STYLES = StyleSheet.create({
     textTransform: "uppercase",
     color: palette.accent,
   },
-  title: { fontSize: 30, fontWeight: "800", color: palette.text },
+  title: { fontSize: 34, fontWeight: "800", color: palette.text },
   subtitle: { fontSize: 15, color: palette.muted },
   card: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 14,
+    ...elevation(palette),
   },
   row: {
     flexDirection: "row",
@@ -196,7 +195,6 @@ const STYLES = StyleSheet.create({
     borderRadius: 999,
   },
   pillText: { fontSize: 12, fontWeight: "700", color: palette.accent },
-  chevron: { fontSize: 24, color: palette.muted },
   emptyText: { paddingVertical: 16, color: palette.muted, fontSize: 15 },
   button: {
     backgroundColor: palette.accent,
@@ -204,6 +202,6 @@ const STYLES = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: palette.onAccent, fontSize: 16, fontWeight: "700" },
   error: { color: palette.error, textAlign: "center" },
-});
+}));

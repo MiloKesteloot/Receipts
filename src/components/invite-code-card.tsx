@@ -26,9 +26,11 @@
  */
 
 import { JSX, useState } from "react";
-import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Share, Text, View } from "react-native";
 
+import { ScalePressable } from "@/components/scale-pressable";
 import { CreatedGroup } from "@/lib/create-group";
+import { createThemedStyles } from "@/lib/theme";
 
 type Props = {
   group: CreatedGroup;
@@ -61,6 +63,7 @@ export function buildShareMessage(group: CreatedGroup): string {
  * @returns JSX element
  */
 export function InviteCodeCard({ group, onSharingChange }: Props): JSX.Element {
+  const styles = useStyles();
   const [shareError, setShareError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
 
@@ -85,34 +88,31 @@ export function InviteCodeCard({ group, onSharingChange }: Props): JSX.Element {
   }
 
   return (
-    <View style={STYLES.card}>
-      <Text style={STYLES.label}>Invite code</Text>
+    <View style={styles.card}>
+      <Text style={styles.label}>Invite code</Text>
 
       {/* selectable: long-press to copy, without needing a clipboard package */}
       <Text
         selectable
         accessibilityLabel={`Invite code ${group.inviteCode.split("").join(" ")}`}
-        style={STYLES.code}
+        style={styles.code}
       >
         {group.inviteCode}
       </Text>
 
-      <Text style={STYLES.hint}>
+      <Text style={styles.hint}>
         Send this to your roommates so they can join {group.name}.
       </Text>
 
-      <Pressable
+      <ScalePressable
         onPress={handleShare}
         disabled={sharing}
-        style={({ pressed }) => [
-          STYLES.button,
-          (pressed || sharing) && STYLES.pressed,
-        ]}
+        style={[styles.button, sharing && styles.pressed]}
       >
-        <Text style={STYLES.buttonText}>Share code</Text>
-      </Pressable>
+        <Text style={styles.buttonText}>Share code</Text>
+      </ScalePressable>
 
-      {shareError && <Text style={STYLES.error}>{shareError}</Text>}
+      {shareError && <Text style={styles.error}>{shareError}</Text>}
     </View>
   );
 }
@@ -121,10 +121,10 @@ export function InviteCodeCard({ group, onSharingChange }: Props): JSX.Element {
  * Styles for the card. PLACEHOLDER #3: no design system yet.
  * PLACEHOLDER #5: light colors only.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   card: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: palette.border,
     borderRadius: 14,
     padding: 20,
     gap: 12,
@@ -133,7 +133,7 @@ const STYLES = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#374151",
+    color: palette.text,
     textTransform: "uppercase",
     letterSpacing: 0.8,
     opacity: 0.6,
@@ -142,16 +142,16 @@ const STYLES = StyleSheet.create({
     fontSize: 34,
     fontWeight: "700",
     letterSpacing: 4,
-    color: "#111827",
+    color: palette.text,
     fontVariant: ["tabular-nums"],
   },
   hint: {
     fontSize: 15,
-    color: "#6B7280",
+    color: palette.muted,
     textAlign: "center",
   },
   button: {
-    backgroundColor: "#4F8A5B",
+    backgroundColor: palette.accent,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
@@ -161,12 +161,12 @@ const STYLES = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: "white",
+    color: palette.onAccent,
     fontSize: 17,
     fontWeight: "600",
   },
   error: {
-    color: "#D93025",
+    color: palette.error,
     textAlign: "center",
   },
-});
+}));

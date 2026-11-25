@@ -5,16 +5,15 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 
-import { palette } from "@/lib/palette";
+import { CloseIcon } from "@/components/icons";
 import { ReceiptCheckVerdict } from "@/components/receipt-check-verdict";
+import { ScalePressable } from "@/components/scale-pressable";
 import {
   computeTotals,
   createEmptyItem,
@@ -23,6 +22,7 @@ import {
   type ReceiptItemDraft,
 } from "@/lib/receipt-form";
 import type { ReceiptCheck } from "@/lib/scan-receipt";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
 type SaveHandler = (draft: ReceiptDraft) => Promise<string | null>;
 
@@ -76,6 +76,8 @@ export function AddReceiptModal({
   scanConfidence = null,
   scanNotes = [],
 }: AddReceiptModalProps): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const initialItems: ReceiptItemDraft[] =
     initialDraft !== null && initialDraft.items.length > 0
       ? initialDraft.items.map((item, i) => ({ ...item, id: `item-${i + 1}` }))
@@ -152,66 +154,66 @@ export function AddReceiptModal({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
-        style={STYLES.container}
+        style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={STYLES.topBar}>
-          <Text style={STYLES.heading}>
+        <View style={styles.topBar}>
+          <Text style={styles.heading}>
             {title ?? (initialDraft !== null ? "Edit draft" : "New receipt")}
           </Text>
-          <Pressable
+          <ScalePressable
             onPress={handleClose}
             accessibilityRole="button"
             accessibilityLabel="Close"
             hitSlop={8}
           >
-            <Text style={STYLES.closeText}>Close</Text>
-          </Pressable>
+            <Text style={styles.closeText}>Close</Text>
+          </ScalePressable>
         </View>
 
         <ScrollView
-          contentContainerStyle={STYLES.content}
+          contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={STYLES.sectionLabel}>Store</Text>
+          <Text style={styles.sectionLabel}>Store</Text>
           <TextInput
             value={store}
             onChangeText={setStore}
             accessibilityLabel="Store"
             placeholder="Where was this?"
-            placeholderTextColor={palette.muted}
-            style={[STYLES.input, lowConfidence && STYLES.lowConfidenceInput]}
+            placeholderTextColor={palette.placeholder}
+            style={[styles.input, lowConfidence && styles.lowConfidenceInput]}
           />
 
           {lowConfidence ? (
-            <Text style={STYLES.confidenceWarning}>
+            <Text style={styles.confidenceWarning}>
               Some scanned fields may need checking.
             </Text>
           ) : null}
 
           {scanNotes.map((note) => (
-            <Text key={note} style={STYLES.confidenceWarning}>
+            <Text key={note} style={styles.confidenceWarning}>
               {note}
             </Text>
           ))}
 
-          <Text style={STYLES.sectionLabel}>Items</Text>
-          <View style={STYLES.card}>
+          <Text style={styles.sectionLabel}>Items</Text>
+          <View style={styles.card}>
             {items.map((item, i) => (
               <View
                 key={item.id}
-                style={[STYLES.itemRow, i > 0 && STYLES.divider]}
+                style={[styles.itemRow, i > 0 && styles.divider]}
               >
                 <TextInput
                   value={item.name}
                   onChangeText={(text) => updateItem(item.id, "name", text)}
                   accessibilityLabel={`Item ${i + 1} name`}
                   placeholder="Item"
-                  placeholderTextColor={palette.muted}
+                  placeholderTextColor={palette.placeholder}
                   style={[
-                    STYLES.input,
-                    STYLES.itemName,
-                    lowConfidence && STYLES.lowConfidenceInput,
+                    styles.input,
+                    styles.itemName,
+                    lowConfidence && styles.lowConfidenceInput,
                   ]}
                 />
                 <TextInput
@@ -219,90 +221,87 @@ export function AddReceiptModal({
                   onChangeText={(text) => updateItem(item.id, "price", text)}
                   accessibilityLabel={`Item ${i + 1} price`}
                   placeholder="0.00"
-                  placeholderTextColor={palette.muted}
+                  placeholderTextColor={palette.placeholder}
                   keyboardType="decimal-pad"
                   style={[
-                    STYLES.input,
-                    STYLES.itemPrice,
-                    lowConfidence && STYLES.lowConfidenceInput,
+                    styles.input,
+                    styles.itemPrice,
+                    lowConfidence && styles.lowConfidenceInput,
                   ]}
                 />
                 {items.length > 1 ? (
-                  <Pressable
+                  <ScalePressable
                     onPress={() => removeItem(item.id)}
                     accessibilityRole="button"
                     accessibilityLabel={`Remove item ${i + 1}`}
                     hitSlop={8}
                   >
-                    <Text style={STYLES.removeText}>✕</Text>
-                  </Pressable>
+                    <CloseIcon size={16} color={palette.muted} strokeWidth={2.2} />
+                  </ScalePressable>
                 ) : null}
               </View>
             ))}
           </View>
 
-          <Pressable
+          <ScalePressable
             onPress={addItem}
             accessibilityRole="button"
             accessibilityLabel="Add item"
-            style={({ pressed }) => [
-              STYLES.addItemButton,
-              pressed && STYLES.pressed,
-            ]}
+            style={styles.addItemButton}
           >
-            <Text style={STYLES.addItemText}>+ Add item</Text>
-          </Pressable>
+            <Text style={styles.addItemText}>+ Add item</Text>
+          </ScalePressable>
 
-          <Text style={STYLES.sectionLabel}>Tax and tip</Text>
-          <View style={STYLES.taxRow}>
+          <Text style={styles.sectionLabel}>Tax and tip</Text>
+          <View style={styles.taxRow}>
             <TextInput
               value={tax}
               onChangeText={setTax}
               accessibilityLabel="Tax"
               placeholder="Tax"
-              placeholderTextColor={palette.muted}
+              placeholderTextColor={palette.placeholder}
               keyboardType="decimal-pad"
-              style={[STYLES.input, STYLES.taxInput, lowConfidence && STYLES.lowConfidenceInput]}
+              style={[styles.input, styles.taxInput, lowConfidence && styles.lowConfidenceInput]}
             />
             <TextInput
               value={tip}
               onChangeText={setTip}
               accessibilityLabel="Tip"
               placeholder="Tip"
-              placeholderTextColor={palette.muted}
+              placeholderTextColor={palette.placeholder}
               keyboardType="decimal-pad"
-              style={[STYLES.input, STYLES.taxInput, lowConfidence && STYLES.lowConfidenceInput]}
+              style={[styles.input, styles.taxInput, lowConfidence && styles.lowConfidenceInput]}
             />
           </View>
 
           {totals.invalid ? (
-            <Text style={STYLES.error}>
+            <Text style={styles.error}>
               Check amounts: use numbers like 12.50.
             </Text>
           ) : null}
 
-          <View style={STYLES.card}>
-            <View style={STYLES.summaryRow}>
-              <Text style={STYLES.summaryLabel}>Subtotal</Text>
-              <Text style={STYLES.summaryValue}>
+          <View style={styles.card}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryValue}>
                 {formatCents(totals.subtotalCents)}
               </Text>
             </View>
-            <View style={[STYLES.summaryRow, STYLES.divider]}>
-              <Text style={STYLES.summaryLabel}>Tax</Text>
-              <Text style={STYLES.summaryValue}>
+            <View style={[styles.summaryRow, styles.divider]}>
+              <Text style={styles.summaryLabel}>Tax</Text>
+              <Text style={styles.summaryValue}>
                 {formatCents(totals.taxCents)}
               </Text>
             </View>
-            <View style={[STYLES.summaryRow, STYLES.divider]}>
-              <Text style={STYLES.summaryLabel}>Tip</Text>
-              <Text style={STYLES.summaryValue}>
+            <View style={[styles.summaryRow, styles.divider]}>
+              <Text style={styles.summaryLabel}>Tip</Text>
+              <Text style={styles.summaryValue}>
                 {formatCents(totals.tipCents)}
               </Text>
             </View>
-            <View style={[STYLES.summaryRow, STYLES.divider]}>
-              <Text style={STYLES.totalLabel}>Total</Text>
-              <Text style={STYLES.totalValue} testID="receipt-total">
+            <View style={[styles.summaryRow, styles.divider]}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue} testID="receipt-total">
                 {formatCents(totals.totalCents)}
               </Text>
             </View>
@@ -316,57 +315,45 @@ export function AddReceiptModal({
           ) : null}
         </ScrollView>
 
-        <View style={STYLES.footer}>
+        <View style={styles.footer}>
           {confirmingDelete ? (
-            <Text style={STYLES.confirmText}>
+            <Text style={styles.confirmText}>
               Press Confirm delete to discard this receipt.
             </Text>
           ) : null}
-          {formError ? <Text style={STYLES.error}>{formError}</Text> : null}
-          <View style={STYLES.actionRow}>
-            <Pressable
+          {formError ? <Text style={styles.error}>{formError}</Text> : null}
+          <View style={styles.actionRow}>
+            <ScalePressable
               onPress={handleDelete}
               disabled={saving}
               accessibilityRole="button"
               accessibilityLabel={
                 confirmingDelete ? "Confirm delete" : "Delete receipt"
               }
-              style={({ pressed }) => [
-                STYLES.actionButton,
-                STYLES.deleteButton,
-                (pressed || saving) && STYLES.pressed,
-              ]}
+              style={[styles.actionButton, styles.deleteButton, saving && styles.pressed]}
             >
-              <Text style={STYLES.deleteText}>
+              <Text style={styles.deleteText}>
                 {confirmingDelete ? "Confirm delete" : "Delete"}
               </Text>
-            </Pressable>
-            <Pressable
+            </ScalePressable>
+            <ScalePressable
               onPress={() => runSave(onSaveDraft)}
               disabled={saving}
               accessibilityRole="button"
               accessibilityLabel="Save draft"
-              style={({ pressed }) => [
-                STYLES.actionButton,
-                STYLES.draftButton,
-                (pressed || saving) && STYLES.pressed,
-              ]}
+              style={[styles.actionButton, styles.draftButton, saving && styles.pressed]}
             >
-              <Text style={STYLES.draftText}>Save draft</Text>
-            </Pressable>
-            <Pressable
+              <Text style={styles.draftText}>Save draft</Text>
+            </ScalePressable>
+            <ScalePressable
               onPress={() => runSave(onSubmit)}
               disabled={saving}
               accessibilityRole="button"
               accessibilityLabel="Submit receipt"
-              style={({ pressed }) => [
-                STYLES.actionButton,
-                STYLES.submitButton,
-                (pressed || saving) && STYLES.pressed,
-              ]}
+              style={[styles.actionButton, styles.submitButton, saving && styles.pressed]}
             >
-              <Text style={STYLES.submitText}>Submit</Text>
-            </Pressable>
+              <Text style={styles.submitText}>Submit</Text>
+            </ScalePressable>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -377,7 +364,7 @@ export function AddReceiptModal({
 /**
  * Stylesheet for the add-receipt modal.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   container: { flex: 1, backgroundColor: palette.bg },
   topBar: {
     flexDirection: "row",
@@ -387,7 +374,7 @@ const STYLES = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 8,
   },
-  heading: { fontSize: 24, fontWeight: "800", color: palette.text },
+  heading: { fontSize: 22, fontWeight: "800", color: palette.text },
   closeText: { fontSize: 16, fontWeight: "700", color: palette.accent },
   content: { padding: 24, gap: 10 },
   sectionLabel: {
@@ -414,7 +401,7 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 14,
   },
   itemRow: {
@@ -426,7 +413,6 @@ const STYLES = StyleSheet.create({
   divider: { borderTopWidth: 1, borderTopColor: palette.border },
   itemName: { flex: 1 },
   itemPrice: { width: 96, textAlign: "right" },
-  removeText: { fontSize: 18, color: palette.muted, paddingHorizontal: 4 },
   addItemButton: {
     alignSelf: "flex-start",
     backgroundColor: palette.accentSoft,
@@ -471,5 +457,5 @@ const STYLES = StyleSheet.create({
   draftButton: { backgroundColor: palette.accentSoft },
   draftText: { fontSize: 14, fontWeight: "700", color: palette.accent },
   submitButton: { backgroundColor: palette.accent },
-  submitText: { fontSize: 14, fontWeight: "700", color: "white" },
-});
+  submitText: { fontSize: 14, fontWeight: "700", color: palette.onAccent },
+}));

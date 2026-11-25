@@ -6,18 +6,16 @@ import {
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
 
 import { JSX } from "react/jsx-runtime";
 
+import { ScalePressable } from "@/components/scale-pressable";
 import { cleanItemName, formatDollars } from "@/lib/format-scan";
 import { ReceiptCheckVerdict } from "@/components/receipt-check-verdict";
-import { palette } from "@/lib/palette";
 import {
   checkReceipt,
   itemCents,
@@ -25,6 +23,7 @@ import {
 } from "@/lib/scan-receipt";
 import { scanReceiptPhoto } from "@/lib/scan-flow";
 import { supabase } from "@/lib/supabase";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 /**
  * Azure's free tier rejects files over 4 MB.
@@ -35,6 +34,8 @@ import { supabase } from "@/lib/supabase";
  * @returns JSX element
  */
 export default function ScanReceiptScreen(): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const [scan, setScan] = useState<ScannedReceipt | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,43 +66,43 @@ export default function ScanReceiptScreen(): JSX.Element {
   const check = scan ? checkReceipt(scan) : null;
 
   return (
-    <ScrollView style={STYLES.screen} contentContainerStyle={STYLES.content}>
-      <View style={STYLES.header}>
-        <Text style={STYLES.eyebrow}>Test</Text>
-        <Text style={STYLES.title}>Scan a receipt</Text>
-        <Text style={STYLES.subtitle}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={styles.header}>
+        <Text style={styles.eyebrow}>Test</Text>
+        <Text style={styles.title}>Scan a receipt</Text>
+        <Text style={styles.subtitle}>
           Results aren&apos;t saved. They disappear when you leave.
         </Text>
       </View>
 
-      <View style={STYLES.buttonRow}>
-        <Pressable
+      <View style={styles.buttonRow}>
+        <ScalePressable
           onPress={pick}
           disabled={loading}
-          style={[STYLES.button, loading && STYLES.disabled]}
+          style={[styles.button, loading && styles.disabled]}
         >
-          <Text style={STYLES.buttonText}>Choose photo</Text>
-        </Pressable>
+          <Text style={styles.buttonText}>Choose photo</Text>
+        </ScalePressable>
       </View>
 
       {loading ? (
-        <View style={STYLES.loading}>
+        <View style={styles.loading}>
           <ActivityIndicator color={palette.accent} />
-          <Text style={STYLES.subtitle}>Reading receipt…</Text>
+          <Text style={styles.subtitle}>Reading receipt…</Text>
         </View>
       ) : null}
 
-      {error ? <Text style={STYLES.error}>{error}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {scan && check ? (
         <>
-          <Text style={STYLES.sectionLabel}>
+          <Text style={styles.sectionLabel}>
             {scan.merchant ?? "Unknown merchant"}
             {scan.date ? ` · ${scan.date}` : ""}
           </Text>
-          <View style={STYLES.card}>
+          <View style={styles.card}>
             {scan.items.length === 0 ? (
-              <Text style={STYLES.emptyText}>No line items found.</Text>
+              <Text style={styles.emptyText}>No line items found.</Text>
             ) : (
               scan.items.map((it, i) => {
                 const itemAmount =
@@ -109,11 +110,11 @@ export default function ScanReceiptScreen(): JSX.Element {
                     ? null
                     : itemCents(it) / 100;
                 return (
-                  <View key={i} style={[STYLES.row, i > 0 && STYLES.divider]}>
-                    <Text style={STYLES.itemName}>
+                  <View key={i} style={[styles.row, i > 0 && styles.divider]}>
+                    <Text style={styles.itemName}>
                       {cleanItemName(it.description, it.quantity) || "Unnamed item"}
                     </Text>
-                    <Text style={STYLES.amount}>
+                    <Text style={styles.amount}>
                       {formatDollars(itemAmount, scan.currency)}
                     </Text>
                   </View>
@@ -122,7 +123,7 @@ export default function ScanReceiptScreen(): JSX.Element {
             )}
           </View>
 
-          <View style={STYLES.card}>
+          <View style={styles.card}>
             <TotalRow
               label="Items added up"
               value={formatDollars(check.itemsSum, scan.currency)}
@@ -148,7 +149,7 @@ export default function ScanReceiptScreen(): JSX.Element {
           <ReceiptCheckVerdict check={check} currency={scan.currency} />
 
           {scan.confidence !== null ? (
-            <Text style={STYLES.subtitle}>
+            <Text style={styles.subtitle}>
               Azure confidence: {Math.round(scan.confidence * 100)}%
             </Text>
           ) : null}
@@ -175,10 +176,11 @@ function TotalRow({
   value: string;
   bold?: boolean;
 }): JSX.Element {
+  const styles = useStyles();
   return (
-    <View style={STYLES.row}>
-      <Text style={[STYLES.itemName, bold && STYLES.bold]}>{label}</Text>
-      <Text style={[STYLES.amount, bold && STYLES.bold]}>{value}</Text>
+    <View style={styles.row}>
+      <Text style={[styles.itemName, bold && styles.bold]}>{label}</Text>
+      <Text style={[styles.amount, bold && styles.bold]}>{value}</Text>
     </View>
   );
 }
@@ -186,7 +188,7 @@ function TotalRow({
 /**
  * Stylesheet for the Scan Receipt test screen.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.bg },
   content: { padding: 24, paddingBottom: 128, gap: 10 },
   header: { gap: 6, marginBottom: 8 },
@@ -197,7 +199,7 @@ const STYLES = StyleSheet.create({
     textTransform: "uppercase",
     color: palette.accent,
   },
-  title: { fontSize: 30, fontWeight: "800", color: palette.text },
+  title: { fontSize: 34, fontWeight: "800", color: palette.text },
   subtitle: { fontSize: 15, color: palette.muted },
   sectionLabel: {
     fontSize: 12,
@@ -220,7 +222,7 @@ const STYLES = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: palette.onAccent, fontSize: 16, fontWeight: "700" },
   buttonSecondaryText: { color: palette.text },
   disabled: { opacity: 0.5 },
   loading: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -229,8 +231,9 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 14,
+    ...elevation(palette),
   },
   row: {
     flexDirection: "row",
@@ -246,4 +249,4 @@ const STYLES = StyleSheet.create({
   emptyText: { paddingVertical: 16, color: palette.muted, fontSize: 15 },
   verdict: { borderRadius: 12, padding: 14 },
   verdictText: { fontSize: 16, fontWeight: "700", color: palette.text },
-});
+}));

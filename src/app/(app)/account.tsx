@@ -3,9 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -13,16 +11,19 @@ import {
 import { JSX } from "react/jsx-runtime";
 
 import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
+import { ScalePressable } from "@/components/scale-pressable";
 import { Toast, ToastType } from "@/components/toast";
 import { MAX_DISPLAY_NAME_LENGTH } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-provider";
-import { palette } from "@/lib/palette";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 /**
  * The accounts screen: view profile, edit display name, and sign out.
  * @returns JSX element
  */
 export default function AccountScreen(): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const { session, signOut, updateDisplayName } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,43 +118,40 @@ export default function AccountScreen(): JSX.Element {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={STYLES.container}
+      style={styles.container}
     >
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
-        style={STYLES.screen}
-        contentContainerStyle={STYLES.content}
+        style={styles.screen}
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={STYLES.title}>Account</Text>
+        <Text style={styles.title}>Account</Text>
 
-        <View style={STYLES.card}>
-          <View style={STYLES.nameRow}>
-            <View style={STYLES.nameInfo}>
-              <Text style={STYLES.fieldLabel}>Display name</Text>
+        <View style={styles.card}>
+          <View style={styles.nameRow}>
+            <View style={styles.nameInfo}>
+              <Text style={styles.fieldLabel}>Display name</Text>
               <Text
-                style={currentName ? STYLES.name : STYLES.namePlaceholder}
+                style={currentName ? styles.name : styles.namePlaceholder}
               >
                 {currentName || "No display name set"}
               </Text>
             </View>
             {!editingName ? (
-              <Pressable
+              <ScalePressable
                 onPress={handleStartEditName}
                 accessibilityRole="button"
                 accessibilityLabel="Edit display name"
-                style={({ pressed }) => [
-                  STYLES.editNameButton,
-                  pressed && STYLES.pressed,
-                ]}
+                style={styles.editNameButton}
               >
-                <Text style={STYLES.editNameButtonText}>Edit name</Text>
-              </Pressable>
+                <Text style={styles.editNameButtonText}>Edit name</Text>
+              </ScalePressable>
             ) : null}
           </View>
 
           {editingName ? (
-            <View style={STYLES.editForm}>
+            <View style={styles.editForm}>
               <TextInput
                 value={nameDraft}
                 onChangeText={(value) => {
@@ -161,7 +159,7 @@ export default function AccountScreen(): JSX.Element {
                   if (nameError) setNameError(null);
                 }}
                 placeholder="Enter display name"
-                placeholderTextColor={palette.muted}
+                placeholderTextColor={palette.placeholder}
                 maxLength={MAX_DISPLAY_NAME_LENGTH}
                 editable={!savingName}
                 autoCapitalize="words"
@@ -170,27 +168,22 @@ export default function AccountScreen(): JSX.Element {
                   void handleSaveName();
                 }}
                 accessibilityLabel="Display name"
-                style={[STYLES.input, nameError ? STYLES.inputError : null]}
+                style={[styles.input, nameError ? styles.inputError : null]}
               />
               {nameError ? (
-                <Text style={STYLES.nameError}>{nameError}</Text>
+                <Text style={styles.nameError}>{nameError}</Text>
               ) : null}
-              <View style={STYLES.editActionsRow}>
-                <Pressable
+              <View style={styles.editActionsRow}>
+                <ScalePressable
                   onPress={handleCancelEditName}
                   disabled={savingName}
                   accessibilityRole="button"
                   accessibilityLabel="Cancel display name edit"
-                  style={({ pressed }) => [
-                    STYLES.editActionButton,
-                    STYLES.cancelButton,
-                    pressed && !savingName && STYLES.pressed,
-                    savingName && STYLES.disabled,
-                  ]}
+                  style={[styles.editActionButton, styles.cancelButton, savingName && styles.disabled]}
                 >
-                  <Text style={STYLES.cancelButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </ScalePressable>
+                <ScalePressable
                   onPress={() => {
                     void handleSaveName();
                   }}
@@ -198,50 +191,41 @@ export default function AccountScreen(): JSX.Element {
                   accessibilityRole="button"
                   accessibilityLabel="Save display name"
                   accessibilityState={{ disabled: savingName, busy: savingName }}
-                  style={({ pressed }) => [
-                    STYLES.editActionButton,
-                    STYLES.saveButton,
-                    pressed && !savingName && STYLES.pressed,
-                    savingName && STYLES.disabled,
-                  ]}
+                  style={[styles.editActionButton, styles.saveButton, savingName && styles.disabled]}
                 >
                   {savingName ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <ActivityIndicator color={palette.onAccent} size="small" />
                   ) : (
-                    <Text style={STYLES.saveButtonText}>Save</Text>
+                    <Text style={styles.saveButtonText}>Save</Text>
                   )}
-                </Pressable>
+                </ScalePressable>
               </View>
             </View>
           ) : null}
 
-          <View style={STYLES.divider} />
+          <View style={styles.divider} />
 
-          <Text style={STYLES.email}>{user?.email ?? "Signed in"}</Text>
+          <Text style={styles.email}>{user?.email ?? "Signed in"}</Text>
           {provider ? (
-            <Text style={STYLES.muted}>
+            <Text style={styles.muted}>
               Signed in with {providerLabel(provider)}
             </Text>
           ) : null}
         </View>
 
-        {error ? <Text style={STYLES.error}>{error}</Text> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable
+        <ScalePressable
           onPress={handleSignOut}
           disabled={signingOut}
-          style={({ pressed }) => [
-            STYLES.button,
-            pressed && STYLES.pressed,
-            signingOut && STYLES.disabled,
-          ]}
+          style={[styles.button, signingOut && styles.disabled]}
         >
           {signingOut ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color={palette.onAccent} />
           ) : (
-            <Text style={STYLES.buttonText}>Sign out</Text>
+            <Text style={styles.buttonText}>Sign out</Text>
           )}
-        </Pressable>
+        </ScalePressable>
       </ScrollView>
 
       {toast ? (
@@ -270,7 +254,7 @@ function providerLabel(provider: string): string {
 /**
  * Styles for the account screen.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   container: { flex: 1, backgroundColor: palette.bg },
   screen: { flex: 1, backgroundColor: palette.bg },
   content: {
@@ -286,7 +270,8 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
+    ...elevation(palette),
   },
   nameRow: {
     flexDirection: "row",
@@ -305,7 +290,7 @@ const STYLES = StyleSheet.create({
     textTransform: "uppercase",
     color: palette.muted,
   },
-  name: { fontSize: 18, fontWeight: "700", color: palette.text },
+  name: { fontSize: 17, fontWeight: "700", color: palette.text },
   namePlaceholder: {
     fontSize: 16,
     fontWeight: "500",
@@ -375,7 +360,7 @@ const STYLES = StyleSheet.create({
   saveButtonText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.onAccent,
   },
   divider: {
     height: 1,
@@ -393,7 +378,7 @@ const STYLES = StyleSheet.create({
     justifyContent: "center",
     minHeight: 50,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: palette.onAccent, fontSize: 16, fontWeight: "700" },
   pressed: { opacity: 0.75 },
   disabled: { opacity: 0.6 },
-});
+}));

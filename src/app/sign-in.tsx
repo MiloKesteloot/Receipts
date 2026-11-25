@@ -1,12 +1,11 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { maybeCompleteAuthSession } from "expo-web-browser";
 import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -19,10 +18,12 @@ import {
   EyeIcon,
   EyeOffIcon,
   GoogleIcon,
+  ReceiptIcon,
 } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
 import type { AuthResult, EmailMode } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-provider";
-import { palette } from "@/lib/palette";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 // On web, OAuth opens in a popup that lands back here; this closes it.
 maybeCompleteAuthSession();
@@ -35,6 +36,9 @@ type Busy = "email" | "google" | "apple" | null;
  * @returns JSX element
  */
 export default function SignInScreen(): JSX.Element {
+  const passwordStyles = usePasswordStyles();
+  const styles = useStyles();
+  const palette = useTheme();
   const { signInWithEmail, signUpWithEmail, signInWithGoogle, signInWithApple } =
     useAuth();
   const insets = useSafeAreaInsets();
@@ -91,31 +95,39 @@ export default function SignInScreen(): JSX.Element {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={STYLES.container}
+      style={styles.container}
     >
       <ScrollView
         contentContainerStyle={[
-          STYLES.content,
+          styles.content,
           { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={STYLES.header}>
-          <Text style={STYLES.eyebrow}>Receipts</Text>
-          <Text style={STYLES.title}>
+        <View style={styles.header}>
+          <LinearGradient
+            colors={palette.heroGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.brandMark}
+          >
+            <ReceiptIcon size={30} color={palette.onAccent} strokeWidth={1.9} />
+          </LinearGradient>
+          <Text style={styles.eyebrow}>Receipts</Text>
+          <Text style={styles.title}>
             {mode === "sign-in" ? "Welcome back" : "Create your account"}
           </Text>
-          <Text style={STYLES.subtitle}>
+          <Text style={styles.subtitle}>
             Sign in to see your groups and split receipts.
           </Text>
         </View>
 
-        <View style={STYLES.card}>
+        <View style={styles.card}>
           {mode === "sign-up" ? (
             <TextInput
-              style={STYLES.input}
+              style={styles.input}
               placeholder="Display name"
-              placeholderTextColor={palette.muted}
+              placeholderTextColor={palette.placeholder}
               value={displayName}
               onChangeText={setDisplayName}
               autoCapitalize="words"
@@ -125,9 +137,9 @@ export default function SignInScreen(): JSX.Element {
             />
           ) : null}
           <TextInput
-            style={STYLES.input}
+            style={styles.input}
             placeholder="Email"
-            placeholderTextColor={palette.muted}
+            placeholderTextColor={palette.placeholder}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -137,11 +149,11 @@ export default function SignInScreen(): JSX.Element {
             textContentType="emailAddress"
             editable={!disabled}
           />
-          <View style={PASSWORD_STYLES.wrapper}>
+          <View style={passwordStyles.wrapper}>
             <TextInput
-              style={[STYLES.input, PASSWORD_STYLES.input]}
+              style={[styles.input, passwordStyles.input]}
               placeholder="Password"
-              placeholderTextColor={palette.muted}
+              placeholderTextColor={palette.placeholder}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -151,78 +163,66 @@ export default function SignInScreen(): JSX.Element {
               onSubmitEditing={handleEmail}
               editable={!disabled}
             />
-            <Pressable
+            <ScalePressable
               onPress={() => setShowPassword((prev) => !prev)}
               accessibilityRole="button"
               accessibilityLabel={showPassword ? "Hide password" : "Show password"}
               hitSlop={8}
-              style={({ pressed }) => [
-                PASSWORD_STYLES.eyeButton,
-                pressed && PASSWORD_STYLES.eyeButtonPressed,
-              ]}
+              style={passwordStyles.eyeButton}
             >
               {showPassword ? (
                 <EyeOffIcon size={20} color={palette.muted} />
               ) : (
                 <EyeIcon size={20} color={palette.muted} />
               )}
-            </Pressable>
+            </ScalePressable>
           </View>
 
-          {error ? <Text style={STYLES.error}>{error}</Text> : null}
-          {notice ? <Text style={STYLES.notice}>{notice}</Text> : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
-          <Pressable
+          <ScalePressable
             onPress={handleEmail}
             disabled={disabled}
-            style={({ pressed }) => [
-              STYLES.primaryButton,
-              pressed && STYLES.pressed,
-              disabled && STYLES.disabled,
-            ]}
+            style={[styles.primaryButton, disabled && styles.disabled]}
           >
             {busy === "email" ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color={palette.onAccent} />
             ) : (
-              <Text style={STYLES.primaryButtonText}>
+              <Text style={styles.primaryButtonText}>
                 {mode === "sign-in" ? "Sign in" : "Create account"}
               </Text>
             )}
-          </Pressable>
+          </ScalePressable>
 
-          <Pressable onPress={toggleMode} disabled={disabled} hitSlop={8}>
-            <Text style={STYLES.toggle}>
+          <ScalePressable onPress={toggleMode} disabled={disabled} hitSlop={8}>
+            <Text style={styles.toggle}>
               {mode === "sign-in"
                 ? "New here? Create an account"
                 : "Already have an account? Sign in"}
             </Text>
-          </Pressable>
+          </ScalePressable>
         </View>
 
-        <View style={STYLES.dividerRow}>
-          <View style={STYLES.dividerLine} />
-          <Text style={STYLES.dividerText}>or</Text>
-          <View style={STYLES.dividerLine} />
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
         </View>
 
-        <View style={STYLES.socialRow}>
-          <Pressable
+        <View style={styles.socialRow}>
+          <ScalePressable
             onPress={() => run("apple", signInWithApple)}
             disabled={disabled}
-            style={({ pressed }) => [
-              STYLES.socialButton,
-              STYLES.appleButton,
-              pressed && STYLES.pressed,
-              disabled && STYLES.disabled,
-            ]}
+            style={[styles.socialButton, styles.appleButton, disabled && styles.disabled]}
           >
             {busy === "apple" ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color={palette.onAccent} />
             ) : (
               <>
-                <AppleIcon size={18} color="#FFFFFF" />
+                <AppleIcon size={18} color={palette.bg} />
                 <Text
-                  style={[STYLES.socialText, STYLES.appleText]}
+                  style={[styles.socialText, styles.appleText]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
@@ -231,16 +231,12 @@ export default function SignInScreen(): JSX.Element {
                 </Text>
               </>
             )}
-          </Pressable>
+          </ScalePressable>
 
-          <Pressable
+          <ScalePressable
             onPress={() => run("google", signInWithGoogle)}
             disabled={disabled}
-            style={({ pressed }) => [
-              STYLES.socialButton,
-              pressed && STYLES.pressed,
-              disabled && STYLES.disabled,
-            ]}
+            style={[styles.socialButton, disabled && styles.disabled]}
           >
             {busy === "google" ? (
               <ActivityIndicator color={palette.text} />
@@ -248,7 +244,7 @@ export default function SignInScreen(): JSX.Element {
               <>
                 <GoogleIcon size={18} />
                 <Text
-                  style={STYLES.socialText}
+                  style={styles.socialText}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
@@ -257,7 +253,7 @@ export default function SignInScreen(): JSX.Element {
                 </Text>
               </>
             )}
-          </Pressable>
+          </ScalePressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -268,7 +264,7 @@ export default function SignInScreen(): JSX.Element {
  * Styles for the sign-in screen.
  */
 /** Styles for the password field and visibility toggle button. */
-const PASSWORD_STYLES = StyleSheet.create({
+const usePasswordStyles = createThemedStyles(() => ({
   wrapper: {
     position: "relative",
     justifyContent: "center",
@@ -288,13 +284,26 @@ const PASSWORD_STYLES = StyleSheet.create({
   eyeButtonPressed: {
     opacity: 0.6,
   },
-});
+}));
 
 /** Styles for the sign-in screen. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   container: { flex: 1, backgroundColor: palette.bg },
   content: { paddingHorizontal: 24, gap: 14, maxWidth: 480, width: "100%", alignSelf: "center" },
   header: { gap: 6, marginBottom: 10 },
+  brandMark: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+    shadowColor: palette.accent,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 6,
+  },
   eyebrow: {
     fontSize: 12,
     fontWeight: "700",
@@ -302,7 +311,7 @@ const STYLES = StyleSheet.create({
     textTransform: "uppercase",
     color: palette.accent,
   },
-  title: { fontSize: 30, fontWeight: "800", color: palette.text },
+  title: { fontSize: 34, fontWeight: "800", color: palette.text, letterSpacing: -0.8 },
   subtitle: { fontSize: 15, color: palette.muted },
   card: {
     gap: 12,
@@ -310,7 +319,8 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
+    ...elevation(palette),
   },
   input: {
     borderWidth: 1.5,
@@ -326,13 +336,18 @@ const STYLES = StyleSheet.create({
   notice: { color: palette.text, fontSize: 14, fontWeight: "600" },
   primaryButton: {
     backgroundColor: palette.accent,
-    borderRadius: 12,
+    borderRadius: 16,
+    shadowColor: palette.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 4,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 50,
   },
-  primaryButtonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  primaryButtonText: { color: palette.onAccent, fontSize: 16, fontWeight: "700" },
   toggle: {
     color: palette.accent,
     fontSize: 14,
@@ -352,7 +367,7 @@ const STYLES = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     paddingHorizontal: 10,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.card,
@@ -360,9 +375,9 @@ const STYLES = StyleSheet.create({
     justifyContent: "center",
     minHeight: 50,
   },
-  socialText: { fontSize: 13.5, fontWeight: "600", color: palette.text, flexShrink: 1 },
-  appleButton: { backgroundColor: "black", borderColor: "black" },
-  appleText: { color: "white" },
+  socialText: { fontSize: 14, fontWeight: "600", color: palette.text, flexShrink: 1 },
+  appleButton: { backgroundColor: palette.text, borderColor: palette.text },
+  appleText: { color: palette.bg },
   pressed: { opacity: 0.75 },
   disabled: { opacity: 0.6 },
-});
+}));

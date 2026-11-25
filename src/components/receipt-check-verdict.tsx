@@ -1,9 +1,9 @@
 import { JSX } from "react/jsx-runtime";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { formatDollars } from "@/lib/format-scan";
-import { palette } from "@/lib/palette";
 import type { ReceiptCheck } from "@/lib/scan-receipt";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
 type ReceiptCheckVerdictProps = {
   check: ReceiptCheck;
@@ -21,6 +21,8 @@ export function ReceiptCheckVerdict({
   check,
   currency,
 }: ReceiptCheckVerdictProps): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const message =
     check.difference === null
       ? "⚠️ No printed total found"
@@ -32,17 +34,17 @@ export function ReceiptCheckVerdict({
   return (
     <View
       style={[
-        STYLES.verdict,
+        styles.verdict,
         { backgroundColor: check.matches ? palette.tiles[0] : palette.accentSoft },
       ]}
     >
-      <Text style={STYLES.text}>{message}</Text>
+      <Text style={styles.text}>{message}</Text>
     </View>
   );
 }
 
 /** Styles for the verdict banner. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   verdict: { borderRadius: 12, padding: 14 },
   text: { color: palette.text, fontSize: 15, fontWeight: "700" },
-});
+}));

@@ -6,13 +6,12 @@ import {
   ActivityIndicator,
   Image,
   Modal,
-  Pressable,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
+import { ScalePressable } from "@/components/scale-pressable";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
-import { palette } from "@/lib/palette";
 
 type CapturedPhoto = { uri: string; base64: string };
 
@@ -36,6 +35,8 @@ export function ReceiptCameraSheet({
   onClose,
   onPhoto,
 }: ReceiptCameraSheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const palette = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
   const [captured, setCaptured] = useState<CapturedPhoto | null>(null);
@@ -114,80 +115,81 @@ export function ReceiptCameraSheet({
       transparent
       onRequestClose={close}
     >
-      <View style={STYLES.backdrop}>
-        <View style={STYLES.sheet}>
-          <View style={STYLES.topBar}>
-            <Text style={STYLES.heading}>Scan receipt</Text>
-            <Pressable onPress={close} accessibilityLabel="Close camera">
-              <Text style={STYLES.closeText}>Close</Text>
-            </Pressable>
+      <View style={styles.backdrop}>
+        <View style={styles.sheet}>
+          <View style={styles.grabber} />
+          <View style={styles.topBar}>
+            <Text style={styles.heading}>Scan receipt</Text>
+            <ScalePressable onPress={close} accessibilityLabel="Close camera">
+              <Text style={styles.closeText}>Close</Text>
+            </ScalePressable>
           </View>
 
           {captured ? (
             <>
-              <Image source={{ uri: captured.uri }} style={STYLES.preview} />
-              <Text style={STYLES.helpText}>Check that the whole receipt is readable.</Text>
-              {error ? <Text style={STYLES.error}>{error}</Text> : null}
-              <View style={STYLES.actionRow}>
-                <Pressable
+              <Image source={{ uri: captured.uri }} style={styles.preview} />
+              <Text style={styles.helpText}>Check that the whole receipt is readable.</Text>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <View style={styles.actionRow}>
+                <ScalePressable
                   onPress={() => {
                     setCaptured(null);
                     setError(null);
                   }}
                   disabled={busy}
-                  style={[STYLES.secondaryButton, busy && STYLES.disabled]}
+                  style={[styles.secondaryButton, busy && styles.disabled]}
                 >
-                  <Text style={STYLES.secondaryText}>Retake</Text>
-                </Pressable>
-                <Pressable
+                  <Text style={styles.secondaryText}>Retake</Text>
+                </ScalePressable>
+                <ScalePressable
                   onPress={usePhoto}
                   disabled={busy}
-                  style={[STYLES.primaryButton, busy && STYLES.disabled]}
+                  style={[styles.primaryButton, busy && styles.disabled]}
                 >
-                  {busy ? <ActivityIndicator color="white" /> : <Text style={STYLES.primaryText}>Use photo</Text>}
-                </Pressable>
+                  {busy ? <ActivityIndicator color={palette.onAccent} /> : <Text style={styles.primaryText}>Use photo</Text>}
+                </ScalePressable>
               </View>
             </>
           ) : permission === null ? (
-            <View style={STYLES.permissionState}>
+            <View style={styles.permissionState}>
               <ActivityIndicator color={palette.accent} />
-              <Text style={STYLES.helpText}>Checking camera permission…</Text>
+              <Text style={styles.helpText}>Checking camera permission…</Text>
             </View>
           ) : !permission.granted ? (
-            <View style={STYLES.permissionState}>
-              <Text style={STYLES.helpText}>Camera access is needed to scan a receipt.</Text>
+            <View style={styles.permissionState}>
+              <Text style={styles.helpText}>Camera access is needed to scan a receipt.</Text>
               {permission.canAskAgain ? (
-                <Pressable onPress={requestPermission} style={STYLES.primaryButton}>
-                  <Text style={STYLES.primaryText}>Allow camera</Text>
-                </Pressable>
+                <ScalePressable onPress={requestPermission} style={styles.primaryButton}>
+                  <Text style={styles.primaryText}>Allow camera</Text>
+                </ScalePressable>
               ) : (
-                <Text style={STYLES.error}>Enable camera access in Settings, or choose a photo below.</Text>
+                <Text style={styles.error}>Enable camera access in Settings, or choose a photo below.</Text>
               )}
-              <Pressable onPress={pickFromLibrary} style={STYLES.secondaryButton}>
-                <Text style={STYLES.secondaryText}>Choose from library</Text>
-              </Pressable>
+              <ScalePressable onPress={pickFromLibrary} style={styles.secondaryButton}>
+                <Text style={styles.secondaryText}>Choose from library</Text>
+              </ScalePressable>
             </View>
           ) : (
             <>
               <CameraView
                 ref={cameraRef}
-                style={STYLES.preview}
+                style={styles.preview}
                 facing="back"
                 mode="picture"
                 autofocus="on"
                 onCameraReady={() => setReady(true)}
                 onMountError={(event) => setError(event.message)}
               />
-              {error ? <Text style={STYLES.error}>{error}</Text> : null}
-              <Text style={STYLES.helpText}>Fit the receipt inside the frame and keep it steady.</Text>
-              <View style={STYLES.actionRow}>
-                <Pressable onPress={pickFromLibrary} disabled={busy} style={STYLES.secondaryButton}>
-                  <Text style={STYLES.secondaryText}>Library</Text>
-                </Pressable>
-                <Pressable onPress={takePhoto} disabled={!ready || busy} style={[STYLES.shutter, (!ready || busy) && STYLES.disabled]} accessibilityLabel="Take receipt photo">
-                  <View style={STYLES.shutterInner} />
-                </Pressable>
-                <View style={STYLES.sideSpacer} />
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Text style={styles.helpText}>Fit the receipt inside the frame and keep it steady.</Text>
+              <View style={styles.actionRow}>
+                <ScalePressable onPress={pickFromLibrary} disabled={busy} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryText}>Library</Text>
+                </ScalePressable>
+                <ScalePressable onPress={takePhoto} disabled={!ready || busy} style={[styles.shutter, (!ready || busy) && styles.disabled]} accessibilityLabel="Take receipt photo">
+                  <View style={styles.shutterInner} />
+                </ScalePressable>
+                <View style={styles.sideSpacer} />
               </View>
             </>
           )}
@@ -198,11 +200,12 @@ export function ReceiptCameraSheet({
 }
 
 /** Styles for the camera sheet. */
-const STYLES = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
-  sheet: { minHeight: "68%", backgroundColor: palette.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12 },
+const useStyles = createThemedStyles((palette) => ({
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: palette.overlay },
+  sheet: { minHeight: "68%", backgroundColor: palette.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingTop: 10, gap: 12 },
+  grabber: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, backgroundColor: palette.border, marginBottom: 6 },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  heading: { fontSize: 24, fontWeight: "800", color: palette.text },
+  heading: { fontSize: 22, fontWeight: "800", color: palette.text },
   closeText: { fontSize: 16, fontWeight: "700", color: palette.accent },
   preview: { width: "100%", height: 360, borderRadius: 16, backgroundColor: "#111" },
   helpText: { color: palette.muted, fontSize: 14, textAlign: "center" },
@@ -210,11 +213,11 @@ const STYLES = StyleSheet.create({
   permissionState: { alignItems: "center", justifyContent: "center", gap: 16, minHeight: 360 },
   actionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   primaryButton: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, borderRadius: 12, backgroundColor: palette.accent, paddingHorizontal: 16 },
-  primaryText: { color: "white", fontSize: 15, fontWeight: "700" },
+  primaryText: { color: palette.onAccent, fontSize: 15, fontWeight: "700" },
   secondaryButton: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, borderRadius: 12, backgroundColor: palette.accentSoft, paddingHorizontal: 16 },
   secondaryText: { color: palette.accent, fontSize: 15, fontWeight: "700" },
   shutter: { width: 72, height: 72, borderRadius: 36, borderWidth: 5, borderColor: palette.accent, alignItems: "center", justifyContent: "center" },
   shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: palette.accent },
   sideSpacer: { flex: 1 },
   disabled: { opacity: 0.45 },
-});
+}));

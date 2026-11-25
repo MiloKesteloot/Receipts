@@ -1,19 +1,20 @@
 import { useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
+import { AnimatedView, DIALOG_ENTERING } from "@/components/animated";
 import { ClaimantBadge } from "@/components/claimant-badge";
+import { CheckIcon } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
+import { SkeletonScreen } from "@/components/skeleton";
 import { Toast, ToastType } from "@/components/toast";
 import {
   calculateGuestTotalCents,
@@ -21,7 +22,7 @@ import {
   getReceiptByGuestToken,
   type GuestReceiptDetail,
 } from "@/lib/guest-claim";
-import { palette } from "@/lib/palette";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 /** Local browser storage key for persisting the guest's display name. */
 const GUEST_NAME_STORAGE_KEY = "receipts_guest_name";
@@ -70,6 +71,8 @@ function formatCents(cents: number): string {
  * @returns JSX element
  */
 export default function GuestClaimScreen(): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const { token } = useLocalSearchParams<{ token: string }>();
 
   const [guestName, setGuestName] = useState<string>(getStoredGuestName);
@@ -167,22 +170,19 @@ export default function GuestClaimScreen(): JSX.Element {
 
   if (loading) {
     return (
-      <View style={STYLES.centeredScreen}>
-        <ActivityIndicator color={palette.accent} size="large" />
-        <Text style={STYLES.loadingText}>Loading receipt...</Text>
-      </View>
+      <SkeletonScreen paddingTop={64} />
     );
   }
 
   if (errorMessage || !receipt) {
     return (
-      <View style={STYLES.centeredScreen}>
-        <View style={STYLES.errorCard}>
-          <Text style={STYLES.errorTitle}>Claim Link Unavailable</Text>
-          <Text style={STYLES.errorMessage}>
+      <View style={styles.centeredScreen}>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>Claim Link Unavailable</Text>
+          <Text style={styles.errorMessage}>
             {errorMessage || "This claim link is invalid or has expired."}
           </Text>
-          <Text style={STYLES.errorHint}>
+          <Text style={styles.errorHint}>
             Please verify the URL or ask the receipt owner to send an updated link.
           </Text>
         </View>
@@ -198,42 +198,42 @@ export default function GuestClaimScreen(): JSX.Element {
   ).length;
 
   return (
-    <View style={STYLES.pageContainer}>
-      <ScrollView contentContainerStyle={STYLES.scrollContent}>
+    <View style={styles.pageContainer}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Receipt Header Banner */}
-        <View style={STYLES.headerCard}>
-          <View style={STYLES.badgeRow}>
-            <View style={STYLES.publicBadge}>
-              <Text style={STYLES.publicBadgeText}>Guest Claiming</Text>
+        <View style={styles.headerCard}>
+          <View style={styles.badgeRow}>
+            <View style={styles.publicBadge}>
+              <Text style={styles.publicBadgeText}>Guest Claiming</Text>
             </View>
             {guestName ? (
-              <Pressable
+              <ScalePressable
                 onPress={() => {
                   setNameInput(guestName);
                   setNameModalVisible(true);
                 }}
-                style={STYLES.guestUserBadge}
+                style={styles.guestUserBadge}
               >
-                <Text style={STYLES.guestUserBadgeText}>
-                  Claiming as <Text style={STYLES.guestUserBadgeName}>{guestName}</Text> (Edit)
+                <Text style={styles.guestUserBadgeText}>
+                  Claiming as <Text style={styles.guestUserBadgeName}>{guestName}</Text> (Edit)
                 </Text>
-              </Pressable>
+              </ScalePressable>
             ) : null}
           </View>
 
-          <Text style={STYLES.receiptTitle}>{receipt.title}</Text>
-          <Text style={STYLES.receiptTotal}>
+          <Text style={styles.receiptTitle}>{receipt.title}</Text>
+          <Text style={styles.receiptTotal}>
             Total: {formatCents(receipt.total_cents)}
           </Text>
-          <Text style={STYLES.instructionHint}>
+          <Text style={styles.instructionHint}>
             Tap any item below to claim your share. Costs are automatically divided evenly.
           </Text>
         </View>
 
         {/* Line Items List */}
-        <Text style={STYLES.sectionHeader}>Receipt Items ({receipt.items.length})</Text>
+        <Text style={styles.sectionHeader}>Receipt Items ({receipt.items.length})</Text>
 
-        <View style={STYLES.itemsList}>
+        <View style={styles.itemsList}>
           {receipt.items.map((item) => {
             const isClaimedByMe = item.claims.some(
               (c) =>
@@ -243,42 +243,39 @@ export default function GuestClaimScreen(): JSX.Element {
             const isProcessing = togglingItemId === item.id;
 
             return (
-              <Pressable
+              <ScalePressable
                 key={item.id}
+                haptic="select"
                 onPress={() => handleToggleClaim(item.id, isClaimedByMe)}
                 disabled={isProcessing}
-                style={({ pressed }) => [
-                  STYLES.itemCard,
-                  isClaimedByMe && STYLES.itemCardClaimed,
-                  pressed && STYLES.itemCardPressed,
-                ]}
+                style={[styles.itemCard, isClaimedByMe && styles.itemCardClaimed]}
               >
-                <View style={STYLES.itemCheckbox}>
+                <View style={styles.itemCheckbox}>
                   <View
                     style={[
-                      STYLES.checkCircle,
-                      isClaimedByMe && STYLES.checkCircleActive,
+                      styles.checkCircle,
+                      isClaimedByMe && styles.checkCircleActive,
                     ]}
                   >
                     {isClaimedByMe ? (
-                      <Text style={STYLES.checkmarkText}>✓</Text>
+                      <CheckIcon size={14} color={palette.onAccent} strokeWidth={3} />
                     ) : null}
                   </View>
                 </View>
 
-                <View style={STYLES.itemDetails}>
-                  <View style={STYLES.itemNameRow}>
+                <View style={styles.itemDetails}>
+                  <View style={styles.itemNameRow}>
                     <Text
                       style={[
-                        STYLES.itemName,
-                        isClaimedByMe && STYLES.itemNameClaimed,
+                        styles.itemName,
+                        isClaimedByMe && styles.itemNameClaimed,
                       ]}
                     >
                       {item.name}
                     </Text>
                     {item.is_shared ? (
-                      <View style={STYLES.sharedChip}>
-                        <Text style={STYLES.sharedChipText}>
+                      <View style={styles.sharedChip}>
+                        <Text style={styles.sharedChipText}>
                           Shared ({item.claims.length})
                         </Text>
                       </View>
@@ -286,9 +283,9 @@ export default function GuestClaimScreen(): JSX.Element {
                   </View>
 
                   {/* Claimants List */}
-                  <View style={STYLES.claimantsRow}>
+                  <View style={styles.claimantsRow}>
                     {item.claims.length === 0 ? (
-                      <Text style={STYLES.noClaimsText}>Tap to claim</Text>
+                      <Text style={styles.noClaimsText}>Tap to claim</Text>
                     ) : (
                       item.claims.map((c, i) => {
                         const isYou =
@@ -318,32 +315,32 @@ export default function GuestClaimScreen(): JSX.Element {
                 </View>
 
                 {/* Pricing Info */}
-                <View style={STYLES.itemPriceCol}>
-                  <Text style={STYLES.itemFullPrice}>
+                <View style={styles.itemPriceCol}>
+                  <Text style={styles.itemFullPrice}>
                     {formatCents(item.amount_cents)}
                   </Text>
                   {item.is_shared ? (
-                    <Text style={STYLES.itemPerPersonPrice}>
+                    <Text style={styles.itemPerPersonPrice}>
                       {formatCents(item.per_person_cents)} ea
                     </Text>
                   ) : null}
                 </View>
-              </Pressable>
+              </ScalePressable>
             );
           })}
         </View>
       </ScrollView>
 
       {/* Sticky Bottom Bar Showing Personal Running Total */}
-      <View style={STYLES.bottomBar}>
-        <View style={STYLES.bottomBarContent}>
+      <View style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
           <View>
-            <Text style={STYLES.bottomBarLabel}>Your Running Total</Text>
-            <Text style={STYLES.bottomBarSub}>
+            <Text style={styles.bottomBarLabel}>Your Running Total</Text>
+            <Text style={styles.bottomBarSub}>
               {claimedCount} {claimedCount === 1 ? "item" : "items"} claimed
             </Text>
           </View>
-          <Text style={STYLES.bottomBarAmount}>
+          <Text style={styles.bottomBarAmount}>
             {formatCents(personalTotalCents)}
           </Text>
         </View>
@@ -358,17 +355,17 @@ export default function GuestClaimScreen(): JSX.Element {
           if (guestName) setNameModalVisible(false);
         }}
       >
-        <View style={STYLES.modalBackdrop}>
-          <View style={STYLES.modalCard}>
-            <Text style={STYLES.modalTitle}>Welcome to Receipts</Text>
-            <Text style={STYLES.modalSubtitle}>
+        <View style={styles.modalBackdrop}>
+          <AnimatedView entering={DIALOG_ENTERING} style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Welcome to Receipts</Text>
+            <Text style={styles.modalSubtitle}>
               Please enter your name so others know what you&apos;re claiming.
             </Text>
 
             <TextInput
-              style={[STYLES.modalInput, Boolean(nameError) && STYLES.modalInputError]}
+              style={[styles.modalInput, Boolean(nameError) && styles.modalInputError]}
               placeholder="Your full name or nickname"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={palette.placeholder}
               value={nameInput}
               onChangeText={(text) => {
                 setNameInput(text);
@@ -380,19 +377,16 @@ export default function GuestClaimScreen(): JSX.Element {
             />
 
             {nameError ? (
-              <Text style={STYLES.modalErrorText}>{nameError}</Text>
+              <Text style={styles.modalErrorText}>{nameError}</Text>
             ) : null}
 
-            <Pressable
+            <ScalePressable
               onPress={handleSaveName}
-              style={({ pressed }) => [
-                STYLES.modalButton,
-                pressed && STYLES.pressed,
-              ]}
+              style={styles.modalButton}
             >
-              <Text style={STYLES.modalButtonText}>Start Claiming</Text>
-            </Pressable>
-          </View>
+              <Text style={styles.modalButtonText}>Start Claiming</Text>
+            </ScalePressable>
+          </AnimatedView>
         </View>
       </Modal>
 
@@ -411,7 +405,7 @@ export default function GuestClaimScreen(): JSX.Element {
 /**
  * Styling for the Guest Claiming Screen.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   pageContainer: {
     flex: 1,
     backgroundColor: palette.bg,
@@ -432,19 +426,16 @@ const STYLES = StyleSheet.create({
     padding: 24,
     gap: 16,
   },
-  loadingText: {
-    fontSize: 16,
-    color: palette.muted,
-  },
   errorCard: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
     alignItems: "center",
     maxWidth: 400,
     gap: 10,
+    ...elevation(palette),
   },
   errorTitle: {
     fontSize: 20,
@@ -468,7 +459,7 @@ const STYLES = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     gap: 8,
-    shadowColor: "#000",
+    shadowColor: palette.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -481,7 +472,7 @@ const STYLES = StyleSheet.create({
     marginBottom: 4,
   },
   publicBadge: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: palette.successSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -489,25 +480,25 @@ const STYLES = StyleSheet.create({
   publicBadgeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#166534",
+    color: palette.success,
     textTransform: "uppercase",
   },
   guestUserBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: palette.surface,
   },
   guestUserBadgeText: {
     fontSize: 12,
-    color: "#4B5563",
+    color: palette.muted,
   },
   guestUserBadgeName: {
     fontWeight: "700",
     color: palette.accent,
   },
   receiptTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "800",
     color: palette.text,
   },
@@ -538,13 +529,14 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1.5,
     borderColor: palette.border,
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 16,
     gap: 12,
+    ...elevation(palette),
   },
   itemCardClaimed: {
     borderColor: palette.accent,
-    backgroundColor: "#F5FBF6",
+    backgroundColor: palette.successSoft,
   },
   itemCardPressed: {
     opacity: 0.8,
@@ -558,18 +550,13 @@ const STYLES = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 2,
-    borderColor: "#D1D5DB",
+    borderColor: palette.border,
     alignItems: "center",
     justifyContent: "center",
   },
   checkCircleActive: {
     backgroundColor: palette.accent,
     borderColor: palette.accent,
-  },
-  checkmarkText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
   },
   itemDetails: {
     flex: 1,
@@ -587,10 +574,10 @@ const STYLES = StyleSheet.create({
     color: palette.text,
   },
   itemNameClaimed: {
-    color: "#166534",
+    color: palette.success,
   },
   sharedChip: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: palette.warningSoft,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
@@ -598,7 +585,7 @@ const STYLES = StyleSheet.create({
   sharedChipText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#92400E",
+    color: palette.warning,
   },
   claimantsRow: {
     flexDirection: "row",
@@ -629,11 +616,12 @@ const STYLES = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#1F2937",
+    backgroundColor: palette.card,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderTopWidth: 1,
-    borderTopColor: "#374151",
+    borderTopColor: palette.border,
+    ...elevation(palette, 2),
     alignItems: "center",
   },
   bottomBarContent: {
@@ -646,20 +634,20 @@ const STYLES = StyleSheet.create({
   bottomBarLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#D1D5DB",
+    color: palette.muted,
   },
   bottomBarSub: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: palette.placeholder,
   },
   bottomBarAmount: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "800",
-    color: "#34D399",
+    color: palette.accent,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: palette.overlay,
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
@@ -671,7 +659,7 @@ const STYLES = StyleSheet.create({
     borderRadius: 18,
     padding: 24,
     gap: 14,
-    shadowColor: "#000",
+    shadowColor: palette.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
@@ -695,7 +683,7 @@ const STYLES = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: palette.text,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.card,
     ...Platform.select({
       web: { outlineStyle: "none" } as object,
     }),
@@ -715,11 +703,11 @@ const STYLES = StyleSheet.create({
     marginTop: 4,
   },
   modalButtonText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 16,
     fontWeight: "700",
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

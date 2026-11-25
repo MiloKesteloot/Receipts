@@ -14,19 +14,19 @@
 import { JSX, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 
+import { ScalePressable } from "@/components/scale-pressable";
 import {
   CreatedGroup,
   createGroup,
   MAX_GROUP_NAME_LENGTH,
   validateGroupName,
 } from "@/lib/create-group";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
 type Props = {
   onCreated?: (group: CreatedGroup) => void;
@@ -47,6 +47,8 @@ export function CreateGroupForm({
   onCreated,
   onBusyChange,
 }: Props): JSX.Element {
+  const palette = useTheme();
+  const styles = useStyles();
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,8 +108,8 @@ export function CreateGroupForm({
   }
 
   return (
-    <View style={STYLES.section}>
-      <Text style={STYLES.sectionLabel}>Create a new group</Text>
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>Create a new group</Text>
 
       <TextInput
         value={name}
@@ -116,34 +118,30 @@ export function CreateGroupForm({
           if (error) setError(null);
         }}
         placeholder="Group name, e.g. Apartment 402"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={palette.placeholder}
         maxLength={MAX_GROUP_NAME_LENGTH}
         editable={!saving}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
-        style={[STYLES.input, error ? STYLES.inputError : null]}
+        style={[styles.input, error ? styles.inputError : null]}
       />
-      <Text style={STYLES.counter}>
+      <Text style={styles.counter}>
         {name.length}/{MAX_GROUP_NAME_LENGTH}
       </Text>
 
-      {error && <Text style={STYLES.error}>{error}</Text>}
+      {error && <Text style={styles.error}>{error}</Text>}
 
-      <Pressable
+      <ScalePressable
         onPress={handleSubmit}
         disabled={!canSubmit}
-        style={({ pressed }) => [
-          STYLES.button,
-          pressed && STYLES.buttonPressed,
-          !canSubmit && STYLES.disabled,
-        ]}
+        style={[styles.button, !canSubmit && styles.disabled]}
       >
         {saving ? (
-          <ActivityIndicator color="#FFFFFF" size="small" />
+          <ActivityIndicator color={palette.onAccent} size="small" />
         ) : (
-          <Text style={STYLES.buttonText}>Create group</Text>
+          <Text style={styles.buttonText}>Create group</Text>
         )}
-      </Pressable>
+      </ScalePressable>
     </View>
   );
 }
@@ -152,7 +150,7 @@ export function CreateGroupForm({
  * Styles for the form. PLACEHOLDER #2: copied from Kellar's modal.
  * PLACEHOLDER #3: light colors only.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   section: {
     width: "100%",
     gap: 8,
@@ -160,56 +158,56 @@ const STYLES = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#374151",
+    color: palette.text,
   },
   demoNote: {
-    color: "#8A5A00",
-    backgroundColor: "#FFF4D6",
+    color: palette.warning,
+    backgroundColor: palette.warningSoft,
     padding: 10,
     borderRadius: 8,
     fontSize: 13,
     overflow: "hidden",
   },
   input: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.card,
     borderWidth: 1.5,
-    borderColor: "#D1D5DB",
+    borderColor: palette.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 13,
     fontSize: 15,
-    color: "#111827",
+    color: palette.text,
   },
   inputError: {
-    borderColor: "#EF4444",
-    backgroundColor: "#FEF2F2",
+    borderColor: palette.error,
+    backgroundColor: palette.errorSoft,
   },
   counter: {
     alignSelf: "flex-end",
     fontSize: 13,
-    color: "#9CA3AF",
+    color: palette.placeholder,
   },
   error: {
-    color: "#EF4444",
+    color: palette.error,
     fontSize: 13,
     fontWeight: "600",
   },
   button: {
-    backgroundColor: "#4F8A5B",
+    backgroundColor: palette.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   buttonPressed: {
-    backgroundColor: "#42774C",
+    backgroundColor: palette.accent,
   },
   buttonText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 15,
     fontWeight: "700",
   },
   disabled: {
     opacity: 0.5,
   },
-});
+}));

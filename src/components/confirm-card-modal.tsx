@@ -1,4 +1,4 @@
-import { JSX } from "react";
+import { JSX, useEffect } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -7,8 +7,11 @@ import {
   Text,
   View,
 } from "react-native";
+import { AnimatedView, DIALOG_ENTERING } from "@/components/animated";
+import { ScalePressable } from "@/components/scale-pressable";
+import { warningHaptic } from "@/lib/haptics";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
-import { PALETTE } from "@/lib/palette";
 
 export interface ConfirmCardViewProps {
   title: string;
@@ -31,6 +34,8 @@ export interface ConfirmCardModalProps extends ConfirmCardViewProps {
  * @returns Rendered confirmation card
  */
 export function ConfirmCardView(props: ConfirmCardViewProps): JSX.Element {
+  const palette = useTheme();
+  const styles = useStyles();
   const {
     title,
     message,
@@ -42,48 +47,43 @@ export function ConfirmCardView(props: ConfirmCardViewProps): JSX.Element {
     onConfirm,
   } = props;
 
-  return (
-    <View style={STYLES.card}>
-      <Text style={STYLES.title}>{title}</Text>
-      <Text style={STYLES.message}>{message}</Text>
+  // A warning buzz when a destructive confirmation appears.
+  useEffect(() => {
+    if (destructive) warningHaptic();
+  }, [destructive]);
 
-      <View style={STYLES.actionsRow}>
-        <Pressable
+  return (
+    <AnimatedView entering={DIALOG_ENTERING} style={styles.card}>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.message}>{message}</Text>
+
+      <View style={styles.actionsRow}>
+        <ScalePressable
           onPress={onCancel}
           disabled={busy}
           accessibilityRole="button"
           accessibilityLabel={cancelLabel}
-          style={({ pressed }) => [
-            STYLES.button,
-            STYLES.cancelButton,
-            pressed && !busy && STYLES.pressed,
-            busy && STYLES.disabled,
-          ]}
+          style={[styles.button, styles.cancelButton, busy && styles.disabled]}
         >
-          <Text style={STYLES.cancelText}>{cancelLabel}</Text>
-        </Pressable>
+          <Text style={styles.cancelText}>{cancelLabel}</Text>
+        </ScalePressable>
 
-        <Pressable
+        <ScalePressable
           onPress={onConfirm}
           disabled={busy}
           accessibilityRole="button"
           accessibilityLabel={confirmLabel}
           accessibilityState={{ disabled: busy, busy }}
-          style={({ pressed }) => [
-            STYLES.button,
-            destructive ? STYLES.destructiveButton : STYLES.primaryButton,
-            pressed && !busy && STYLES.pressed,
-            busy && STYLES.disabled,
-          ]}
+          style={[styles.button, destructive ? styles.destructiveButton : styles.primaryButton, busy && styles.disabled]}
         >
           {busy ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={palette.onAccent} size="small" />
           ) : (
-            <Text style={STYLES.confirmText}>{confirmLabel}</Text>
+            <Text style={styles.confirmText}>{confirmLabel}</Text>
           )}
-        </Pressable>
+        </ScalePressable>
       </View>
-    </View>
+    </AnimatedView>
   );
 }
 
@@ -93,6 +93,7 @@ export function ConfirmCardView(props: ConfirmCardViewProps): JSX.Element {
  * @returns Rendered confirmation modal
  */
 export function ConfirmCardModal(props: ConfirmCardModalProps): JSX.Element {
+  const styles = useStyles();
   const {
     visible,
     title,
@@ -112,9 +113,9 @@ export function ConfirmCardModal(props: ConfirmCardModalProps): JSX.Element {
       animationType="fade"
       onRequestClose={busy ? undefined : onCancel}
     >
-      <View style={STYLES.backdrop}>
+      <View style={styles.backdrop}>
         <Pressable
-          style={STYLES.backdropTouch}
+          style={styles.backdropTouch}
           onPress={busy ? undefined : onCancel}
           accessibilityLabel="Dismiss confirmation dialog"
         />
@@ -134,10 +135,10 @@ export function ConfirmCardModal(props: ConfirmCardModalProps): JSX.Element {
 }
 
 /** Stylesheet for confirmation card and modal overlay. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(31, 42, 36, 0.45)",
+    backgroundColor: palette.overlay,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -148,12 +149,12 @@ const STYLES = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 400,
-    backgroundColor: PALETTE.card,
+    backgroundColor: palette.card,
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: PALETTE.border,
-    shadowColor: "#000000",
+    borderColor: palette.border,
+    shadowColor: palette.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -164,12 +165,12 @@ const STYLES = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "800",
-    color: PALETTE.text,
+    color: palette.text,
   },
   message: {
     fontSize: 15,
     lineHeight: 22,
-    color: PALETTE.muted,
+    color: palette.muted,
   },
   actionsRow: {
     flexDirection: "row",
@@ -184,25 +185,25 @@ const STYLES = StyleSheet.create({
     justifyContent: "center",
   },
   cancelButton: {
-    backgroundColor: PALETTE.bg,
+    backgroundColor: palette.bg,
     borderWidth: 1,
-    borderColor: PALETTE.border,
+    borderColor: palette.border,
   },
   primaryButton: {
-    backgroundColor: PALETTE.accent,
+    backgroundColor: palette.accent,
   },
   destructiveButton: {
-    backgroundColor: PALETTE.error,
+    backgroundColor: palette.error,
   },
   cancelText: {
     fontSize: 15,
     fontWeight: "700",
-    color: PALETTE.text,
+    color: palette.text,
   },
   confirmText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.onAccent,
   },
   pressed: {
     opacity: 0.82,
@@ -210,4 +211,4 @@ const STYLES = StyleSheet.create({
   disabled: {
     opacity: 0.65,
   },
-});
+}));

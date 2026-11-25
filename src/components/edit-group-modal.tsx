@@ -11,9 +11,12 @@ import {
   View,
 } from "react-native";
 
+import { AnimatedView, DIALOG_ENTERING } from "@/components/animated";
 import { ConfirmCardView } from "@/components/confirm-card-modal";
+import { CloseIcon } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
 import { MAX_GROUP_NAME_LENGTH, renameGroup } from "@/lib/groups";
-import { PALETTE } from "@/lib/palette";
+import { createThemedStyles, useTheme } from "@/lib/theme";
 
 export interface EditGroupModalProps {
   visible: boolean;
@@ -33,6 +36,8 @@ export interface EditGroupModalProps {
  * @returns Rendered edit group modal
  */
 export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
+  const palette = useTheme();
+  const styles = useStyles();
   const {
     visible,
     groupId,
@@ -112,10 +117,10 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={STYLES.backdrop}
+        style={styles.backdrop}
       >
         <Pressable
-          style={STYLES.backdropTouch}
+          style={styles.backdropTouch}
           onPress={handleClose}
           accessibilityLabel="Close edit group dialog"
         />
@@ -136,26 +141,23 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
             }}
           />
         ) : (
-          <View style={STYLES.card}>
-            <View style={STYLES.header}>
-              <Text style={STYLES.title}>Edit group</Text>
-              <Pressable
+          <AnimatedView entering={DIALOG_ENTERING} style={styles.card}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Edit group</Text>
+              <ScalePressable
                 onPress={handleClose}
                 disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Close edit group modal"
-                style={({ pressed }) => [
-                  STYLES.closeButton,
-                  pressed && !busy && STYLES.pressed,
-                ]}
+                style={styles.closeButton}
               >
-                <Text style={STYLES.closeIcon}>✕</Text>
-              </Pressable>
+                <CloseIcon size={14} color={palette.muted} strokeWidth={2.4} />
+              </ScalePressable>
             </View>
 
-            <View style={STYLES.fieldHeader}>
-              <Text style={STYLES.label}>Group name</Text>
-              <Text style={STYLES.counter}>
+            <View style={styles.fieldHeader}>
+              <Text style={styles.label}>Group name</Text>
+              <Text style={styles.counter}>
                 {Array.from(name.trim()).length}/{MAX_GROUP_NAME_LENGTH}
               </Text>
             </View>
@@ -167,7 +169,7 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
                 if (error) setError(null);
               }}
               placeholder="Group name"
-              placeholderTextColor={PALETTE.muted}
+              placeholderTextColor={palette.placeholder}
               maxLength={MAX_GROUP_NAME_LENGTH}
               editable={!busy}
               returnKeyType="done"
@@ -175,12 +177,12 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
                 void handleSave();
               }}
               accessibilityLabel="Group name"
-              style={[STYLES.input, error ? STYLES.inputError : null]}
+              style={[styles.input, error ? styles.inputError : null]}
             />
 
-            {error ? <Text style={STYLES.errorText}>{error}</Text> : null}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <Pressable
+            <ScalePressable
               onPress={() => {
                 void handleSave();
               }}
@@ -188,35 +190,27 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
               accessibilityRole="button"
               accessibilityLabel="Save changes"
               accessibilityState={{ disabled: busy, busy: saving }}
-              style={({ pressed }) => [
-                STYLES.saveButton,
-                pressed && !busy && STYLES.pressed,
-                busy && STYLES.disabled,
-              ]}
+              style={[styles.saveButton, busy && styles.disabled]}
             >
               {saving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={palette.onAccent} size="small" />
               ) : (
-                <Text style={STYLES.saveButtonText}>Save changes</Text>
+                <Text style={styles.saveButtonText}>Save changes</Text>
               )}
-            </Pressable>
+            </ScalePressable>
 
-            <View style={STYLES.divider} />
+            <View style={styles.divider} />
 
-            <Pressable
+            <ScalePressable
               onPress={() => setStep("confirmDelete")}
               disabled={busy}
               accessibilityRole="button"
               accessibilityLabel="Delete Group"
-              style={({ pressed }) => [
-                STYLES.deleteButton,
-                pressed && !busy && STYLES.pressed,
-                busy && STYLES.disabled,
-              ]}
+              style={[styles.deleteButton, busy && styles.disabled]}
             >
-              <Text style={STYLES.deleteButtonText}>Delete Group</Text>
-            </Pressable>
-          </View>
+              <Text style={styles.deleteButtonText}>Delete Group</Text>
+            </ScalePressable>
+          </AnimatedView>
         )}
       </KeyboardAvoidingView>
     </Modal>
@@ -224,10 +218,10 @@ export function EditGroupModal(props: EditGroupModalProps): JSX.Element {
 }
 
 /** Stylesheet for the Edit group modal. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(31, 42, 36, 0.45)",
+    backgroundColor: palette.overlay,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -238,12 +232,12 @@ const STYLES = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 400,
-    backgroundColor: PALETTE.card,
+    backgroundColor: palette.card,
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: PALETTE.border,
-    shadowColor: "#000000",
+    borderColor: palette.border,
+    shadowColor: palette.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -259,23 +253,18 @@ const STYLES = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "800",
-    color: PALETTE.text,
+    color: palette.text,
     letterSpacing: -0.3,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: PALETTE.bg,
+    backgroundColor: palette.bg,
     borderWidth: 1,
-    borderColor: PALETTE.border,
+    borderColor: palette.border,
     alignItems: "center",
     justifyContent: "center",
-  },
-  closeIcon: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: PALETTE.muted,
   },
   fieldHeader: {
     flexDirection: "row",
@@ -286,35 +275,35 @@ const STYLES = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: "700",
-    color: PALETTE.muted,
+    color: palette.muted,
   },
   counter: {
     fontSize: 12,
     fontWeight: "600",
-    color: PALETTE.muted,
+    color: palette.muted,
   },
   input: {
-    backgroundColor: PALETTE.bg,
+    backgroundColor: palette.bg,
     borderWidth: 1,
-    borderColor: PALETTE.border,
+    borderColor: palette.border,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 13,
     fontSize: 16,
     fontWeight: "600",
-    color: PALETTE.text,
+    color: palette.text,
   },
   inputError: {
-    borderColor: PALETTE.error,
+    borderColor: palette.error,
   },
   errorText: {
     fontSize: 13,
     fontWeight: "600",
-    color: PALETTE.error,
+    color: palette.error,
     marginTop: 8,
   },
   saveButton: {
-    backgroundColor: PALETTE.accent,
+    backgroundColor: palette.accent,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: "center",
@@ -323,15 +312,15 @@ const STYLES = StyleSheet.create({
   saveButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.onAccent,
   },
   divider: {
     height: 1,
-    backgroundColor: PALETTE.border,
+    backgroundColor: palette.border,
     marginVertical: 20,
   },
   deleteButton: {
-    backgroundColor: PALETTE.error,
+    backgroundColor: palette.error,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: "center",
@@ -339,7 +328,7 @@ const STYLES = StyleSheet.create({
   deleteButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.onAccent,
   },
   pressed: {
     opacity: 0.82,
@@ -347,4 +336,4 @@ const STYLES = StyleSheet.create({
   disabled: {
     opacity: 0.65,
   },
-});
+}));
