@@ -3,7 +3,7 @@ import { hide as hideSplash, preventAutoHideAsync } from "expo-splash-screen";
 import { useEffect } from "react";
 import { JSX } from "react/jsx-runtime";
 
-import { isSignedIn } from "@/lib/auth";
+import { authRouteGuards, isSignedIn } from "@/lib/auth";
 import { AuthProvider, useAuth } from "@/lib/auth-provider";
 import { PALETTE as palette } from "@/lib/palette";
 
@@ -36,14 +36,16 @@ export default function RootLayout(): JSX.Element {
 }
 
 /**
- * Shows the app when signed in and the sign-in screen otherwise. Guards also
- * redirect away from any screen whose guard turns false (e.g. on sign-out).
- * Public screens outside of guards (like guest claiming) are accessible by anyone.
+ * Shows the app when signed in and the sign-in screen otherwise. After a
+ * password reset link is opened, only the new-password screen is shown until
+ * the user saves or cancels (US 4.10). Guards also redirect away from any
+ * screen whose guard turns false (e.g. on sign-out). Public screens outside
+ * of guards (like guest claiming) are accessible by anyone.
  * @returns JSX element
  */
 function RootNavigator(): JSX.Element {
-  const { session, isLoading } = useAuth();
-  const signedIn = isSignedIn(session);
+  const { session, isLoading, isRecoveringPassword } = useAuth();
+  const guards = authRouteGuards(isSignedIn(session), isRecoveringPassword);
 
   useEffect(() => {
     if (!isLoading) hideSplash();
@@ -52,12 +54,16 @@ function RootNavigator(): JSX.Element {
   return (
     <ThemeProvider value={APP_THEME}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={signedIn}>
+        <Stack.Protected guard={guards.app}>
           <Stack.Screen name="(app)" />
         </Stack.Protected>
 
-        <Stack.Protected guard={!signedIn}>
+        <Stack.Protected guard={guards.signIn}>
           <Stack.Screen name="sign-in" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={guards.resetPassword}>
+          <Stack.Screen name="reset-password" />
         </Stack.Protected>
 
         {/* Public route: guest claiming screen does not require authentication */}

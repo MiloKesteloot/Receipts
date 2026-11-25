@@ -1,4 +1,4 @@
-import type { Provider, Session, SupabaseClient } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Provider, Session, SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * The parts of `supabase.auth` this app uses. Kept narrow so tests can pass a fake.
@@ -13,6 +13,7 @@ export type AuthClient = Pick<
   | "exchangeCodeForSession"
   | "setSession"
   | "updateUser"
+  | "resetPasswordForEmail"
   | "signOut"
 >;
 
@@ -166,6 +167,18 @@ export function toAuthFailure(error: unknown): AuthFailure {
         success: false,
         error: "INVALID_PASSWORD",
         message: "Choose a stronger password",
+      };
+    case "same_password":
+      return {
+        success: false,
+        error: "INVALID_PASSWORD",
+        message: "Choose a password different from your old one",
+      };
+    case "over_email_send_rate_limit":
+      return {
+        success: false,
+        error: "AUTH_ERROR",
+        message: "Too many emails sent. Wait a few minutes and try again",
       };
   }
   return {
@@ -530,23 +543,136 @@ export async function signOut(client: AuthClient | null): Promise<AuthResult> {
 }
 
 /**
- * Calls `onChange` with the current session now and whenever it changes
- * (sign-in, sign-out, token refresh).
+ * Shown after a reset email is requested. It never says whether an account
+ * exists, and reminds the user that the PKCE link only works on this device.
+ */
+export const RESET_EMAIL_SENT_MESSAGE =
+  "If there's an account for that email, we sent a link to reset your password. Open it on this device.";
+
+/**
+ * Emails a password reset link (US 4.10). Opening the link signs the user in
+ * for the reset and Supabase reports a `PASSWORD_RECOVERY` event.
  * @param client Supabase auth client
- * @param onChange Receives the latest session
+ * @param email Email address as typed
+ * @param redirectTo Deep link the email link opens; must be allow-listed in Supabase
+ * @returns Result with a check-your-email message
+ */
+export async function requestPasswordReset(
+  client: AuthClient | null,
+  email: string,
+  redirectTo: string
+): Promise<AuthResult> {
+  if (!client) return NOT_CONFIGURED;
+  if (!EMAIL_PATTERN.test(email.trim())) {
+    return {
+      success: false,
+      error: "INVALID_EMAIL",
+      message: "Enter a valid email address",
+    };
+  }
+  try {
+    const { error } = await client.resetPasswordForEmail(email.trim(), { redirectTo });
+    if (error) return toAuthFailure(error);
+    return { success: true, session: null, message: RESET_EMAIL_SENT_MESSAGE };
+  } catch (error) {
+    return toAuthFailure(error);
+  }
+}
+
+/**
+ * Checks a new password and its confirmation before contacting Supabase.
+ * @param password New password as typed
+ * @param confirmation The same password typed again
+ * @returns A failure to show, or null when the input looks valid
+ */
+export function validateNewPassword(password: string, confirmation: string): AuthFailure | null {
+  if (!password) {
+    return { success: false, error: "INVALID_PASSWORD", message: "Enter a new password" };
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return {
+      success: false,
+      error: "INVALID_PASSWORD",
+      message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+    };
+  }
+  if (password !== confirmation) {
+    return { success: false, error: "INVALID_PASSWORD", message: "Passwords don't match" };
+  }
+  return null;
+}
+
+/**
+ * Sets a new password for the signed-in user (after opening a reset link).
+ * @param client Supabase auth client
+ * @param password New password
+ * @param confirmation The same password typed again
+ * @returns Result; success means the new password is saved
+ */
+export async function updatePassword(
+  client: AuthClient | null,
+  password: string,
+  confirmation: string
+): Promise<AuthResult> {
+  if (!client) return NOT_CONFIGURED;
+  const invalid = validateNewPassword(password, confirmation);
+  if (invalid) return invalid;
+  try {
+    const { error } = await client.updateUser({ password });
+    if (error) return toAuthFailure(error);
+    return { success: true, session: null, message: "Password updated" };
+  } catch (error) {
+    return toAuthFailure(error);
+  }
+}
+
+/**
+ * Whether an auth event means a password reset link was just opened.
+ * @param event Supabase auth event
+ * @returns True for `PASSWORD_RECOVERY`
+ */
+export function isPasswordRecovery(event: AuthChangeEvent | null | undefined): boolean {
+  return event === "PASSWORD_RECOVERY";
+}
+
+/** Which top-level routes are open. */
+export type AuthRouteGuards = { app: boolean; signIn: boolean; resetPassword: boolean };
+
+/**
+ * Decides which top-level routes the root layout allows. While a reset link
+ * is being used the user is signed in, but only the new-password screen is
+ * open until they save a password or cancel.
+ * @param signedIn Whether there is a session
+ * @param recoveringPassword Whether a reset link was opened and not finished
+ * @returns Guards for the app, sign-in, and reset-password routes
+ */
+export function authRouteGuards(signedIn: boolean, recoveringPassword: boolean): AuthRouteGuards {
+  return {
+    app: signedIn && !recoveringPassword,
+    signIn: !signedIn,
+    resetPassword: signedIn && recoveringPassword,
+  };
+}
+
+/**
+ * Calls `onChange` with the current session now and whenever it changes
+ * (sign-in, sign-out, token refresh, password recovery).
+ * @param client Supabase auth client
+ * @param onChange Receives the latest session and the Supabase event (none
+ *   when Supabase isn't configured)
  * @returns Function that stops listening
  */
 export function watchSession(
   client: AuthClient | null,
-  onChange: (session: Session | null) => void
+  onChange: (session: Session | null, event?: AuthChangeEvent) => void
 ): () => void {
   if (!client) {
     onChange(null);
     return () => {};
   }
   // Supabase fires INITIAL_SESSION straight away with the stored session.
-  const { data } = client.onAuthStateChange((_event, session) => {
-    onChange(session);
+  const { data } = client.onAuthStateChange((event, session) => {
+    onChange(session, event);
   });
   return () => data.subscription.unsubscribe();
 }

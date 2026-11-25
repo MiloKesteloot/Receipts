@@ -24,6 +24,12 @@ type AuthContextValue = {
   signInWithApple: () => Promise<auth.AuthResult>;
   updateDisplayName: (displayName: string) => Promise<auth.AuthResult>;
   signOut: () => Promise<auth.AuthResult>;
+  // Forgot password (US 4.10). True after a reset link is opened, until the
+  // new password is saved or the reset is cancelled.
+  isRecoveringPassword: boolean;
+  requestPasswordReset: (email: string) => Promise<auth.AuthResult>;
+  updatePassword: (password: string, confirmation: string) => Promise<auth.AuthResult>;
+  cancelPasswordReset: () => Promise<auth.AuthResult>;
 };
 
 /**
@@ -37,8 +43,9 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const CLIENT = SUPABASE?.auth ?? null;
 
 /**
- * Deep link OAuth providers and confirmation emails send users back to. Add it
- * to Supabase → Authentication → URL Configuration → Redirect URLs.
+ * Deep link OAuth providers, confirmation emails and password reset emails
+ * send users back to. Add it to Supabase → Authentication → URL
+ * Configuration → Redirect URLs.
  * @returns e.g. `receipts://sign-in`, or `exp://…/--/sign-in` in Expo Go
  */
 function redirectUrl(): string {
@@ -68,7 +75,16 @@ function requestAppleCredential(): ReturnType<auth.RequestAppleCredential> {
 /**
  * The value AuthProvider shares; actions are bound to the real Supabase client.
  */
-const ACTIONS: Omit<AuthContextValue, "session" | "isLoading" | "updateDisplayName"> = {
+const ACTIONS: Omit<
+  AuthContextValue,
+  | "session"
+  | "isLoading"
+  | "updateDisplayName"
+  | "isRecoveringPassword"
+  | "updatePassword"
+  | "cancelPasswordReset"
+> = {
+  requestPasswordReset: (email) => auth.requestPasswordReset(CLIENT, email, redirectUrl()),
   signInWithEmail: (email, password) => auth.signInWithEmail(CLIENT, email, password),
   signUpWithEmail: (email, password, displayName) =>
     auth.signUpWithEmail(CLIENT, email, password, redirectUrl(), displayName),
@@ -96,12 +112,16 @@ const ACTIONS: Omit<AuthContextValue, "session" | "isLoading" | "updateDisplayNa
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
 
   useEffect(
     () =>
-      auth.watchSession(CLIENT, (next) => {
+      auth.watchSession(CLIENT, (next, event) => {
         setSession(next);
         setIsLoading(false);
+        // Opening a reset link signs the user in for the reset (US 4.10).
+        if (auth.isPasswordRecovery(event)) setIsRecoveringPassword(true);
+        if (!next) setIsRecoveringPassword(false);
       }),
     []
   );
@@ -161,8 +181,43 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     return result;
   }
 
+  /**
+   * Saves the new password from a reset link, then lets the app open.
+   * @param password New password
+   * @param confirmation The same password typed again
+   * @returns Auth result from Supabase
+   */
+  async function updatePassword(
+    password: string,
+    confirmation: string
+  ): Promise<auth.AuthResult> {
+    const result = await auth.updatePassword(CLIENT, password, confirmation);
+    if (result.success) setIsRecoveringPassword(false);
+    return result;
+  }
+
+  /**
+   * Abandons a password reset by signing out of the reset session.
+   * @returns Auth result from signing out
+   */
+  async function cancelPasswordReset(): Promise<auth.AuthResult> {
+    const result = await ACTIONS.signOut();
+    setIsRecoveringPassword(false);
+    return result;
+  }
+
   return (
-    <AuthContext.Provider value={{ session, isLoading, ...ACTIONS, updateDisplayName }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        isLoading,
+        ...ACTIONS,
+        updateDisplayName,
+        isRecoveringPassword,
+        updatePassword,
+        cancelPasswordReset,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
