@@ -6,17 +6,18 @@
  */
 
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
+import { ScalePressable } from "@/components/scale-pressable";
 import type { ToastType } from "@/components/toast";
-import { palette } from "@/lib/palette";
 import {
   cooldownSecondsLeft,
   formatCooldown,
   PAY_ME_COOLDOWN_MS,
   sendPayMe,
 } from "@/lib/pay-me";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 export type PayMeCardProps = {
   receiptId: string;
@@ -56,6 +57,8 @@ export function PayMeCard({
   onMessage,
   onNobodyOwes,
 }: PayMeCardProps): JSX.Element {
+  const palette = useTheme();
+  const styles = useStyles();
   // When the next Pay me is allowed, in ms. 0 means now.
   const [readyAtMs, setReadyAtMs] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -116,9 +119,9 @@ export function PayMeCard({
 
   if (owingCount <= 0) {
     return (
-      <View style={STYLES.card} testID="pay-me-card">
-        <Text style={STYLES.title}>Pay me</Text>
-        <Text style={STYLES.hint}>
+      <View style={styles.card} testID="pay-me-card">
+        <Text style={styles.title}>Pay me</Text>
+        <Text style={styles.hint}>
           Nobody to nudge: everyone left has marked their share paid, or is a guest.
         </Text>
       </View>
@@ -126,53 +129,54 @@ export function PayMeCard({
   }
 
   return (
-    <View style={STYLES.card} testID="pay-me-card">
-      <Text style={STYLES.title}>Pay me</Text>
-      <Text style={STYLES.hint}>
+    <View style={styles.card} testID="pay-me-card">
+      <Text style={styles.title}>Pay me</Text>
+      <Text style={styles.hint}>
         {`${peopleLabel(owingCount)} still ${owingCount === 1 ? "owes" : "owe"} you. Pay me sends them a notification.`}
       </Text>
 
       {secondsLeft > 0 ? (
         <View
-          style={[STYLES.button, STYLES.buttonWaiting]}
+          style={[styles.button, styles.buttonWaiting]}
           testID="pay-me-countdown"
           accessibilityLiveRegion="polite"
         >
-          <Text style={STYLES.waitingText}>{`Pay me again in ${formatCooldown(secondsLeft)}`}</Text>
+          <Text style={styles.waitingText}>{`Pay me again in ${formatCooldown(secondsLeft)}`}</Text>
         </View>
       ) : (
-        <Pressable
+        <ScalePressable
           onPress={() => {
             void handlePress();
           }}
           disabled={sending}
           accessibilityRole="button"
           accessibilityState={{ disabled: sending, busy: sending }}
-          style={({ pressed }) => [STYLES.button, pressed && STYLES.pressed]}
+          style={styles.button}
         >
           {sending ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={palette.onAccent} size="small" />
           ) : (
-            <Text style={STYLES.buttonText}>Pay me</Text>
+            <Text style={styles.buttonText}>Pay me</Text>
           )}
-        </Pressable>
+        </ScalePressable>
       )}
     </View>
   );
 }
 
 /** Styles for the Pay me card. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   card: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 18,
     gap: 12,
+    ...elevation(palette),
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
     color: palette.text,
   },
@@ -191,7 +195,7 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.accentSoft,
   },
   buttonText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 16,
     fontWeight: "700",
   },
@@ -204,4 +208,4 @@ const STYLES = StyleSheet.create({
   pressed: {
     opacity: 0.7,
   },
-});
+}));

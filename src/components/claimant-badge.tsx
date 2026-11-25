@@ -1,12 +1,17 @@
 import type { JSX } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import {
   ClaimantGuestIcon,
   ClaimantVerifiedIcon,
   type IconProps,
 } from "@/components/icons";
-import { PALETTE } from "@/lib/palette";
+import {
+  createThemedStyles,
+  type Palette,
+  useIsDark,
+  useTheme,
+} from "@/lib/theme";
 
 /** Whether a receipt claimant is the current user, a group member, or a guest. */
 export type ClaimantRole = "you" | "member" | "guest";
@@ -16,39 +21,49 @@ export interface ClaimantBadgeProps {
   label: string;
 }
 
-/** Visual styling and accessible role label for each claimant badge type. */
-const ROLE_META: Record<
-  ClaimantRole,
-  {
-    bg: string;
-    border: string;
-    text: string;
-    roleName: string;
-    icon: (props: IconProps) => JSX.Element;
-  }
-> = {
-  you: {
-    bg: PALETTE.accent,
-    border: PALETTE.accent,
-    text: "#FFFFFF",
-    roleName: "You",
-    icon: ClaimantVerifiedIcon,
-  },
-  member: {
-    bg: "#E8F1F8",
-    border: "#BDD5EA",
-    text: "#1E568A",
-    roleName: "Member",
-    icon: ClaimantVerifiedIcon,
-  },
-  guest: {
-    bg: "#FDF2D6",
-    border: "#F2D28B",
-    text: "#8A5300",
-    roleName: "Guest",
-    icon: ClaimantGuestIcon,
-  },
+/** Visual styling and accessible role label for one claimant badge type. */
+type RoleMeta = {
+  bg: string;
+  border: string;
+  text: string;
+  roleName: string;
+  icon: (props: IconProps) => JSX.Element;
 };
+
+/**
+ * Badge colors and role label for each claimant type in the active theme.
+ * @param palette Active palette
+ * @param isDark Whether dark mode is on
+ * @returns Styling keyed by claimant role
+ */
+function roleMeta(
+  palette: Palette,
+  isDark: boolean
+): Record<ClaimantRole, RoleMeta> {
+  return {
+    you: {
+      bg: palette.accent,
+      border: palette.accent,
+      text: palette.onAccent,
+      roleName: "You",
+      icon: ClaimantVerifiedIcon,
+    },
+    member: {
+      bg: isDark ? "#1D2A38" : "#E8F1F8",
+      border: isDark ? "#2E4660" : "#BDD5EA",
+      text: isDark ? "#9CC3EA" : "#1E568A",
+      roleName: "Member",
+      icon: ClaimantVerifiedIcon,
+    },
+    guest: {
+      bg: palette.warningSoft,
+      border: isDark ? "#5A4622" : "#F2D28B",
+      text: palette.warning,
+      roleName: "Guest",
+      icon: ClaimantGuestIcon,
+    },
+  };
+}
 
 /**
  * Renders a color-coded pill badge with a role SVG icon for a receipt claimant.
@@ -56,26 +71,29 @@ const ROLE_META: Record<
  * @returns Rendered claimant pill badge
  */
 export function ClaimantBadge(props: ClaimantBadgeProps): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
+  const isDark = useIsDark();
   const { role, label } = props;
-  const meta = ROLE_META[role];
+  const meta = roleMeta(palette, isDark)[role];
 
   return (
     <View
       testID={`claimant-badge-${role}`}
       accessibilityLabel={`${label} (${meta.roleName})`}
       style={[
-        STYLES.badge,
+        styles.badge,
         { backgroundColor: meta.bg, borderColor: meta.border },
       ]}
     >
       <meta.icon size={13} color={meta.text} strokeWidth={2.2} />
-      <Text style={[STYLES.label, { color: meta.text }]}>{label}</Text>
+      <Text style={[styles.label, { color: meta.text }]}>{label}</Text>
     </View>
   );
 }
 
 /** Stylesheet for claimant pill badges. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles(() => ({
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -89,4 +107,4 @@ const STYLES = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-});
+}));

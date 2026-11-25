@@ -1,12 +1,14 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { JSX } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { FadeInDown } from "react-native-reanimated";
 
+import { AnimatedView } from "@/components/animated";
+import { ChevronRightIcon } from "@/components/icons";
+import { ScalePressable } from "@/components/scale-pressable";
 import type { HomeGroupSummary } from "@/lib/home-overview";
-import { palette } from "@/lib/palette";
 import { formatCents } from "@/lib/receipt-form";
-
-/** Color used when others owe the current user money. */
-const OWED_TO_ME_COLOR = "#1F6E4A";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 type BalanceCardProps = {
   owedToMeCents: number;
@@ -16,7 +18,6 @@ type BalanceCardProps = {
 type BalanceColumnProps = {
   label: string;
   cents: number;
-  positiveColor: string;
   testID: string;
 };
 
@@ -40,25 +41,20 @@ export function formatMemberCount(count: number): string {
  * @param root0 Column props
  * @param root0.label Metric heading
  * @param root0.cents Amount in whole cents
- * @param root0.positiveColor Text color applied when `cents > 0`
  * @param root0.testID Test identifier for amount text
  * @returns JSX element
  */
-function BalanceColumn({
-  label,
-  cents,
-  positiveColor,
-  testID,
-}: BalanceColumnProps): JSX.Element {
+function BalanceColumn({ label, cents, testID }: BalanceColumnProps): JSX.Element {
+  const styles = useStyles();
+
   return (
-    <View style={STYLES.balanceColumn}>
-      <Text style={STYLES.balanceLabel}>{label}</Text>
+    <View style={styles.balanceColumn}>
+      <Text style={styles.balanceLabel}>{label}</Text>
       <Text
         testID={testID}
-        style={[
-          STYLES.balanceAmount,
-          cents > 0 ? { color: positiveColor } : null,
-        ]}
+        style={[styles.balanceAmount, cents === 0 && styles.balanceZero]}
+        adjustsFontSizeToFit
+        numberOfLines={1}
       >
         {formatCents(cents)}
       </Text>
@@ -67,7 +63,8 @@ function BalanceColumn({
 }
 
 /**
- * Summary card showing what the current user is owed and what they owe.
+ * Hero card showing what the current user is owed and what they owe, on a
+ * warm accent gradient.
  * @param root0 Card props
  * @param root0.owedToMeCents Gross cents owed to the current user
  * @param root0.iOweCents Gross cents the current user owes others
@@ -77,22 +74,40 @@ export function HomeBalanceCard({
   owedToMeCents,
   iOweCents,
 }: BalanceCardProps): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
+  const settled = owedToMeCents === 0 && iOweCents === 0;
+
   return (
-    <View testID="balance-card" style={STYLES.balanceCard}>
-      <BalanceColumn
-        label="Owed to me"
-        cents={owedToMeCents}
-        positiveColor={OWED_TO_ME_COLOR}
-        testID="owed-to-me-amount"
-      />
-      <View style={STYLES.divider} />
-      <BalanceColumn
-        label="I owe"
-        cents={iOweCents}
-        positiveColor={palette.accent}
-        testID="i-owe-amount"
-      />
-    </View>
+    <AnimatedView
+      entering={FadeInDown.duration(450).springify().damping(18)}
+      style={styles.balanceShadow}
+    >
+      <LinearGradient
+        testID="balance-card"
+        colors={palette.heroGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.balanceCard}
+      >
+        {/* Soft highlight circles give the gradient some depth. */}
+        <View style={[styles.glow, styles.glowLarge]} />
+        <View style={[styles.glow, styles.glowSmall]} />
+
+        <Text style={styles.balanceEyebrow}>
+          {settled ? "All settled up" : "Your balances"}
+        </Text>
+        <View style={styles.balanceRow}>
+          <BalanceColumn
+            label="Owed to me"
+            cents={owedToMeCents}
+            testID="owed-to-me-amount"
+          />
+          <View style={styles.divider} />
+          <BalanceColumn label="I owe" cents={iOweCents} testID="i-owe-amount" />
+        </View>
+      </LinearGradient>
+    </AnimatedView>
   );
 }
 
@@ -109,104 +124,137 @@ export function HomeGroupCard({
   index,
   onPress,
 }: GroupCardProps): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const latestText = group.latestReceipt
     ? `Latest: ${group.latestReceipt.title} · ${formatCents(group.latestReceipt.totalCents)}`
     : "No receipts yet";
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${group.name}`}
-      style={({ pressed }) => [STYLES.groupCard, pressed && STYLES.pressed]}
+    <AnimatedView
+      entering={FadeInDown.delay(80 + Math.min(index, 8) * 60)
+        .duration(400)
+        .springify()
+        .damping(18)}
     >
-      <View
-        style={[
-          STYLES.tile,
-          { backgroundColor: palette.tiles[index % palette.tiles.length] },
-        ]}
+      <ScalePressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${group.name}`}
+        style={styles.groupCard}
       >
-        <Text style={STYLES.tileText}>
-          {group.name.trim().charAt(0).toUpperCase()}
-        </Text>
-      </View>
+        <View
+          style={[
+            styles.tile,
+            { backgroundColor: palette.tiles[index % palette.tiles.length] },
+          ]}
+        >
+          <Text style={styles.tileText}>
+            {group.name.trim().charAt(0).toUpperCase()}
+          </Text>
+        </View>
 
-      <View style={STYLES.groupBody}>
-        <Text style={STYLES.groupName} numberOfLines={1}>
-          {group.name}
-        </Text>
-        <Text style={STYLES.groupMeta} numberOfLines={1}>
-          {formatMemberCount(group.memberCount)}
-        </Text>
-        <Text style={STYLES.groupReceipt} numberOfLines={1}>
-          {latestText}
-        </Text>
-      </View>
+        <View style={styles.groupBody}>
+          <Text style={styles.groupName} numberOfLines={1}>
+            {group.name}
+          </Text>
+          <Text style={styles.groupMeta} numberOfLines={1}>
+            {formatMemberCount(group.memberCount)}
+          </Text>
+          <Text style={styles.groupReceipt} numberOfLines={1}>
+            {latestText}
+          </Text>
+        </View>
 
-      <Text style={STYLES.chevron}>›</Text>
-    </Pressable>
+        <View style={styles.chevron}>
+          <ChevronRightIcon size={16} color={palette.muted} strokeWidth={2.4} />
+        </View>
+      </ScalePressable>
+    </AnimatedView>
   );
 }
 
 /**
  * Styles for Home overview cards matching the warm cream-and-orange palette.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
+  balanceShadow: {
+    borderRadius: 28,
+    marginBottom: 10,
+    ...elevation(palette, 2),
+    shadowColor: palette.accent,
+  },
   balanceCard: {
+    borderRadius: 28,
+    paddingVertical: 22,
+    paddingHorizontal: 22,
+    gap: 14,
+    overflow: "hidden",
+  },
+  glow: {
+    position: "absolute",
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+  },
+  glowLarge: { width: 220, height: 220, top: -110, right: -60 },
+  glowSmall: { width: 120, height: 120, bottom: -70, left: -30 },
+  balanceEyebrow: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: "rgba(255, 255, 255, 0.8)",
+  },
+  balanceRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: palette.card,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    marginBottom: 8,
   },
   balanceColumn: {
     flex: 1,
     gap: 4,
   },
   balanceLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
-    color: palette.muted,
+    color: "rgba(255, 255, 255, 0.85)",
   },
   balanceAmount: {
-    fontSize: 22,
+    fontSize: 34,
     fontWeight: "800",
-    color: palette.text,
+    color: palette.onAccent,
+    letterSpacing: -0.8,
     fontVariant: ["tabular-nums"],
+  },
+  balanceZero: {
+    color: "rgba(255, 255, 255, 0.7)",
   },
   divider: {
     width: 1,
-    height: 36,
-    backgroundColor: palette.border,
-    marginHorizontal: 16,
+    height: 48,
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    marginHorizontal: 18,
   },
   groupCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    padding: 14,
+    padding: 16,
     backgroundColor: palette.card,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
-  },
-  pressed: {
-    opacity: 0.7,
+    ...elevation(palette),
   },
   tile: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 50,
+    height: 50,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   tileText: {
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
     color: palette.text,
   },
   groupBody: {
@@ -217,6 +265,7 @@ const STYLES = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     color: palette.text,
+    letterSpacing: -0.2,
   },
   groupMeta: {
     fontSize: 13,
@@ -228,8 +277,11 @@ const STYLES = StyleSheet.create({
     color: palette.muted,
   },
   chevron: {
-    fontSize: 26,
-    color: palette.muted,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.surface,
   },
-});
-
+}));

@@ -1,11 +1,8 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
-  Pressable,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -13,12 +10,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BOTTOM_TAB_CLEARANCE } from "@/components/bottom-tab-bar";
 import { CreateGroupForm } from "@/components/create-group-form";
+import { EmptyState } from "@/components/empty-state";
 import {
   HomeBalanceCard,
   HomeGroupCard,
 } from "@/components/home-overview-cards";
 import { JoinGroupModal } from "@/components/join-group-modal";
+import { UsersIcon } from "@/components/icons";
 import { NewGroupButton } from "@/components/NewGroupButton";
+import { ScalePressable } from "@/components/scale-pressable";
+import { SkeletonScreen } from "@/components/skeleton";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { type CreatedGroup } from "@/lib/create-group";
@@ -27,9 +28,21 @@ import {
   loadHomeOverview,
   resolveDisplayName,
 } from "@/lib/home-overview";
-import { palette } from "@/lib/palette";
+import { createThemedStyles } from "@/lib/theme";
 
 type GroupSummary = { id: string; name: string };
+
+/**
+ * Today's date as a short eyebrow label, e.g. "Tuesday, Nov 24".
+ * @returns Formatted date
+ */
+function todayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 /**
  * Main Home overview screen displaying personalized greeting, user balances,
@@ -37,6 +50,7 @@ type GroupSummary = { id: string; name: string };
  * @returns JSX element
  */
 export default function Index(): JSX.Element {
+  const styles = useStyles();
   const { session } = useAuth();
   const [overview, setOverview] = useState<HomeOverview | null>(null);
   const [loading, setLoading] = useState(true); // first load only
@@ -159,20 +173,16 @@ export default function Index(): JSX.Element {
   };
 
   if (loading && !overview) {
-    return (
-      <View style={STYLES.center}>
-        <ActivityIndicator color={palette.accent} />
-      </View>
-    );
+    return <SkeletonScreen paddingTop={topPadding} />;
   }
 
   if (error && !overview) {
     return (
-      <View style={STYLES.center}>
-        <Text style={STYLES.error}>{error}</Text>
-        <Pressable onPress={() => load("initial")} style={STYLES.button}>
-          <Text style={STYLES.buttonText}>Try again</Text>
-        </Pressable>
+      <View style={styles.center}>
+        <Text style={styles.error}>{error}</Text>
+        <ScalePressable onPress={() => load("initial")} style={styles.button}>
+          <Text style={styles.buttonText}>Try again</Text>
+        </ScalePressable>
       </View>
     );
   }
@@ -188,19 +198,20 @@ export default function Index(): JSX.Element {
   const groups = overview?.groups ?? [];
 
   return (
-    <View style={STYLES.container}>
+    <View style={styles.container}>
       <FlatList
-        style={STYLES.screen}
-        contentContainerStyle={[STYLES.list, { paddingTop: topPadding }]}
+        style={styles.screen}
+        contentContainerStyle={[styles.list, { paddingTop: topPadding }]}
         data={groups}
         keyExtractor={(g) => g.id}
         onRefresh={() => load("refresh")}
         refreshing={refreshing}
         ListHeaderComponent={
-          <View style={STYLES.header}>
-            <Text style={STYLES.title}>{`Hi, ${greetingName}`}</Text>
-            <View style={STYLES.subtitleRow}>
-              <Text style={STYLES.subtitle}>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>{todayLabel()}</Text>
+            <Text style={styles.title}>{`Hi, ${greetingName}`}</Text>
+            <View style={styles.subtitleRow}>
+              <Text style={styles.subtitle}>
                 Here&apos;s where your groups and balances stand.
               </Text>
               <NewGroupButton onPress={handleOpenModal} />
@@ -209,14 +220,23 @@ export default function Index(): JSX.Element {
               owedToMeCents={balances.owedToMeCents}
               iOweCents={balances.iOweCents}
             />
-            {error ? <Text style={STYLES.inlineError}>{error}</Text> : null}
-            <Text style={STYLES.sectionTitle}>Your groups</Text>
+            {error ? <Text style={styles.inlineError}>{error}</Text> : null}
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>Your groups</Text>
+              {groups.length > 0 ? (
+                <Text style={styles.sectionCount}>{groups.length}</Text>
+              ) : null}
+            </View>
           </View>
         }
         ListEmptyComponent={
-          <View style={STYLES.emptyCard}>
-            <Text style={STYLES.emptyText}>You&apos;re not in any groups yet.</Text>
-          </View>
+          <EmptyState
+            icon={UsersIcon}
+            title="You're not in any groups yet."
+            message="Create a group for your next dinner or trip, or join one with an invite code."
+            actionLabel="Get started"
+            onAction={handleOpenModal}
+          />
         }
         renderItem={({ item, index }) => (
           <HomeGroupCard
@@ -260,7 +280,7 @@ export default function Index(): JSX.Element {
 /**
  * Styles for the Index screen.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   container: { flex: 1, backgroundColor: palette.bg },
   screen: { backgroundColor: palette.bg },
   center: {
@@ -271,39 +291,58 @@ const STYLES = StyleSheet.create({
     paddingHorizontal: 24,
     backgroundColor: palette.bg,
   },
-  list: { padding: 24, paddingBottom: BOTTOM_TAB_CLEARANCE, gap: 12 },
-  header: { marginBottom: 4, gap: 10 },
-  title: { fontSize: 30, fontWeight: "800", color: palette.text },
+  list: { padding: 20, paddingBottom: BOTTOM_TAB_CLEARANCE, gap: 12 },
+  header: { marginBottom: 2, gap: 8 },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: palette.accent,
+  },
+  title: {
+    fontSize: 34,
+    fontWeight: "800",
+    color: palette.text,
+    letterSpacing: -0.8,
+  },
   subtitleRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  subtitle: { flex: 1, fontSize: 15, color: palette.muted },
+  subtitle: { flex: 1, fontSize: 15, lineHeight: 21, color: palette.muted },
+  sectionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+  },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "800",
     color: palette.text,
-    marginTop: 4,
+    letterSpacing: -0.3,
+  },
+  sectionCount: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: palette.muted,
+    backgroundColor: palette.surface,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    overflow: "hidden",
   },
   inlineError: { fontSize: 13, color: palette.error },
-  emptyCard: {
-    padding: 24,
-    alignItems: "center",
-    backgroundColor: palette.card,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 16,
-  },
-  emptyText: { color: palette.muted, fontSize: 15 },
   button: {
     backgroundColor: palette.accent,
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 13,
+    borderRadius: 999,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: palette.onAccent, fontSize: 16, fontWeight: "700" },
   error: { color: palette.error, textAlign: "center" },
-});
+}));

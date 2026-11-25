@@ -373,3 +373,105 @@ export function ClaimantGuestIcon(props: IconProps): JSX.Element {
     </Svg>
   );
 }
+
+/**
+ * Renders a simple stroked path icon on the shared 24×24 grid.
+ * @param props Icon sizing and stroke color
+ * @param paths SVG path data, one entry per stroke
+ * @param defaultSize Size used when none is given
+ * @returns SVG icon element
+ */
+function strokeIcon(
+  props: IconProps,
+  paths: string[],
+  defaultSize = 20
+): JSX.Element {
+  const { size = defaultSize, color, strokeWidth = 2 } = props;
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {paths.map((d) => (
+        <Path
+          key={d}
+          d={d}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+    </Svg>
+  );
+}
+
+/**
+ * Renders a right-pointing chevron for list rows that open a detail screen.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function ChevronRightIcon(props: IconProps): JSX.Element {
+  return strokeIcon(props, ["M9 6l6 6-6 6"], 18);
+}
+
+/**
+ * Renders an X for close and remove buttons.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function CloseIcon(props: IconProps): JSX.Element {
+  return strokeIcon(props, ["M6 6l12 12", "M18 6L6 18"], 16);
+}
+
+/**
+ * Renders a checkmark for selected checkboxes.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function CheckIcon(props: IconProps): JSX.Element {
+  return strokeIcon(props, ["M5 12.5l4.5 4.5L19 7.5"], 14);
+}
+
+/**
+ * Renders a plus sign for add and create buttons.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function PlusIcon(props: IconProps): JSX.Element {
+  return strokeIcon(props, ["M12 5v14", "M5 12h14"], 16);
+}
+
+/**
+ * Renders a paper receipt with a zigzag edge for empty states.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function ReceiptIcon(props: IconProps): JSX.Element {
+  return strokeIcon(
+    props,
+    [
+      "M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21V3z",
+      "M9 8h6",
+      "M9 12h6",
+      "M9 16h3",
+    ],
+    28
+  );
+}
+
+/**
+ * Renders two people for group empty states.
+ * @param props Icon sizing and stroke color
+ * @returns SVG icon element
+ */
+export function UsersIcon(props: IconProps): JSX.Element {
+  return strokeIcon(
+    props,
+    [
+      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+      "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+      "M22 21v-2a4 4 0 0 0-3-3.87",
+      "M16 3.13a4 4 0 0 1 0 7.75",
+    ],
+    28
+  );
+}

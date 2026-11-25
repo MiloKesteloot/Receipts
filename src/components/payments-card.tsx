@@ -5,17 +5,18 @@
  * buttons from `shareActions` in `src/lib/settlement.ts`.
  */
 
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
 import { formatSplitCents } from "@/components/final-split-card";
-import { palette } from "@/lib/palette";
+import { ScalePressable } from "@/components/scale-pressable";
 import {
   shareActions,
   type Settlement,
   type SettlementViewer,
   type ShareStatus,
 } from "@/lib/settlement";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 export type PaymentsCardProps = {
   settlement: Settlement;
@@ -75,10 +76,12 @@ export function PaymentsCard({
   onConfirm,
   onNotReceived,
 }: PaymentsCardProps): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   return (
-    <View style={STYLES.card} testID="payments-card">
-      <Text style={STYLES.title}>Payments</Text>
-      <Text style={[STYLES.subtitle, settlement.settled && STYLES.subtitleSettled]}>
+    <View style={styles.card} testID="payments-card">
+      <Text style={styles.title}>Payments</Text>
+      <Text style={[styles.subtitle, settlement.settled && styles.subtitleSettled]}>
         {settlementSummary(settlement)}
       </Text>
 
@@ -92,28 +95,28 @@ export function PaymentsCard({
         return (
           <View
             key={person.userId}
-            style={STYLES.row}
+            style={styles.row}
             testID={`payment-row-${person.userId}`}
             accessibilityLabel={`${name}: ${statusLabel}`}
           >
-            <View style={STYLES.rowTop}>
-              <View style={STYLES.rowMain}>
-                <Text style={STYLES.name}>{name}</Text>
+            <View style={styles.rowTop}>
+              <View style={styles.rowMain}>
+                <Text style={styles.name}>{name}</Text>
                 <Text
                   style={[
-                    STYLES.status,
-                    person.status === "confirmed" && STYLES.statusConfirmed,
-                    person.status === "not_received" && STYLES.statusRejected,
+                    styles.status,
+                    person.status === "confirmed" && styles.statusConfirmed,
+                    person.status === "not_received" && styles.statusRejected,
                   ]}
                 >
                   {statusLabel}
                 </Text>
               </View>
-              <Text style={STYLES.amount}>{formatSplitCents(person.owesCents)}</Text>
+              <Text style={styles.amount}>{formatSplitCents(person.owesCents)}</Text>
             </View>
 
             {hasActions ? (
-              <View style={STYLES.actions}>
+              <View style={styles.actions}>
                 {busy ? <ActivityIndicator color={palette.accent} size="small" /> : null}
                 {actions.notReceived ? (
                   <ActionButton
@@ -162,41 +165,38 @@ function ActionButton({
   disabled: boolean;
   variant?: "primary" | "secondary";
 }): JSX.Element {
+  const styles = useStyles();
   return (
-    <Pressable
+    <ScalePressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
-        STYLES.button,
-        variant === "primary" ? STYLES.buttonPrimary : STYLES.buttonSecondary,
-        disabled && STYLES.buttonDisabled,
-        pressed && !disabled && STYLES.pressed,
-      ]}
+      style={[styles.button, variant === "primary" ? styles.buttonPrimary : styles.buttonSecondary, disabled && styles.buttonDisabled]}
     >
       <Text
-        style={variant === "primary" ? STYLES.buttonPrimaryText : STYLES.buttonSecondaryText}
+        style={variant === "primary" ? styles.buttonPrimaryText : styles.buttonSecondaryText}
       >
         {label}
       </Text>
-    </Pressable>
+    </ScalePressable>
   );
 }
 
 /** Styles for the payments card. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   card: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 18,
     gap: 10,
+    ...elevation(palette),
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
     color: palette.text,
   },
@@ -274,7 +274,7 @@ const STYLES = StyleSheet.create({
     opacity: 0.5,
   },
   buttonPrimaryText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -286,4 +286,4 @@ const STYLES = StyleSheet.create({
   pressed: {
     opacity: 0.75,
   },
-});
+}));

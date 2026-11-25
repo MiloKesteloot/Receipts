@@ -4,11 +4,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   Share,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -22,6 +20,8 @@ import { ConfirmCardModal } from "@/components/confirm-card-modal";
 import { FinalSplitCard } from "@/components/final-split-card";
 import { PayMeCard } from "@/components/pay-me-card";
 import { PaymentsCard } from "@/components/payments-card";
+import { ScalePressable } from "@/components/scale-pressable";
+import { SkeletonScreen } from "@/components/skeleton";
 import { Toast, ToastType } from "@/components/toast";
 import { useAuth } from "@/lib/auth-provider";
 import { isGuestClaimKey, toClaimableItems, type ItemShares } from "@/lib/claims";
@@ -33,13 +33,13 @@ import {
   createGuestClaimToken,
   formatClaimUrl,
 } from "@/lib/guest-claim";
-import { palette } from "@/lib/palette";
 import { countNudgeable, loadLastPayMe } from "@/lib/pay-me";
 import type { PaymentActionResult } from "@/lib/payments";
 import { computeSettlement, type Settlement, type SettlementPerson } from "@/lib/settlement";
 import { SUPABASE } from "@/lib/supabase";
 import { useClaims } from "@/lib/use-claims";
 import { MY_SHARE_BUSY_KEY, usePayments } from "@/lib/use-payments";
+import { createThemedStyles, elevation, useTheme } from "@/lib/theme";
 
 /** Delay in ms after closing share sheet to allow animations to settle. */
 const SHARE_SHEET_CLOSE_DELAY_MS = 500;
@@ -214,6 +214,8 @@ async function loadMemberReceipt(id: string, token: string): Promise<LoadResult>
  * @returns JSX element
  */
 export default function ReceiptScreen(): JSX.Element {
+  const styles = useStyles();
+  const palette = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
   const userId = session?.user.id;
@@ -474,18 +476,18 @@ export default function ReceiptScreen(): JSX.Element {
    */
   const renderClaimantBadges = (shares: ItemShares): JSX.Element => {
     if (shares.claimedBy.length === 0) {
-      return <Text style={STYLES.unclaimedText}>Tap to claim</Text>;
+      return <Text style={styles.unclaimedText}>Tap to claim</Text>;
     }
     if (!shares.isShared) {
       const info = badgeFor(shares.claimedBy[0]);
       return (
-        <View style={STYLES.claimantsRow}>
+        <View style={styles.claimantsRow}>
           <ClaimantBadge role={info.role} label={info.name} />
         </View>
       );
     }
     return (
-      <View style={STYLES.claimantsRow}>
+      <View style={styles.claimantsRow}>
         {shares.shares.map((share) => {
           const info = badgeFor(share.userId);
           return (
@@ -578,22 +580,20 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
   if (loading) {
     return (
-      <View style={STYLES.center}>
-        <ActivityIndicator color={palette.accent} size="large" />
-      </View>
+      <SkeletonScreen paddingTop={16} />
     );
   }
 
   if (!receipt) {
     return (
-      <View style={STYLES.center}>
-        <Text style={STYLES.errorText}>{errorMessage || "Receipt not found."}</Text>
-        <Pressable
+      <View style={styles.center}>
+        <Text style={styles.errorText}>{errorMessage || "Receipt not found."}</Text>
+        <ScalePressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-          style={STYLES.actionButton}
+          style={styles.actionButton}
         >
-          <Text style={STYLES.actionButtonText}>Go back</Text>
-        </Pressable>
+          <Text style={styles.actionButtonText}>Go back</Text>
+        </ScalePressable>
         {toast ? (
           <Toast
             visible={Boolean(toast)}
@@ -607,11 +607,11 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 
   return (
-    <View style={STYLES.container}>
+    <View style={styles.container}>
       <ScrollView
-        style={STYLES.scroll}
+        style={styles.scroll}
         contentContainerStyle={[
-          STYLES.content,
+          styles.content,
           {
             paddingBottom:
               claimable.length > 0 ? 24 : BOTTOM_TAB_CLEARANCE + insets.bottom,
@@ -631,19 +631,19 @@ async function copyToClipboard(text: string): Promise<boolean> {
         }
       >
         {/* Receipt Header */}
-        <View style={STYLES.headerCard}>
-          <View style={STYLES.headerTopRow}>
-            <Text style={STYLES.eyebrow}>Receipt Details</Text>
+        <View style={styles.headerCard}>
+          <View style={styles.headerTopRow}>
+            <Text style={styles.eyebrow}>Receipt Details</Text>
             {isFinalized ? (
-              <View style={[STYLES.finalizedBadge, isSettled && STYLES.settledBadge]}>
-                <Text style={STYLES.finalizedBadgeText}>
+              <View style={[styles.finalizedBadge, isSettled && styles.settledBadge]}>
+                <Text style={styles.finalizedBadgeText}>
                   {isSettled ? "Settled" : "Finalized"}
                 </Text>
               </View>
             ) : null}
           </View>
-          <Text style={STYLES.receiptTitle}>{receipt.title}</Text>
-          <Text style={STYLES.totalAmount}>
+          <Text style={styles.receiptTitle}>{receipt.title}</Text>
+          <Text style={styles.totalAmount}>
             {formatCents(receipt.total_cents)}
           </Text>
         </View>
@@ -697,8 +697,8 @@ async function copyToClipboard(text: string): Promise<boolean> {
           />
         ) : null}
         {finalSplit !== null && finalSplit.status !== "ok" && !claimsLoading ? (
-          <View style={STYLES.finalizeCard}>
-            <Text style={STYLES.finalizeHint}>
+          <View style={styles.finalizeCard}>
+            <Text style={styles.finalizeHint}>
               {"Couldn't work out the final split for this receipt."}
             </Text>
           </View>
@@ -706,15 +706,15 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
         {/* Finalize, for submitted receipts (US 3.3) */}
         {canFinalize && !claimsLoading ? (
-          <View style={STYLES.finalizeCard}>
+          <View style={styles.finalizeCard}>
             {isUploader ? (
               <>
-                <Text style={STYLES.finalizeHint}>
+                <Text style={styles.finalizeHint}>
                   {unclaimedCount > 0
                     ? unclaimedLabel(unclaimedCount)
                     : "Every item is claimed."}
                 </Text>
-                <Pressable
+                <ScalePressable
                   onPress={() => setConfirmingFinalize(true)}
                   disabled={unclaimedCount > 0 || finalizing}
                   accessibilityRole="button"
@@ -722,21 +722,17 @@ async function copyToClipboard(text: string): Promise<boolean> {
                     disabled: unclaimedCount > 0 || finalizing,
                     busy: finalizing,
                   }}
-                  style={({ pressed }) => [
-                    STYLES.finalizeButton,
-                    (unclaimedCount > 0 || finalizing) && STYLES.finalizeButtonDisabled,
-                    pressed && STYLES.pressed,
-                  ]}
+                  style={[styles.finalizeButton, (unclaimedCount > 0 || finalizing) && styles.finalizeButtonDisabled]}
                 >
                   {finalizing ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <ActivityIndicator color={palette.onAccent} size="small" />
                   ) : (
-                    <Text style={STYLES.finalizeButtonText}>Finalize receipt</Text>
+                    <Text style={styles.finalizeButtonText}>Finalize receipt</Text>
                   )}
-                </Pressable>
+                </ScalePressable>
               </>
             ) : (
-              <Text style={STYLES.finalizeHint}>
+              <Text style={styles.finalizeHint}>
                 {`Waiting for ${memberNames[receipt.created_by] ?? "the uploader"} to finalize.`}
               </Text>
             )}
@@ -745,85 +741,76 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
         {/* Share with Guests Card (hidden once finalized: claims are locked) */}
         {isFinalized ? null : (
-          <View style={STYLES.shareCard}>
-            <View style={STYLES.shareHeader}>
-              <Text style={STYLES.shareTitle}>Guest Claim Link</Text>
+          <View style={styles.shareCard}>
+            <View style={styles.shareHeader}>
+              <Text style={styles.shareTitle}>Guest Claim Link</Text>
             </View>
 
-            <Text style={STYLES.shareDescription}>
+            <Text style={styles.shareDescription}>
               Send this link to friends or guests so they can open this receipt in
               any browser and claim their items without signing up.
             </Text>
 
             {claimUrl ? (
-              <View style={STYLES.linkPreviewBox}>
-                <Text style={STYLES.linkText} numberOfLines={1} selectable>
+              <View style={styles.linkPreviewBox}>
+                <Text style={styles.linkText} numberOfLines={1} selectable>
                   {claimUrl}
                 </Text>
               </View>
             ) : null}
 
-            <View style={STYLES.buttonRow}>
-              <Pressable
+            <View style={styles.buttonRow}>
+              <ScalePressable
                 onPress={handleShare}
                 disabled={sharing || generatingLink}
-                style={({ pressed }) => [
-                  STYLES.primaryShareButton,
-                  (pressed || sharing) && STYLES.pressed,
-                ]}
+                style={[styles.primaryShareButton, sharing && styles.pressed]}
               >
                 {generatingLink ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <ActivityIndicator color={palette.onAccent} size="small" />
                 ) : (
-                  <Text style={STYLES.primaryShareButtonText}>
+                  <Text style={styles.primaryShareButtonText}>
                     Share Claim Link
                   </Text>
                 )}
-              </Pressable>
+              </ScalePressable>
 
-              <Pressable
+              <ScalePressable
                 onPress={handleCopyLink}
-                style={({ pressed }) => [
-                  STYLES.copyButton,
-                  pressed && STYLES.pressed,
-                ]}
+                style={styles.copyButton}
               >
-                <Text style={STYLES.copyButtonText}>Copy Link</Text>
-              </Pressable>
+                <Text style={styles.copyButtonText}>Copy Link</Text>
+              </ScalePressable>
             </View>
 
-            <Pressable
+            <ScalePressable
               onPress={() => {
                 if (receipt.token) {
                   router.push(`/claim/${receipt.token}` as never);
                 }
               }}
-              style={({ pressed }) => [
-                STYLES.previewButton,
-                pressed && STYLES.pressed,
-              ]}
+              style={styles.previewButton}
             >
-              <Text style={STYLES.previewButtonText}>
+              <Text style={styles.previewButtonText}>
                 Open Guest Claim Web Page ›
               </Text>
-            </Pressable>
+            </ScalePressable>
           </View>
         )}
 
         {/* Items Section */}
-        <View style={STYLES.sectionHeaderRow}>
-          <Text style={STYLES.sectionLabel}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionLabel}>
             Line Items ({receipt.items.length})
           </Text>
           {claimsLoading && claimable.length > 0 && groupId !== undefined ? (
-            <Text style={STYLES.loadingHint}>Loading claims…</Text>
+            <Text style={styles.loadingHint}>Loading claims…</Text>
           ) : null}
         </View>
 
-        <View style={STYLES.itemsList}>
+        <View style={styles.itemsList}>
           {receipt.items.length === 0 ? (
-            <View style={STYLES.emptyCard}>
-              <Text style={STYLES.emptyText}>No items added to this receipt yet.</Text>
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No items added to this receipt yet.</Text>
             </View>
           ) : (
             receipt.items.map((item) => {
@@ -831,10 +818,10 @@ async function copyToClipboard(text: string): Promise<boolean> {
               // Items with a bad price aren't claimable (see toClaimableItems).
               if (!shares) {
                 return (
-                  <View key={item.id} style={STYLES.itemCard}>
-                    <View style={STYLES.itemMain}>
-                      <Text style={STYLES.itemName}>{item.name}</Text>
-                      <Text style={STYLES.unclaimedText}>
+                  <View key={item.id} style={styles.itemCard}>
+                    <View style={styles.itemMain}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.unclaimedText}>
                         Price unavailable, can&apos;t be claimed
                       </Text>
                     </View>
@@ -846,8 +833,9 @@ async function copyToClipboard(text: string): Promise<boolean> {
               const inFlight = inFlightItemIds.has(item.id);
               const priceCents = claimable.find((c) => c.id === item.id)?.priceCents ?? 0;
               return (
-                <Pressable
+                <ScalePressable
                   key={item.id}
+                  haptic="select"
                   onPress={() => {
                     // Claims are locked once finalized (US 3.3).
                     if (isFinalized) return;
@@ -860,15 +848,11 @@ async function copyToClipboard(text: string): Promise<boolean> {
                   accessibilityLabel={
                     isFinalized ? item.name : `${isMine ? "Unclaim" : "Claim"} ${item.name}`
                   }
-                  style={({ pressed }) => [
-                    STYLES.itemCard,
-                    isMine && STYLES.itemCardClaimed,
-                    (pressed || inFlight) && STYLES.pressed,
-                  ]}
+                  style={[styles.itemCard, isMine && styles.itemCardClaimed, inFlight && styles.pressed]}
                 >
                   <View
                     testID={`item-checkbox-${item.id}`}
-                    style={STYLES.itemCheckbox}
+                    style={styles.itemCheckbox}
                   >
                     <Svg width={26} height={26} viewBox="0 0 26 26">
                       <Circle
@@ -883,7 +867,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
                         <Path
                           d="M7.5 13.5l3.5 3.5L18.5 9.5"
                           fill="none"
-                          stroke="#FFFFFF"
+                          stroke={palette.onAccent}
                           strokeWidth={2.5}
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -892,34 +876,34 @@ async function copyToClipboard(text: string): Promise<boolean> {
                     </Svg>
                   </View>
 
-                  <View style={STYLES.itemMain}>
-                    <View style={STYLES.itemTitleRow}>
+                  <View style={styles.itemMain}>
+                    <View style={styles.itemTitleRow}>
                       <Text
-                        style={[STYLES.itemName, isMine && STYLES.itemNameClaimed]}
+                        style={[styles.itemName, isMine && styles.itemNameClaimed]}
                       >
                         {item.name}
                       </Text>
                       {isMine ? (
-                        <View style={STYLES.mineBadge}>
-                          <Text style={STYLES.mineBadgeText}>✓ Mine</Text>
+                        <View style={styles.mineBadge}>
+                          <Text style={styles.mineBadgeText}>✓ Mine</Text>
                         </View>
                       ) : null}
                       {shares.isShared ? (
-                        <View style={STYLES.sharedBadge}>
-                          <Text style={STYLES.sharedBadgeText}>Shared</Text>
+                        <View style={styles.sharedBadge}>
+                          <Text style={styles.sharedBadgeText}>Shared</Text>
                         </View>
                       ) : null}
                     </View>
                     {renderClaimantBadges(shares)}
                   </View>
 
-                  <View style={STYLES.itemPricing}>
-                    <Text style={STYLES.itemAmount}>{formatCents(priceCents)}</Text>
+                  <View style={styles.itemPricing}>
+                    <Text style={styles.itemAmount}>{formatCents(priceCents)}</Text>
                     {inFlight ? (
                       <ActivityIndicator size="small" color={palette.accent} />
                     ) : null}
                   </View>
-                </Pressable>
+                </ScalePressable>
               );
             })
           )}
@@ -928,9 +912,9 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
       {/* Running total floating above the bottom navigation bubble (US 2.3 Task 5) */}
       {claimable.length > 0 ? (
-        <View style={[STYLES.totalBarWrapper, { paddingBottom: floatingTabOffset }]}>
-          <View style={STYLES.totalBar} accessibilityLiveRegion="polite">
-            <Text style={STYLES.totalBarText}>
+        <View style={[styles.totalBarWrapper, { paddingBottom: floatingTabOffset }]}>
+          <View style={styles.totalBar} accessibilityLiveRegion="polite">
+            <Text style={styles.totalBarText}>
               {isFinalized
                 ? finalizedBarText(settlement, mySettlement, isUploader, uploaderName)
                 : myTotal.claimedCount === 0
@@ -990,7 +974,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 /**
  * Styles for the receipt screen.
  */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   container: {
     flex: 1,
     backgroundColor: palette.bg,
@@ -1014,9 +998,10 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     gap: 6,
+    ...elevation(palette),
   },
   headerTopRow: {
     flexDirection: "row",
@@ -1035,15 +1020,16 @@ const STYLES = StyleSheet.create({
   finalizedBadgeText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#FFFFFF",
+    color: palette.onAccent,
   },
   finalizeCard: {
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 18,
     gap: 12,
+    ...elevation(palette),
   },
   finalizeHint: {
     fontSize: 14,
@@ -1061,7 +1047,7 @@ const STYLES = StyleSheet.create({
     opacity: 0.45,
   },
   finalizeButtonText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 16,
     fontWeight: "800",
   },
@@ -1073,20 +1059,20 @@ const STYLES = StyleSheet.create({
     color: palette.accent,
   },
   receiptTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "800",
     color: palette.text,
   },
   totalAmount: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: "800",
     color: palette.accent,
     marginTop: 4,
   },
   shareCard: {
-    backgroundColor: "#F7FAF8",
+    backgroundColor: palette.successSoft,
     borderWidth: 1.5,
-    borderColor: "#D2E7D6",
+    borderColor: palette.border,
     borderRadius: 16,
     padding: 18,
     gap: 12,
@@ -1097,26 +1083,26 @@ const STYLES = StyleSheet.create({
     justifyContent: "space-between",
   },
   shareTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
-    color: "#1B3B22",
+    color: palette.text,
   },
   shareDescription: {
     fontSize: 14,
-    color: "#374151",
+    color: palette.text,
     lineHeight: 20,
   },
   linkPreviewBox: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: palette.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   linkText: {
     fontSize: 13,
-    color: "#4B5563",
+    color: palette.muted,
     fontFamily: "monospace",
   },
   buttonRow: {
@@ -1133,13 +1119,13 @@ const STYLES = StyleSheet.create({
     justifyContent: "center",
   },
   primaryShareButtonText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 15,
     fontWeight: "700",
   },
   copyButton: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.accent,
     paddingVertical: 13,
@@ -1180,8 +1166,9 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 16,
+    ...elevation(palette),
   },
   itemCard: {
     flexDirection: "row",
@@ -1189,9 +1176,10 @@ const STYLES = StyleSheet.create({
     backgroundColor: palette.card,
     borderWidth: 1.5,
     borderColor: palette.border,
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 16,
     gap: 12,
+    ...elevation(palette),
   },
   itemCardClaimed: {
     borderColor: palette.accent,
@@ -1313,8 +1301,8 @@ const STYLES = StyleSheet.create({
     borderRadius: 10,
   },
   actionButtonText: {
-    color: "#FFFFFF",
+    color: palette.onAccent,
     fontSize: 15,
     fontWeight: "700",
   },
-});
+}));

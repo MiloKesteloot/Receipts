@@ -4,11 +4,11 @@
  * `computeFinalSplit` in `src/lib/finalize-split.ts`.
  */
 
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { JSX } from "react/jsx-runtime";
 
 import type { FinalSplit } from "@/lib/finalize-split";
-import { palette } from "@/lib/palette";
+import { createThemedStyles, elevation } from "@/lib/theme";
 
 export type FinalSplitCardProps = {
   split: FinalSplit;
@@ -44,10 +44,11 @@ export function FinalSplitCard({
   currentUserId,
   nameFor,
 }: FinalSplitCardProps): JSX.Element {
+  const styles = useStyles();
   return (
-    <View style={STYLES.card} testID="final-split-card">
-      <Text style={STYLES.title}>Final split</Text>
-      <Text style={STYLES.subtitle}>
+    <View style={styles.card} testID="final-split-card">
+      <Text style={styles.title}>Final split</Text>
+      <Text style={styles.subtitle}>
         Tax and tip are split by how much each person ordered.
       </Text>
 
@@ -57,35 +58,35 @@ export function FinalSplitCard({
         return (
           <View
             key={person.userId}
-            style={[STYLES.row, isMe && STYLES.rowMine]}
+            style={[styles.row, isMe && styles.rowMine]}
             accessibilityLabel={`${name} ${isMe ? "owe" : "owes"} ${formatSplitCents(
               person.totalCents
             )}`}
           >
-            <View style={STYLES.rowMain}>
-              <Text style={STYLES.name}>{name}</Text>
-              <Text style={STYLES.breakdown}>
+            <View style={styles.rowMain}>
+              <Text style={styles.name}>{name}</Text>
+              <Text style={styles.breakdown}>
                 {`Items ${formatSplitCents(person.itemsCents)} · Tax ${formatSplitCents(
                   person.taxCents
                 )} · Tip ${formatSplitCents(person.tipCents)}`}
               </Text>
             </View>
-            <Text style={STYLES.amount}>{formatSplitCents(person.totalCents)}</Text>
+            <Text style={styles.amount}>{formatSplitCents(person.totalCents)}</Text>
           </View>
         );
       })}
 
-      <View style={STYLES.footer}>
-        <Text style={STYLES.footerDetail}>
+      <View style={styles.footer}>
+        <Text style={styles.footerDetail}>
           {`Subtotal ${formatSplitCents(split.subtotalCents)} · Tax ${formatSplitCents(
             split.taxCents
           )} · Tip ${formatSplitCents(split.tipCents)}`}
         </Text>
-        <Text style={STYLES.footerTotal}>
+        <Text style={styles.footerTotal}>
           {`Total ${formatSplitCents(split.totalCents)}`}
         </Text>
         {split.totalCents !== receiptTotalCents ? (
-          <Text style={STYLES.mismatch}>
+          <Text style={styles.mismatch}>
             {`This doesn't match the receipt total of ${formatSplitCents(
               receiptTotalCents
             )}.`}
@@ -97,17 +98,18 @@ export function FinalSplitCard({
 }
 
 /** Styles for the final split card. */
-const STYLES = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   card: {
     backgroundColor: palette.card,
     borderWidth: 1.5,
     borderColor: palette.accent,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 18,
     gap: 10,
+    ...elevation(palette),
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
     color: palette.text,
   },
@@ -167,4 +169,4 @@ const STYLES = StyleSheet.create({
     fontSize: 12,
     color: palette.error,
   },
-});
+}));

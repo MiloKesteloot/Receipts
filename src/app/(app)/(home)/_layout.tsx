@@ -1,19 +1,22 @@
 import { Stack } from "expo-router";
 import { JSX } from "react/jsx-runtime";
 
-import { PALETTE as palette } from "@/lib/palette";
+import { FONTS, useTheme } from "@/lib/theme";
 
 /**
  * Home tab stack: the group list plus group detail screens.
  * @returns JSX element
  */
 export default function HomeLayout(): JSX.Element {
+  const palette = useTheme();
+
   return (
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: palette.bg },
         headerTintColor: palette.accent,
-        headerTitleStyle: { color: palette.text, fontWeight: "700" },
+        headerTitleStyle: { color: palette.text, fontFamily: FONTS.bold },
+        headerBackTitleStyle: { fontFamily: FONTS.medium },
         headerShadowVisible: false,
         contentStyle: { backgroundColor: palette.bg },
       }}
