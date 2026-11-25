@@ -29,17 +29,26 @@ maybeCompleteAuthSession();
 
 type Busy = "email" | "google" | "apple" | null;
 
+/** What the email card is for: signing in, creating an account, or a reset email (US 4.10). */
+type CardMode = EmailMode | "forgot";
+
 /**
- * Sign-in screen: email/password (sign in or create account), Google and Apple.
- * The root layout swaps to the app as soon as a session exists.
+ * Sign-in screen: email/password (sign in or create account), Google and
+ * Apple, and Forgot password (US 4.10). The root layout swaps to the app as
+ * soon as a session exists.
  * @returns JSX element
  */
 export default function SignInScreen(): JSX.Element {
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle, signInWithApple } =
-    useAuth();
+  const {
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithGoogle,
+    signInWithApple,
+    requestPasswordReset,
+  } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [mode, setMode] = useState<EmailMode>("sign-in");
+  const [mode, setMode] = useState<CardMode>("sign-in");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -71,20 +80,50 @@ export default function SignInScreen(): JSX.Element {
    */
   function handleEmail(): void {
     run("email", () =>
-      mode === "sign-in"
-        ? signInWithEmail(email, password)
-        : signUpWithEmail(email, password, displayName)
+      mode === "forgot"
+        ? requestPasswordReset(email)
+        : mode === "sign-in"
+          ? signInWithEmail(email, password)
+          : signUpWithEmail(email, password, displayName)
     );
   }
 
   /**
-   * Switches between signing in and creating an account.
+   * Switches the card's mode and clears old messages. The email stays.
+   * @param next Mode to show
    */
-  function toggleMode(): void {
-    setMode(mode === "sign-in" ? "sign-up" : "sign-in");
+  function switchMode(next: CardMode): void {
+    setMode(next);
     setError(null);
     setNotice(null);
   }
+
+  /**
+   * Switches between signing in and creating an account, or leaves the
+   * reset form for sign-in.
+   */
+  function toggleMode(): void {
+    switchMode(mode === "sign-in" ? "sign-up" : "sign-in");
+  }
+
+  const title =
+    mode === "forgot"
+      ? "Reset your password"
+      : mode === "sign-in"
+        ? "Welcome back"
+        : "Create your account";
+  const subtitle =
+    mode === "forgot"
+      ? "Enter your email and we'll send you a link to choose a new password."
+      : "Sign in to see your groups and split receipts.";
+  const submitLabel =
+    mode === "forgot" ? "Send reset link" : mode === "sign-in" ? "Sign in" : "Create account";
+  const toggleLabel =
+    mode === "sign-in"
+      ? "New here? Create an account"
+      : mode === "sign-up"
+        ? "Already have an account? Sign in"
+        : "Back to sign in";
 
   const disabled = busy !== null;
 
@@ -102,12 +141,8 @@ export default function SignInScreen(): JSX.Element {
       >
         <View style={STYLES.header}>
           <Text style={STYLES.eyebrow}>Receipts</Text>
-          <Text style={STYLES.title}>
-            {mode === "sign-in" ? "Welcome back" : "Create your account"}
-          </Text>
-          <Text style={STYLES.subtitle}>
-            Sign in to see your groups and split receipts.
-          </Text>
+          <Text style={STYLES.title}>{title}</Text>
+          <Text style={STYLES.subtitle}>{subtitle}</Text>
         </View>
 
         <View style={STYLES.card}>
@@ -135,39 +170,55 @@ export default function SignInScreen(): JSX.Element {
             autoComplete="email"
             keyboardType="email-address"
             textContentType="emailAddress"
+            returnKeyType={mode === "forgot" ? "send" : "next"}
+            onSubmitEditing={mode === "forgot" ? handleEmail : undefined}
             editable={!disabled}
           />
-          <View style={PASSWORD_STYLES.wrapper}>
-            <TextInput
-              style={[STYLES.input, PASSWORD_STYLES.input]}
-              placeholder="Password"
-              placeholderTextColor={palette.muted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-              textContentType={mode === "sign-in" ? "password" : "newPassword"}
-              returnKeyType="go"
-              onSubmitEditing={handleEmail}
-              editable={!disabled}
-            />
+          {mode === "forgot" ? null : (
+            <View style={PASSWORD_STYLES.wrapper}>
+              <TextInput
+                style={[STYLES.input, PASSWORD_STYLES.input]}
+                placeholder="Password"
+                placeholderTextColor={palette.muted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+                textContentType={mode === "sign-in" ? "password" : "newPassword"}
+                returnKeyType="go"
+                onSubmitEditing={handleEmail}
+                editable={!disabled}
+              />
+              <Pressable
+                onPress={() => setShowPassword((prev) => !prev)}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  PASSWORD_STYLES.eyeButton,
+                  pressed && PASSWORD_STYLES.eyeButtonPressed,
+                ]}
+              >
+                {showPassword ? (
+                  <EyeOffIcon size={20} color={palette.muted} />
+                ) : (
+                  <EyeIcon size={20} color={palette.muted} />
+                )}
+              </Pressable>
+            </View>
+          )}
+
+          {mode === "sign-in" ? (
             <Pressable
-              onPress={() => setShowPassword((prev) => !prev)}
-              accessibilityRole="button"
-              accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+              onPress={() => switchMode("forgot")}
+              disabled={disabled}
               hitSlop={8}
-              style={({ pressed }) => [
-                PASSWORD_STYLES.eyeButton,
-                pressed && PASSWORD_STYLES.eyeButtonPressed,
-              ]}
+              accessibilityRole="button"
+              style={STYLES.forgotLink}
             >
-              {showPassword ? (
-                <EyeOffIcon size={20} color={palette.muted} />
-              ) : (
-                <EyeIcon size={20} color={palette.muted} />
-              )}
+              <Text style={STYLES.forgotText}>Forgot password?</Text>
             </Pressable>
-          </View>
+          ) : null}
 
           {error ? <Text style={STYLES.error}>{error}</Text> : null}
           {notice ? <Text style={STYLES.notice}>{notice}</Text> : null}
@@ -184,81 +235,79 @@ export default function SignInScreen(): JSX.Element {
             {busy === "email" ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={STYLES.primaryButtonText}>
-                {mode === "sign-in" ? "Sign in" : "Create account"}
-              </Text>
+              <Text style={STYLES.primaryButtonText}>{submitLabel}</Text>
             )}
           </Pressable>
 
           <Pressable onPress={toggleMode} disabled={disabled} hitSlop={8}>
-            <Text style={STYLES.toggle}>
-              {mode === "sign-in"
-                ? "New here? Create an account"
-                : "Already have an account? Sign in"}
-            </Text>
+            <Text style={STYLES.toggle}>{toggleLabel}</Text>
           </Pressable>
         </View>
 
-        <View style={STYLES.dividerRow}>
-          <View style={STYLES.dividerLine} />
-          <Text style={STYLES.dividerText}>or</Text>
-          <View style={STYLES.dividerLine} />
-        </View>
+        {mode === "forgot" ? null : (
+          <>
+            <View style={STYLES.dividerRow}>
+              <View style={STYLES.dividerLine} />
+              <Text style={STYLES.dividerText}>or</Text>
+              <View style={STYLES.dividerLine} />
+            </View>
 
-        <View style={STYLES.socialRow}>
-          <Pressable
-            onPress={() => run("apple", signInWithApple)}
-            disabled={disabled}
-            style={({ pressed }) => [
-              STYLES.socialButton,
-              STYLES.appleButton,
-              pressed && STYLES.pressed,
-              disabled && STYLES.disabled,
-            ]}
-          >
-            {busy === "apple" ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <>
-                <AppleIcon size={18} color="#FFFFFF" />
-                <Text
-                  style={[STYLES.socialText, STYLES.appleText]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >
-                  Continue with Apple
-                </Text>
-              </>
-            )}
-          </Pressable>
+            <View style={STYLES.socialRow}>
+              <Pressable
+                onPress={() => run("apple", signInWithApple)}
+                disabled={disabled}
+                style={({ pressed }) => [
+                  STYLES.socialButton,
+                  STYLES.appleButton,
+                  pressed && STYLES.pressed,
+                  disabled && STYLES.disabled,
+                ]}
+              >
+                {busy === "apple" ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <>
+                    <AppleIcon size={18} color="#FFFFFF" />
+                    <Text
+                      style={[STYLES.socialText, STYLES.appleText]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
+                      Continue with Apple
+                    </Text>
+                  </>
+                )}
+              </Pressable>
 
-          <Pressable
-            onPress={() => run("google", signInWithGoogle)}
-            disabled={disabled}
-            style={({ pressed }) => [
-              STYLES.socialButton,
-              pressed && STYLES.pressed,
-              disabled && STYLES.disabled,
-            ]}
-          >
-            {busy === "google" ? (
-              <ActivityIndicator color={palette.text} />
-            ) : (
-              <>
-                <GoogleIcon size={18} />
-                <Text
-                  style={STYLES.socialText}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >
-                  Continue with Google
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
+              <Pressable
+                onPress={() => run("google", signInWithGoogle)}
+                disabled={disabled}
+                style={({ pressed }) => [
+                  STYLES.socialButton,
+                  pressed && STYLES.pressed,
+                  disabled && STYLES.disabled,
+                ]}
+              >
+                {busy === "google" ? (
+                  <ActivityIndicator color={palette.text} />
+                ) : (
+                  <>
+                    <GoogleIcon size={18} />
+                    <Text
+                      style={STYLES.socialText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
+                      Continue with Google
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -333,6 +382,8 @@ const STYLES = StyleSheet.create({
     minHeight: 50,
   },
   primaryButtonText: { color: "white", fontSize: 16, fontWeight: "700" },
+  forgotLink: { alignSelf: "flex-end", marginTop: -4 },
+  forgotText: { color: palette.accent, fontSize: 14, fontWeight: "600" },
   toggle: {
     color: palette.accent,
     fontSize: 14,
