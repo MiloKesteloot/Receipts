@@ -25,6 +25,7 @@ export type AuthErrorCode =
   | "EMAIL_NOT_CONFIRMED"
   | "USER_EXISTS"
   | "CANCELLED"
+  | "PROVIDER_DISABLED"
   | "AUTH_ERROR";
 
 export type AuthResult =
@@ -45,6 +46,20 @@ export type AuthFailure = Extract<AuthResult, { success: false }>;
 export type OAuthProvider = Extract<Provider, "google" | "apple">;
 
 export type EmailMode = "sign-in" | "sign-up";
+
+/**
+ * Asks whether a provider is turned on in the Supabase project.
+ * Resolves null when that can't be told (offline, server error).
+ */
+export type CheckOAuthProvider = (provider: OAuthProvider) => Promise<boolean | null>;
+
+/**
+ * The parts of `fetch` the provider check uses. Kept narrow so tests can pass a fake.
+ */
+export type FetchLike = (
+  url: string,
+  init: { headers: Record<string, string> }
+) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
 
 /**
  * Opens the provider's sign-in page and resolves once it redirects back
@@ -86,6 +101,28 @@ const NOT_CONFIGURED: AuthFailure = {
   error: "NOT_CONFIGURED",
   message: "Add your Supabase URL and key to .env",
 };
+
+/**
+ * Display names for providers, used in messages.
+ */
+const PROVIDER_LABELS: Record<OAuthProvider, string> = {
+  google: "Google",
+  apple: "Apple",
+};
+
+/**
+ * Failure for a provider that is turned off in the Supabase project.
+ * @param provider Provider that is off, or undefined when Supabase didn't say
+ * @returns Failure result
+ */
+function providerDisabled(provider?: OAuthProvider): AuthFailure {
+  const method = provider ? `${PROVIDER_LABELS[provider]} sign-in` : "This sign-in method";
+  return {
+    success: false,
+    error: "PROVIDER_DISABLED",
+    message: `${method} isn't turned on yet. Sign in with email for now.`,
+  };
+}
 
 /**
  * Whether there is a signed-in user. Drives the route guards.
@@ -180,6 +217,9 @@ export function toAuthFailure(error: unknown): AuthFailure {
         error: "AUTH_ERROR",
         message: "Too many emails sent. Wait a few minutes and try again",
       };
+  }
+  if (typeof message === "string" && /provider is not enabled/i.test(message)) {
+    return providerDisabled();
   }
   return {
     success: false,
@@ -386,20 +426,77 @@ async function exchangeCode(client: AuthClient, code: string): Promise<AuthResul
 }
 
 /**
+ * Reads whether a provider is on from Supabase's `GET /auth/v1/settings` body.
+ * @param settings Parsed response body
+ * @param provider "google" or "apple"
+ * @returns True or false, or null when the body isn't the expected shape
+ */
+export function isOAuthProviderEnabled(
+  settings: unknown,
+  provider: OAuthProvider
+): boolean | null {
+  const external = (settings as { external?: unknown } | null)?.external;
+  if (typeof external !== "object" || external === null) return null;
+  const enabled = (external as Record<string, unknown>)[provider];
+  return typeof enabled === "boolean" ? enabled : null;
+}
+
+/**
+ * Asks the Supabase project whether a provider is turned on.
+ * @param fetchImpl `fetch`, or a fake in tests
+ * @param supabaseUrl Project URL
+ * @param apiKey Publishable key
+ * @param provider "google" or "apple"
+ * @returns True or false, or null when the answer couldn't be read
+ */
+export async function fetchOAuthProviderEnabled(
+  fetchImpl: FetchLike,
+  supabaseUrl: string,
+  apiKey: string,
+  provider: OAuthProvider
+): Promise<boolean | null> {
+  try {
+    const response = await fetchImpl(`${supabaseUrl.replace(/\/+$/, "")}/auth/v1/settings`, {
+      headers: { apikey: apiKey },
+    });
+    if (!response.ok) return null;
+    return isOAuthProviderEnabled(await response.json(), provider);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Signs in through the provider's web page (Google everywhere, Apple off iOS).
+ * `signInWithOAuth` only builds a URL, so a provider that is turned off would
+ * otherwise show up as a raw error page in the browser; `checkProvider` catches
+ * that first.
  * @param client Supabase auth client
  * @param provider "google" or "apple"
  * @param redirectUrl Deep link back into the app; must be allow-listed in Supabase
  * @param openAuthSession Opens the browser and waits for the redirect
+ * @param checkProvider Optional check that the provider is turned on; only a
+ *   clear "no" stops sign-in
  * @returns Result with the new session
  */
 export async function signInWithOAuthProvider(
   client: AuthClient | null,
   provider: OAuthProvider,
   redirectUrl: string,
-  openAuthSession: OpenAuthSession
+  openAuthSession: OpenAuthSession,
+  checkProvider?: CheckOAuthProvider
 ): Promise<AuthResult> {
   if (!client) return NOT_CONFIGURED;
+
+  if (checkProvider) {
+    let enabled: boolean | null = null;
+    try {
+      enabled = await checkProvider(provider);
+    } catch {
+      // Can't tell, so let the browser try.
+    }
+    if (enabled === false) return providerDisabled(provider);
+  }
 
   try {
     const { data, error } = await client.signInWithOAuth({

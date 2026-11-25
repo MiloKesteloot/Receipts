@@ -8,7 +8,7 @@ import { JSX } from "react/jsx-runtime";
 
 import * as auth from "./auth";
 import { unregisterThisDevice } from "./push-notifications";
-import { SUPABASE } from "./supabase";
+import { SUPABASE, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./supabase";
 
 type AuthContextValue = {
   session: Session | null;
@@ -63,6 +63,23 @@ function openAuthSession(url: string, returnUrl: string): ReturnType<auth.OpenAu
 }
 
 /**
+ * Asks Supabase whether a provider is turned on, so a disabled one shows a
+ * message instead of an error page in the browser.
+ * @param provider "google" or "apple"
+ * @returns True or false, or null when it can't tell (or `.env` has no keys)
+ */
+function checkProvider(provider: auth.OAuthProvider): Promise<boolean | null> {
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return Promise.resolve(null);
+  return auth.fetchOAuthProviderEnabled(fetch, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, provider);
+}
+
+/**
+ * The provider check, or undefined when `.env` has no Supabase keys.
+ */
+const providerCheck: auth.CheckOAuthProvider | undefined =
+  SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY ? checkProvider : undefined;
+
+/**
  * Shows the native Sign in with Apple sheet.
  * @returns Apple's credential
  */
@@ -89,12 +106,24 @@ const ACTIONS: Omit<
   signUpWithEmail: (email, password, displayName) =>
     auth.signUpWithEmail(CLIENT, email, password, redirectUrl(), displayName),
   signInWithGoogle: () =>
-    auth.signInWithOAuthProvider(CLIENT, "google", redirectUrl(), openAuthSession),
+    auth.signInWithOAuthProvider(
+      CLIENT,
+      "google",
+      redirectUrl(),
+      openAuthSession,
+      providerCheck
+    ),
   // Native sheet on iOS; Apple's web sign-in on Android and web.
   signInWithApple: () =>
     Platform.OS === "ios"
       ? auth.signInWithAppleNative(CLIENT, requestAppleCredential)
-      : auth.signInWithOAuthProvider(CLIENT, "apple", redirectUrl(), openAuthSession),
+      : auth.signInWithOAuthProvider(
+          CLIENT,
+          "apple",
+          redirectUrl(),
+          openAuthSession,
+          providerCheck
+        ),
   // Drop this phone's push token first, so the next account on it doesn't
   // get this one's Pay me pushes (US 3.5).
   signOut: async () => {

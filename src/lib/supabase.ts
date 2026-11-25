@@ -5,13 +5,13 @@ import { SESSION_STORAGE } from "./session-storage";
 /**
  * Project URL from `.env` (Project Settings → Data API).
  */
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 
 /**
  * Publishable key from `.env`. Safe to ship: Row Level Security decides what
  * each user can read or change.
  */
-const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 /**
  * Shared Supabase client, or null when `.env` is missing its keys.
