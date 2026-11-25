@@ -12,12 +12,8 @@ import {
 } from "../../src/lib/account";
 import { NOT_CONFIGURED } from "../../src/lib/group-data";
 
-/**
- * Creates a fake account client recording RPC and auth calls.
- * @param options Mock handlers for RPC and auth
- * @returns Fake client and call history
- */
-function createFakeAccountClient(options?: {
+/** Options for fake account client. */
+type FakeAccountOptions = {
   rpcHandler?: (
     fn: string,
     args?: Record<string, unknown>
@@ -26,7 +22,14 @@ function createFakeAccountClient(options?: {
     error: { code?: string; message: string } | null;
   };
   signOutHandler?: () => { error: unknown };
-}) {
+};
+
+/**
+ * Creates a fake account client recording RPC and auth calls.
+ * @param options Mock handlers for RPC and auth
+ * @returns Fake client and call history
+ */
+function createFakeAccountClient(options?: FakeAccountOptions) {
   const rpcCalls: { fn: string; args?: Record<string, unknown> }[] = [];
   let signOutCalls = 0;
 
